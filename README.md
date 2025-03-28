@@ -12,10 +12,25 @@ A Node.js application that generates social media images for property listings u
 
 ## Prerequisites
 
-- Node.js (v14 or higher)
-- npm (Node Package Manager)
-- A Bannerbear account with API access
-- A Roborabbit account with API access
+- Node.js 18 or higher
+- AWS Account (for DynamoDB)
+- Bannerbear API Key
+- Roborabbit API Key
+
+## Environment Variables
+
+Create a `.env` file in the root directory with the following variables:
+
+```env
+ROBORABBIT_API_KEY=your_roborabbit_key
+TASK_UID=your_task_uid
+BANNERBEAR_API_KEY=your_bannerbear_key
+BANNERBEAR_TEMPLATE_UID=your_template_uid
+BANNERBEAR_WEBHOOK_SECRET=your_webhook_secret
+AWS_REGION=your_aws_region
+AWS_ACCESS_KEY_ID=your_aws_access_key
+AWS_SECRET_ACCESS_KEY=your_aws_secret_key
+```
 
 ## Installation
 
@@ -30,31 +45,52 @@ cd trofai
 npm install
 ```
 
-3. Create a `.env` file in the root directory and add your API keys:
-```env
-ROBORABBIT_API_KEY=your_roborabbit_api_key
-TASK_UID=your_task_uid
-BANNERBEAR_API_KEY=your_bannerbear_api_key
-BANNERBEAR_TEMPLATE_UID=your_template_uid
-BANNERBEAR_WEBHOOK_URL=your_webhook_url
-BANNERBEAR_WEBHOOK_SECRET=your_webhook_secret
-```
-
-## Usage
-
-### Testing Property Image Generation
-
-Run the test script with a Rightmove property URL:
+3. Run the development server:
 ```bash
-node test-rightmove.js "https://www.rightmove.co.uk/properties/YOUR_PROPERTY_ID"
+npm run dev
 ```
 
-### Starting the Webhook Server
+4. Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-To receive image generation status updates:
-```bash
-node webhook-handler.js
+## AWS Setup
+
+1. Create a DynamoDB table:
+   - Table name: `trofai-image-status`
+   - Partition key: `uid` (String)
+   - Enable TTL on `ttl` attribute
+
+2. Create an IAM user with DynamoDB permissions:
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "dynamodb:PutItem",
+                "dynamodb:GetItem",
+                "dynamodb:UpdateItem",
+                "dynamodb:DeleteItem"
+            ],
+            "Resource": "arn:aws:dynamodb:*:*:table/trofai-image-status"
+        }
+    ]
+}
 ```
+
+## Deployment
+
+The project is configured for deployment with AWS Amplify. Follow these steps:
+
+1. Push your code to GitHub
+2. Create a new Amplify app
+3. Connect your repository
+4. Add environment variables in Amplify Console
+5. Deploy
+
+## License
+
+MIT License - see LICENSE file for details
 
 ## Project Structure
 
@@ -79,10 +115,6 @@ The project uses several key technologies:
 3. Commit your changes (`git commit -m 'Add some amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
-
-## License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## Acknowledgments
 
