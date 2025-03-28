@@ -58,7 +58,7 @@ export default async function handler(req, res) {
 
       await docClient.send(
         new PutCommand({
-          TableName: "bannerbear-status",
+          TableName: "trofai-image-status",
           Item: item
         })
       );
