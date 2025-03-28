@@ -12,7 +12,7 @@ AWS.config.update({
 const dynamoDB = new AWS.DynamoDB.DocumentClient();
 const TABLE_NAME = 'trofai-image-status';
 
-async function saveStatus(status) {
+async function saveStatusToDynamo(status) {
   try {
     const params = {
       TableName: TABLE_NAME,
@@ -31,7 +31,7 @@ async function saveStatus(status) {
   }
 }
 
-async function getStatus(uid) {
+async function getStatusFromDynamo(uid) {
   try {
     const params = {
       TableName: TABLE_NAME,
@@ -107,7 +107,7 @@ export default async function handler(req, res) {
         status.image_url_jpg = webhookData.image_url_jpg;
       }
 
-      await saveStatus(status);
+      await saveStatusToDynamo(status);
       console.log('Updated status for UID:', webhookData.uid, status);
 
       return res.status(200).json({ message: 'Webhook processed successfully' });
@@ -134,7 +134,7 @@ export async function getStatus(req, res) {
   }
 
   try {
-    const status = await getStatus(uid);
+    const status = await getStatusFromDynamo(uid);
     if (!status) {
       return res.status(404).json({ message: 'Status not found' });
     }
