@@ -12,14 +12,20 @@ AWS.config.update({
 const dynamoDB = new AWS.DynamoDB.DocumentClient();
 const TABLE_NAME = 'trofai-image-status';
 
-async function getStatus(uid) {
-  const params = {
-    TableName: TABLE_NAME,
-    Key: { uid }
-  };
+async function getStatusFromDynamo(uid) {
+  try {
+    const params = {
+      TableName: TABLE_NAME,
+      Key: { uid }
+    };
 
-  const result = await dynamoDB.get(params).promise();
-  return result.Item;
+    const result = await dynamoDB.get(params).promise();
+    console.log('Successfully retrieved status from DynamoDB:', uid);
+    return result.Item;
+  } catch (error) {
+    console.error('Error getting status from DynamoDB:', error);
+    throw error;
+  }
 }
 
 export default async function handler(req, res) {
@@ -34,7 +40,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const status = await getStatus(uid);
+    const status = await getStatusFromDynamo(uid);
     if (!status) {
       return res.status(404).json({ message: 'Status not found' });
     }
@@ -42,6 +48,10 @@ export default async function handler(req, res) {
     return res.status(200).json(status);
   } catch (error) {
     console.error('Error getting status:', error);
-    return res.status(500).json({ message: 'Internal server error', error: error.message });
+    return res.status(500).json({ 
+      message: 'Internal server error', 
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 } 
