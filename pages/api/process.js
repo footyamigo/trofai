@@ -291,215 +291,76 @@ Contact ${agentName} today to arrange a viewing!
 }
 
 // Bannerbear Functions
-async function generateBannerbearImage(propertyData) {
-  console.log('Starting Bannerbear image generation...');
-  
+async function generateBannerbearImages(propertyData) {
+  console.log('Generating Bannerbear images for:', propertyData);
+
   try {
-    const imagePayload = {
-      ...propertyData.bannerbear,
-      project_id: 'E56OLrMKYWnzwl3oQj'
-    };
-
-    if (process.env.BANNERBEAR_WEBHOOK_URL) {
-      imagePayload.webhook_url = process.env.BANNERBEAR_WEBHOOK_URL;
-      imagePayload.webhook_headers = {
-        'Authorization': `Bearer ${process.env.BANNERBEAR_WEBHOOK_SECRET}`
-      };
-    }
-
-    console.log('Sending Bannerbear image request:', JSON.stringify(imagePayload, null, 2));
-
-    const response = await fetch('https://api.bannerbear.com/v2/images', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${BANNERBEAR_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(imagePayload)
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      console.error('Bannerbear API Error:', error);
-      throw new Error(`Bannerbear API error: ${response.status}`);
-    }
-
-    const result = await response.json();
-    console.log('Image generation initiated:', result);
-
-    return {
-      type: 'single',
-      uid: result.uid,
-      status: result.status,
-      webhook_url: imagePayload.webhook_url
-    };
-  } catch (error) {
-    console.error('Error generating image:', error);
-    throw error;
-  }
-}
-
-async function generateBannerbearCollection(propertyData, templateSetUid) {
-  try {
-    // Get all available property images
-    const propertyImages = propertyData.raw.property.allImages;
-    
-    // Create modifications array with base data (everything except property image)
-    const baseModifications = [
+    // Create modifications array for the template set
+    const modifications = [
       {
-        name: 'property_price',
-        text: propertyData.raw.property.price
+        name: "property_image",
+        image_url: propertyData.property.mainImage
       },
       {
-        name: 'property_location',
-        text: propertyData.raw.property.address
+        name: "property_price",
+        text: propertyData.property.price
       },
       {
-        name: 'bedrooms',
-        text: propertyData.raw.property.bedrooms
+        name: "property_location",
+        text: propertyData.property.address
       },
       {
-        name: 'bathrooms',
-        text: propertyData.raw.property.bathrooms
+        name: "bedrooms",
+        text: propertyData.property.bedrooms.toString()
       },
       {
-        name: 'logo',
-        image_url: propertyData.raw.agent.logo
-      },
-      {
-        name: 'estate_agent_address',
-        text: propertyData.raw.agent.address
+        name: "bathrooms",
+        text: propertyData.property.bathrooms.toString()
       }
     ];
 
-    // Create the collection payload
-    const collectionPayload = {
-      template_set: templateSetUid,
-      modifications: [
-        {
-          name: 'property_image',
-          image_url: propertyImages[0] // First image will be used if we run out of images
-        },
-        ...baseModifications
-      ],
-      project_id: 'E56OLrMKYWnzwl3oQj',
-      metadata: {
-        source: "rightmove",
-        scraped_at: new Date().toISOString(),
-        property_id: propertyData.raw.property.id,
-        total_images: propertyImages.length
-      }
-    };
-
-    // Add image_urls_by_template to specify different images for each template
-    if (propertyImages.length > 1) {
-      collectionPayload.image_urls_by_template = {};
-      propertyImages.forEach((imageUrl, index) => {
-        collectionPayload.image_urls_by_template[`property_image_${index + 1}`] = imageUrl;
+    // Add logo if agent has one
+    if (propertyData.agent?.logo) {
+      modifications.push({
+        name: "logo",
+        image_url: propertyData.agent.logo
       });
     }
 
-    if (process.env.BANNERBEAR_WEBHOOK_URL) {
-      collectionPayload.webhook_url = process.env.BANNERBEAR_WEBHOOK_URL;
-      collectionPayload.webhook_headers = {
-        'Authorization': `Bearer ${process.env.BANNERBEAR_WEBHOOK_SECRET}`
-      };
-    }
+    // Create template set request
+    const requestData = {
+      template_set: process.env.BANNERBEAR_TEMPLATE_SET_UID,
+      modifications: modifications,
+      webhook_url: process.env.BANNERBEAR_WEBHOOK_URL
+    };
 
-    console.log('Sending Bannerbear collection request:', JSON.stringify(collectionPayload, null, 2));
+    console.log('Bannerbear request data:', JSON.stringify(requestData, null, 2));
 
-    const response = await fetch('https://api.bannerbear.com/v2/collections', {
+    const response = await fetch('https://api.bannerbear.com/v2/template_sets', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${BANNERBEAR_API_KEY}`,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${process.env.BANNERBEAR_API_KEY}`
       },
-      body: JSON.stringify(collectionPayload)
+      body: JSON.stringify(requestData)
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      console.error('Bannerbear Collection API Error:', error);
-      throw new Error(`Bannerbear Collection API error: ${response.status}`);
+      const errorText = await response.text();
+      throw new Error(`Bannerbear API error: ${response.status} - ${errorText}`);
     }
 
-    const result = await response.json();
-    console.log('Collection generation initiated:', result);
+    const data = await response.json();
+    console.log('Bannerbear API response:', data);
 
     return {
-      type: 'collection',
-      uid: result.uid,
-      status: result.status,
-      webhook_url: collectionPayload.webhook_url,
-      template_set: templateSetUid,
-      total_images: propertyImages.length
+      uid: data.uid,
+      status: 'pending'
     };
   } catch (error) {
-    console.error('Error generating collection:', error);
+    console.error('Error generating Bannerbear images:', error);
     throw error;
   }
-}
-
-async function pollBannerbearImage(uid) {
-  const MAX_ATTEMPTS = 30;
-  const POLL_INTERVAL = 2000;
-  let attempts = 0;
-
-  while (attempts < MAX_ATTEMPTS) {
-    console.log(`Polling Bannerbear image status (attempt ${attempts + 1}/${MAX_ATTEMPTS})...`);
-    
-    try {
-      const response = await fetch(`https://api.bannerbear.com/v2/images/${uid}?project_id=E56OLrMKYWnzwl3oQj`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${BANNERBEAR_API_KEY}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('Bannerbear polling error:', {
-          status: response.status,
-          statusText: response.statusText,
-          error: errorData
-        });
-        
-        if (response.status !== 400 || attempts >= MAX_ATTEMPTS - 1) {
-          throw new Error(`Failed to poll Bannerbear: ${response.status} - ${response.statusText}`);
-        }
-      }
-
-      const result = await response.json();
-      console.log('Polling response:', result);
-
-      if (result.status === 'completed') {
-        console.log('Image generation completed!');
-        return {
-          status: 'completed',
-          image_url: result.image_url,
-          image_url_png: result.image_url_png,
-          image_url_jpg: result.image_url_jpg
-        };
-      } else if (result.status === 'failed') {
-        throw new Error('Image generation failed: ' + JSON.stringify(result));
-      }
-
-      console.log(`Image status: ${result.status}, waiting ${POLL_INTERVAL}ms before next attempt...`);
-      await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
-      attempts++;
-    } catch (error) {
-      if (attempts < MAX_ATTEMPTS - 1) {
-        console.log(`Error polling, retrying in ${POLL_INTERVAL}ms:`, error.message);
-        await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
-        attempts++;
-        continue;
-      }
-      throw error;
-    }
-  }
-
-  throw new Error('Bannerbear image generation timed out');
 }
 
 // Main API handler
@@ -518,34 +379,33 @@ export default async function handler(req, res) {
 
   try {
     const { url } = req.body;
-    console.log('Processing URL:', url);
-
-    const propertyData = await scrapeProperty(url);
     
-    // Generate Bannerbear images using template set
-    const templateSetUid = process.env.BANNERBEAR_TEMPLATE_SET_UID;
-    let bannerbearResponse;
-
-    if (!templateSetUid) {
-      console.log('No template set configured, falling back to single template...');
-      bannerbearResponse = await generateBannerbearImage(propertyData);
-    } else {
-      console.log('Generating collection using template set:', templateSetUid);
-      bannerbearResponse = await generateBannerbearCollection(propertyData, templateSetUid);
+    if (!url) {
+      return res.status(400).json({ message: 'Property URL is required' });
     }
 
+    // Scrape property data
+    const propertyData = await scrapeProperty(url);
+    console.log('Scraped property data:', propertyData);
+
+    // Generate caption
+    const caption = generateCaption(propertyData);
+    console.log('Generated caption:', caption);
+
+    // Generate Bannerbear images
+    const imageResult = await generateBannerbearImages(propertyData);
+    console.log('Bannerbear image generation initiated:', imageResult);
+
     return res.status(200).json({
-      success: true,
-      data: {
-        property: propertyData.raw,
-        caption: propertyData.caption,
-        bannerbear: bannerbearResponse
-      }
+      message: 'Processing started',
+      uid: imageResult.uid,
+      status: imageResult.status,
+      caption
     });
   } catch (error) {
     console.error('Error processing request:', error);
     return res.status(500).json({ 
-      success: false, 
+      message: 'Error processing request', 
       error: error.message 
     });
   }

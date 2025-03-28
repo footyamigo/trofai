@@ -1,113 +1,76 @@
-import AWS from 'aws-sdk';
+import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
+import { DynamoDBDocumentClient, PutCommand } from "@aws-sdk/lib-dynamodb";
 
-// Configure AWS
-AWS.config.update({
-  region: process.env.REGION || 'us-east-1',
+const client = new DynamoDBClient({
+  region: process.env.REGION,
   credentials: {
     accessKeyId: process.env.ACCESS_KEY_ID,
-    secretAccessKey: process.env.SECRET_ACCESS_KEY
-  }
+    secretAccessKey: process.env.SECRET_ACCESS_KEY,
+  },
 });
 
-const dynamoDB = new AWS.DynamoDB.DocumentClient();
-const TABLE_NAME = 'trofai-image-status';
-
-async function saveStatusToDynamo(status) {
-  try {
-    const params = {
-      TableName: TABLE_NAME,
-      Item: {
-        uid: status.uid,
-        ...status,
-        ttl: Math.floor(Date.now() / 1000) + (24 * 60 * 60) // 24 hours TTL
-      }
-    };
-
-    await dynamoDB.put(params).promise();
-    console.log('Successfully saved status to DynamoDB:', status.uid);
-  } catch (error) {
-    console.error('Error saving status to DynamoDB:', error);
-    throw error;
-  }
-}
+const docClient = DynamoDBDocumentClient.from(client);
 
 export default async function handler(req, res) {
-  // For initial webhook verification, just return a simple success response
+  // Handle GET request for webhook verification
   if (req.method === 'GET') {
     return res.status(200).json({ message: 'Test endpoint is working' });
   }
 
   // Handle POST request for webhook data
   if (req.method === 'POST') {
+    console.log('Received webhook data:', JSON.stringify(req.body, null, 2));
+
+    // Verify webhook secret
+    const authHeader = req.headers.authorization;
+    if (!authHeader || authHeader !== `Bearer ${process.env.BANNERBEAR_WEBHOOK_SECRET}`) {
+      console.error('Unauthorized webhook request');
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
     try {
-      // Log incoming webhook data
-      console.log('Received webhook data:', {
-        headers: req.headers,
-        body: req.body
-      });
-
-      // Verify webhook secret
-      const authHeader = req.headers.authorization;
-      if (!authHeader || authHeader !== `Bearer ${process.env.BANNERBEAR_WEBHOOK_SECRET}`) {
-        console.error('Unauthorized webhook request:', { authHeader });
-        return res.status(401).json({ message: 'Unauthorized' });
-      }
-
       const webhookData = req.body;
-      
-      if (!webhookData.uid) {
+      const { uid, event } = webhookData;
+
+      if (!uid) {
         console.error('Missing UID in webhook data');
-        return res.status(400).json({ message: 'Missing UID in webhook data' });
+        return res.status(400).json({ message: 'Missing UID' });
       }
 
-      // Store the status update
-      const status = {
-        type: webhookData.template_set ? 'collection' : 'single',
+      // Store the status update in DynamoDB
+      const timestamp = Math.floor(Date.now() / 1000);
+      const ttl = timestamp + (7 * 24 * 60 * 60); // 7 days TTL
+
+      const item = {
+        uid,
+        event,
         status: webhookData.status,
-        uid: webhookData.uid,
-        event: webhookData.event,
-        timestamp: new Date().toISOString()
+        created_at: timestamp,
+        ttl,
+        data: webhookData
       };
 
-      if (status.type === 'collection') {
-        // For collections, store both image_urls and images array
-        status.image_urls = webhookData.image_urls || {};
-        status.images = webhookData.images || [];
-        status.template_set = webhookData.template_set;
-        status.zip_url = webhookData.zip_url;
-
-        console.log('Collection status update:', {
-          uid: webhookData.uid,
-          status: status.status,
-          imageCount: Object.keys(status.image_urls || {}).length,
-          images: status.images
-        });
-      } else {
-        status.image_url = webhookData.image_url;
-        status.image_url_png = webhookData.image_url_png;
-        status.image_url_jpg = webhookData.image_url_jpg;
-
-        console.log('Image status update:', {
-          uid: webhookData.uid,
-          status: status.status,
-          image_url: status.image_url
-        });
+      // For template sets, we'll store additional information
+      if (event === 'COLLECTION_CREATED') {
+        item.images = webhookData.images;
+        item.total_images = webhookData.images?.length || 0;
       }
 
-      await saveStatusToDynamo(status);
-      console.log('Successfully saved status to DynamoDB:', webhookData.uid);
+      await docClient.send(
+        new PutCommand({
+          TableName: "bannerbear-status",
+          Item: item
+        })
+      );
 
-      // Return success response
-      return res.status(200).json({ message: 'Webhook processed successfully' });
+      console.log('Successfully stored webhook data:', item);
+      return res.status(200).json({ message: 'Webhook received' });
     } catch (error) {
       console.error('Error processing webhook:', error);
-      return res.status(500).json({ 
-        message: 'Internal server error', 
-        error: error.message,
-        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
-      });
+      return res.status(500).json({ message: 'Error processing webhook' });
     }
   }
 
+  // Handle other HTTP methods
   return res.status(405).json({ message: 'Method not allowed' });
 } 
