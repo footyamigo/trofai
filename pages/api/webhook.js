@@ -13,26 +13,38 @@ const dynamoDB = new AWS.DynamoDB.DocumentClient();
 const TABLE_NAME = 'trofai-image-status';
 
 async function saveStatus(status) {
-  const params = {
-    TableName: TABLE_NAME,
-    Item: {
-      uid: status.uid,
-      ...status,
-      ttl: Math.floor(Date.now() / 1000) + (24 * 60 * 60) // 24 hours TTL
-    }
-  };
+  try {
+    const params = {
+      TableName: TABLE_NAME,
+      Item: {
+        uid: status.uid,
+        ...status,
+        ttl: Math.floor(Date.now() / 1000) + (24 * 60 * 60) // 24 hours TTL
+      }
+    };
 
-  await dynamoDB.put(params).promise();
+    await dynamoDB.put(params).promise();
+    console.log('Successfully saved status to DynamoDB:', status.uid);
+  } catch (error) {
+    console.error('Error saving status to DynamoDB:', error);
+    throw error;
+  }
 }
 
 async function getStatus(uid) {
-  const params = {
-    TableName: TABLE_NAME,
-    Key: { uid }
-  };
+  try {
+    const params = {
+      TableName: TABLE_NAME,
+      Key: { uid }
+    };
 
-  const result = await dynamoDB.get(params).promise();
-  return result.Item;
+    const result = await dynamoDB.get(params).promise();
+    console.log('Successfully retrieved status from DynamoDB:', uid);
+    return result.Item;
+  } catch (error) {
+    console.error('Error getting status from DynamoDB:', error);
+    throw error;
+  }
 }
 
 export default async function handler(req, res) {
@@ -41,14 +53,23 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Log request headers for debugging
+    console.log('Webhook request headers:', JSON.stringify(req.headers, null, 2));
+
     // Verify webhook secret
     const authHeader = req.headers.authorization;
     if (!authHeader || authHeader !== `Bearer ${process.env.BANNERBEAR_WEBHOOK_SECRET}`) {
+      console.error('Unauthorized webhook request:', { authHeader });
       return res.status(401).json({ message: 'Unauthorized' });
     }
 
     const webhookData = req.body;
     console.log('Received webhook data:', JSON.stringify(webhookData, null, 2));
+
+    if (!webhookData.uid) {
+      console.error('Missing UID in webhook data');
+      return res.status(400).json({ message: 'Missing UID in webhook data' });
+    }
 
     // Store the status update
     const status = {
@@ -84,7 +105,11 @@ export default async function handler(req, res) {
     return res.status(200).json({ message: 'Webhook processed successfully' });
   } catch (error) {
     console.error('Error processing webhook:', error);
-    return res.status(500).json({ message: 'Internal server error', error: error.message });
+    return res.status(500).json({ 
+      message: 'Internal server error', 
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 }
 
@@ -105,7 +130,11 @@ export async function GET(req, res) {
     return res.status(200).json(status);
   } catch (error) {
     console.error('Error getting status:', error);
-    return res.status(500).json({ message: 'Internal server error', error: error.message });
+    return res.status(500).json({ 
+      message: 'Internal server error', 
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 }
 
