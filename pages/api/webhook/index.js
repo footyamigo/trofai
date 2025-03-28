@@ -43,7 +43,8 @@ export default async function handler(req, res) {
   // Handle GET request for webhook verification
   if (req.method === 'GET') {
     console.log('Received GET request for webhook verification');
-    return res.status(200).json({ message: 'Webhook endpoint is active' });
+    // Return an empty 200 response for Bannerbear verification
+    return res.status(200).end();
   }
 
   // Handle POST request for actual webhook data
@@ -95,7 +96,8 @@ export default async function handler(req, res) {
       await saveStatusToDynamo(status);
       console.log('Updated status for UID:', webhookData.uid, status);
 
-      return res.status(200).json({ message: 'Webhook processed successfully' });
+      // Return an empty 200 response for successful webhook processing
+      return res.status(200).end();
     } catch (error) {
       console.error('Error processing webhook:', error);
       return res.status(500).json({ 
