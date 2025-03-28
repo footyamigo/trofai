@@ -22,15 +22,20 @@ A Node.js application that generates social media images for property listings u
 Create a `.env` file in the root directory with the following variables:
 
 ```env
+# API Keys
 ROBORABBIT_API_KEY=your_roborabbit_key
 TASK_UID=your_task_uid
 BANNERBEAR_API_KEY=your_bannerbear_key
 BANNERBEAR_TEMPLATE_UID=your_template_uid
 BANNERBEAR_WEBHOOK_SECRET=your_webhook_secret
-AWS_REGION=your_aws_region
-AWS_ACCESS_KEY_ID=your_aws_access_key
-AWS_SECRET_ACCESS_KEY=your_aws_secret_key
+
+# AWS Configuration (Do not prefix with AWS_)
+REGION=your_aws_region
+ACCESS_KEY_ID=your_aws_access_key
+SECRET_ACCESS_KEY=your_aws_secret_key
 ```
+
+For AWS Amplify deployment, add these environment variables in the Amplify Console without the "AWS_" prefix to avoid conflicts with reserved names.
 
 ## Installation
 
