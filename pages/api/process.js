@@ -178,116 +178,41 @@ async function pollForResults(runUid) {
 
 // Function to process results
 async function processResults(data) {
-  if (!data?.outputs?.QD5MJYBw2JgnylL3x6_save_structured_data) {
+  console.log('Processing raw data:', JSON.stringify(data, null, 2));
+
+  // Get the first output key that contains the structured data
+  const outputKey = Object.keys(data.outputs || {}).find(key => key.endsWith('_save_structured_data'));
+  
+  if (!outputKey || !data.outputs[outputKey]) {
+    console.error('No structured data found in outputs:', data.outputs);
     throw new Error('No valid data found in results');
   }
 
-  const propertyData = data.outputs.QD5MJYBw2JgnylL3x6_save_structured_data;
+  const propertyData = data.outputs[outputKey];
   
-  // Format the data
-  const formattedData = {
-    property: {
-      address: propertyData.location_name,
-      price: propertyData.price,
-      bedrooms: propertyData.bedroom,
-      bathrooms: propertyData.bathrooms,
-      mainImage: propertyData.property_images?.[0],
-      allImages: propertyData.property_images || [],
-      keyFeatures: propertyData.key_features,
-      description: propertyData.listing_description
-    },
-    agent: {
-      name: propertyData.estate_agent_name,
-      address: propertyData.estate_agent_address,
-      logo: propertyData.estate_agent_logo,
-      about: propertyData.estate_agent_about
-    }
-  };
-
-  // Generate caption
-  const caption = generateCaption(formattedData);
-
-  // Create Bannerbear-ready structure
-  const bannerbearData = {
-    template: BANNERBEAR_TEMPLATE_UID,
-    modifications: [
-      {
-        name: 'property_image',
-        image_url: formattedData.property.mainImage
-      },
-      {
-        name: 'property_price',
-        text: formattedData.property.price
-      },
-      {
-        name: 'property_location',
-        text: formattedData.property.address
-      },
-      {
-        name: 'bedrooms',
-        text: formattedData.property.bedrooms
-      },
-      {
-        name: 'bathrooms',
-        text: formattedData.property.bathrooms
-      },
-      {
-        name: 'logo',
-        image_url: formattedData.agent.logo
-      },
-      {
-        name: 'estate_agent_address',
-        text: formattedData.agent.address
-      }
-    ],
-    transparent: false,
-    render_pdf: false,
-    metadata: {
-      source: "rightmove",
-      scraped_at: new Date().toISOString()
-    }
-  };
-
-  return {
-    raw: formattedData,
-    bannerbear: bannerbearData,
-    caption: caption
-  };
-}
-
-// Function to generate caption
-function generateCaption(data) {
-  console.log('Generating caption...');
+  // Validate essential fields
+  if (!propertyData) {
+    throw new Error('Property data is undefined');
+  }
   
-  const property = data.property;
-  const agent = data.agent;
+  // Check if required fields exist
+  if (!propertyData.location_name) {
+    console.warn('Missing location_name in property data');
+    propertyData.location_name = 'Location not available';
+  }
   
-  // Handle missing or undefined values
-  const address = property.address || 'Property';
-  const firstPart = address.split(',')[0] || 'Property';
-  const bedrooms = property.bedrooms || 'multiple';
-  const bathrooms = property.bathrooms || 'multiple';
-  const keyFeatures = property.keyFeatures 
-    ? property.keyFeatures.split(/\s*\n\s*/).join('. ') 
-    : 'Fantastic property with great features';
-  const description = property.description 
-    ? property.description.substring(0, 150) + '...'
-    : 'This property offers excellent value and is located in a prime area.';
-  const agentName = agent.name || 'the agent';
+  if (!propertyData.estate_agent_address) {
+    console.warn('Missing estate_agent_address in property data');
+    propertyData.estate_agent_address = 'Agent address not available';
+  }
   
-  // Generate hashtag from address
-  const locationTag = firstPart.replace(/\s+/g, '');
+  if (!propertyData.property_images || !propertyData.property_images.length) {
+    console.warn('Missing property images in property data');
+    propertyData.property_images = ['/images/placeholder.jpg'];
+  }
   
-  // Sample caption template for property
-  return `✨ **Your New Home Awaits in ${firstPart}!** ✨
-
-This stunning ${bedrooms} bedroom property offers modern living at its finest with ${bathrooms} bathroom${bathrooms > 1 && bathrooms !== 'multiple' ? 's' : ''}. ${keyFeatures}. 
-
-Located in ${address}, you'll enjoy easy access to local amenities and excellent transportation links. ${description}
-
-Contact ${agentName} today to arrange a viewing!
-
-#PropertyListing #DreamHome #${locationTag} #RealEstate`;
+  // Return the validated property data
+  return propertyData;
 }
 
 // Bannerbear Functions
@@ -295,48 +220,58 @@ async function generateBannerbearImages(propertyData) {
   console.log('Generating Bannerbear images for:', propertyData);
 
   try {
-    // Create modifications array for the template set
-    const modifications = [
-      {
-        name: "property_image",
-        image_url: propertyData.property.mainImage
-      },
-      {
-        name: "property_price",
-        text: propertyData.property.price
-      },
-      {
-        name: "property_location",
-        text: propertyData.property.address
-      },
-      {
-        name: "bedrooms",
-        text: propertyData.property.bedrooms.toString()
-      },
-      {
-        name: "bathrooms",
-        text: propertyData.property.bathrooms.toString()
+    // Create collection request with raw data
+    const requestData = {
+      template_set: process.env.BANNERBEAR_TEMPLATE_SET_UID,
+      modifications: [
+        {
+          name: "property_image",
+          image_url: propertyData.property_images[0]
+        },
+        {
+          name: "property_price",
+          text: propertyData.price
+        },
+        {
+          name: "property_location",
+          text: propertyData.location_name
+        },
+        {
+          name: "bedrooms",
+          text: propertyData.bedroom
+        },
+        {
+          name: "bathrooms",
+          text: propertyData.bathrooms
+        },
+        {
+          name: "estate_agent_address",
+          text: propertyData.estate_agent_address
+        },
+        {
+          name: "logo",
+          image_url: propertyData.estate_agent_logo
+        }
+      ],
+      webhook_url: process.env.BANNERBEAR_WEBHOOK_URL,
+      project_id: 'E56OLrMKYWnzwl3oQj',
+      metadata: {
+        source: "rightmove",
+        scraped_at: new Date().toISOString()
       }
-    ];
+    };
 
-    // Add logo if agent has one
-    if (propertyData.agent?.logo) {
-      modifications.push({
-        name: "logo",
-        image_url: propertyData.agent.logo
+    // Add image_urls_by_template to specify different images for each template
+    if (propertyData.property_images.length > 1) {
+      requestData.image_urls_by_template = {};
+      propertyData.property_images.forEach((imageUrl, index) => {
+        requestData.image_urls_by_template[`property_image_${index + 1}`] = imageUrl;
       });
     }
 
-    // Create template set request
-    const requestData = {
-      template_set: process.env.BANNERBEAR_TEMPLATE_SET_UID,
-      modifications: modifications,
-      webhook_url: process.env.BANNERBEAR_WEBHOOK_URL
-    };
-
     console.log('Bannerbear request data:', JSON.stringify(requestData, null, 2));
 
-    const response = await fetch('https://api.bannerbear.com/v2/template_sets', {
+    const response = await fetch('https://api.bannerbear.com/v2/collections', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -355,12 +290,50 @@ async function generateBannerbearImages(propertyData) {
 
     return {
       uid: data.uid,
-      status: 'pending'
+      status: 'pending',
+      type: 'collection'
     };
   } catch (error) {
     console.error('Error generating Bannerbear images:', error);
     throw error;
   }
+}
+
+// Function to generate caption
+function generateCaption(propertyData) {
+  console.log('Generating caption...');
+  
+  // Extract location parts
+  const location = propertyData.location_name || 'Property';
+  const firstPart = location.split(',')[0] || 'Property';
+  
+  // Get property details
+  const bedrooms = propertyData.bedroom || 'multiple';
+  const bathrooms = propertyData.bathrooms || 'multiple';
+  const price = propertyData.price || 'Price on application';
+  const agentName = propertyData.estate_agent_name || 'us';
+  
+  // Clean up key features
+  const keyFeatures = propertyData.key_features || 'Fantastic property with great features';
+  
+  // Get description
+  const description = propertyData.listing_description 
+    ? propertyData.listing_description.substring(0, 150) + '...'
+    : 'This property offers excellent value and is located in a prime area.';
+  
+  // Generate hashtag from location
+  const locationTag = firstPart.replace(/\s+/g, '');
+  
+  // Generate caption
+  return `✨ **Your New Home Awaits in ${firstPart}!** ✨
+
+This stunning ${bedrooms} bedroom property offers modern living at its finest with ${bathrooms} bathroom${bathrooms > 1 && bathrooms !== 'multiple' ? 's' : ''}. ${keyFeatures}
+
+Located in ${location}, you'll enjoy easy access to local amenities and excellent transportation links. ${description}
+
+Contact ${agentName} today to arrange a viewing!
+
+#PropertyListing #DreamHome #${locationTag} #RealEstate`;
 }
 
 // Main API handler
@@ -384,9 +357,11 @@ export default async function handler(req, res) {
       return res.status(400).json({ message: 'Property URL is required' });
     }
 
+    console.log('Starting process with URL:', url);
+
     // Scrape property data
     const propertyData = await scrapeProperty(url);
-    console.log('Scraped property data:', propertyData);
+    console.log('Scraped property data:', JSON.stringify(propertyData, null, 2));
 
     // Generate caption
     const caption = generateCaption(propertyData);
@@ -396,17 +371,35 @@ export default async function handler(req, res) {
     const imageResult = await generateBannerbearImages(propertyData);
     console.log('Bannerbear image generation initiated:', imageResult);
 
+    // Structure the response in the expected format
     return res.status(200).json({
       message: 'Processing started',
-      uid: imageResult.uid,
-      status: imageResult.status,
-      caption
+      data: {
+        bannerbear: {
+          uid: imageResult.uid,
+          status: imageResult.status,
+          type: imageResult.type || 'collection'
+        },
+        caption: caption,
+        property: {
+          address: propertyData.location_name || 'Address not available',
+          price: propertyData.price || 'Price not available',
+          bedrooms: propertyData.bedroom || 'N/A',
+          bathrooms: propertyData.bathrooms || 'N/A',
+          images: propertyData.property_images || []
+        }
+      }
     });
   } catch (error) {
-    console.error('Error processing request:', error);
+    console.error('Full error details:', {
+      message: error.message,
+      stack: error.stack,
+      cause: error.cause
+    });
     return res.status(500).json({ 
       message: 'Error processing request', 
-      error: error.message 
+      error: error.message,
+      details: error.stack
     });
   }
 } 

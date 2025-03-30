@@ -4,9 +4,11 @@ import PropertyURLForm from '../../components/Forms/PropertyURLForm';
 import ResultsContainer from '../../components/Results/ResultsContainer';
 import HistoryList from '../../components/Dashboard/HistoryList';
 import Card from '../../components/UI/Card';
+import ErrorDisplay from '../../components/UI/ErrorDisplay';
 
 export default function Dashboard() {
   const [results, setResults] = useState(null);
+  const [error, setError] = useState(null);
   const [history, setHistory] = useState([
     {
       id: '1',
@@ -32,6 +34,10 @@ export default function Dashboard() {
 
   const handleSubmit = async (url) => {
     try {
+      // Clear previous results and errors
+      setResults(null);
+      setError(null);
+      
       // Make API call to process the URL
       const response = await fetch('/api/process', {
         method: 'POST',
@@ -39,28 +45,37 @@ export default function Dashboard() {
         body: JSON.stringify({ url })
       });
     
+      const responseData = await response.json();
+      console.log('API Response:', responseData);
+      
       if (!response.ok) {
-        const errorData = await response.json();
-        console.error('API Error:', errorData);
-        throw new Error(errorData.error || errorData.message || errorData.details || 'Failed to process URL');
+        console.error('API Error:', responseData);
+        throw new Error(responseData.error || responseData.message || responseData.details || 'Failed to process URL');
       }
       
-      const data = await response.json();
-      console.log('API Response:', data);
+      // Check if data has the expected structure
+      if (!responseData || !responseData.data) {
+        console.error('Missing data structure in API response', responseData);
+        throw new Error('Invalid API response format');
+      }
       
       // Set results with the complete data structure
       setResults({
-        bannerbear: data.data.bannerbear,
-        caption: data.data.caption
+        bannerbear: responseData.data.bannerbear || null,
+        caption: responseData.data.caption || "No caption available"
       });
     } catch (error) {
       console.error('Error processing URL:', error);
-      throw error;
+      setError({
+        message: error.message || 'An unexpected error occurred',
+        details: error.stack || ''
+      });
     }
   };
 
   const handleViewHistoryItem = (item) => {
     setResults(item);
+    setError(null);
     window.scrollTo({
       top: 0,
       behavior: 'smooth'
@@ -74,6 +89,14 @@ export default function Dashboard() {
       <Card title="Create New">
         <PropertyURLForm onSubmit={handleSubmit} />
       </Card>
+
+      {error && (
+        <ErrorDisplay 
+          message={error.message} 
+          details={error.details} 
+          onDismiss={() => setError(null)} 
+        />
+      )}
 
       {results && <ResultsContainer results={results} />}
 

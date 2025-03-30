@@ -4,7 +4,7 @@ import CaptionDisplay from './CaptionDisplay';
 export default function ResultsContainer({ results }) {
   if (!results) return null;
   
-  const { bannerbear, caption } = results;
+  const { bannerbear = null, caption = "No caption available" } = results;
   const isCollection = bannerbear?.type === 'collection';
   
   return (

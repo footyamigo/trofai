@@ -40,7 +40,22 @@ export default function ImageDisplay({ bannerbear, isCollection }) {
     return () => clearInterval(interval);
   }, [bannerbear?.uid, status?.status]);
 
-  if (!bannerbear) return null;
+  // Return fallback UI if bannerbear data is missing
+  if (!bannerbear) {
+    return (
+      <div className="fallback-message">
+        <p>No image data available yet. Please try again.</p>
+        <style jsx>{`
+          .fallback-message {
+            background: #f9f9f9;
+            padding: 2rem;
+            border-radius: 8px;
+            text-align: center;
+          }
+        `}</style>
+      </div>
+    );
+  }
 
   const downloadImage = async (url, filename = 'property-image.jpg') => {
     if (!url) return;

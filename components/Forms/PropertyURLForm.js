@@ -4,22 +4,30 @@ import ErrorDisplay from '../UI/ErrorDisplay';
 export default function PropertyURLForm({ onSubmit, buttonText = 'Trof it!' }) {
   const [url, setUrl] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState({ message: '', details: '' });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsProcessing(true);
-    setError('');
+    setError({ message: '', details: '' });
     
     try {
       // Validate URL
+      if (!url) {
+        throw new Error('Please enter a Rightmove property URL');
+      }
+      
       if (!url.includes('rightmove.co.uk/properties/')) {
         throw new Error('Please enter a valid Rightmove property URL');
       }
       
       await onSubmit(url);
     } catch (err) {
-      setError(err.message);
+      console.error('Form submission error:', err);
+      setError({ 
+        message: err.message || 'An error occurred processing this URL',
+        details: err.stack || ''
+      });
     } finally {
       setIsProcessing(false);
     }
@@ -45,7 +53,13 @@ export default function PropertyURLForm({ onSubmit, buttonText = 'Trof it!' }) {
         </button>
       </form>
       
-      {error && <ErrorDisplay message={error} onDismiss={() => setError('')} />}
+      {error.message && (
+        <ErrorDisplay 
+          message={error.message} 
+          details={error.details}
+          onDismiss={() => setError({ message: '', details: '' })} 
+        />
+      )}
 
       <style jsx>{`
         .form-container {
