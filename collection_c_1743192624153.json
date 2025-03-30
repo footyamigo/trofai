@@ -1,0 +1,93 @@
+{
+  "id": "c_1743192624153",
+  "created_at": "2025-03-28T20:10:27.164Z",
+  "status": "pending",
+  "template_set": "5AaLxyr4P8xrP8bDRG",
+  "images": [
+    {
+      "uid": "w0gWbdEPaYaD5yMMQrVklOA5j",
+      "status": "pending",
+      "template": "6jq8BX57x4kKDnlwWa",
+      "template_name": "Template1_Story1",
+      "property_image": "https://media.rightmove.co.uk/16k/15969/159791096/15969_1320112_IMG_00_0001.jpeg"
+    },
+    {
+      "uid": "aMBJ5DWdLYPogaDWQXRNjrp4Z",
+      "status": "pending",
+      "template": "agXkA3Dw17YWZW2VBY",
+      "template_name": "Template1_design10",
+      "property_image": "https://media.rightmove.co.uk/16k/15969/159791096/15969_1320112_IMG_01_0001.jpeg"
+    },
+    {
+      "uid": "kW7yv9eBdzprlkRJQNLRwa5Px",
+      "status": "pending",
+      "template": "A37YJe5qLqV0ZmpvWK",
+      "template_name": "Template1_design9",
+      "property_image": "https://media.rightmove.co.uk/16k/15969/159791096/15969_1320112_IMG_02_0001.jpeg"
+    },
+    {
+      "uid": "jMVrobL3AQ5aK90JQG9ReqJW5",
+      "status": "pending",
+      "template": "ok0l2K5mp3AAZ3j1Yx",
+      "template_name": "Template1_design8",
+      "property_image": "https://media.rightmove.co.uk/16k/15969/159791096/15969_1320112_IMG_03_0000.jpeg"
+    },
+    {
+      "uid": "5nDZ3xmVezbDbyNGQy2qpdWj9",
+      "status": "pending",
+      "template": "vz9ByYbNa7yPDRGXrw",
+      "template_name": "Template1_design7",
+      "property_image": "https://media.rightmove.co.uk/16k/15969/159791096/15969_1320112_IMG_04_0000.jpeg"
+    },
+    {
+      "uid": "P0ev7XDZrzqDmgkBYMjR9og8N",
+      "status": "pending",
+      "template": "Rqg32K5QmyEV58V07Y",
+      "template_name": "Template1_design6",
+      "property_image": "https://media.rightmove.co.uk/16k/15969/159791096/15969_1320112_IMG_05_0000.jpeg"
+    },
+    {
+      "uid": "nGPeXKvLJY7pa9lEzd81p93OM",
+      "status": "pending",
+      "template": "n1MJGd52o269D7LaPV",
+      "template_name": "Template1_design5",
+      "property_image": "https://media.rightmove.co.uk/16k/15969/159791096/15969_1320112_IMG_06_0001.jpeg"
+    },
+    {
+      "uid": "9BvRDJ724zWROWb1YlAKNOd03",
+      "status": "pending",
+      "template": "Aqa9wzDPxpBGDJogk7",
+      "template_name": "Template1_design4",
+      "property_image": "https://media.rightmove.co.uk/16k/15969/159791096/15969_1320112_IMG_07_0001.jpeg"
+    },
+    {
+      "uid": "NgL30amMOYeDWy3GQprJxBoye",
+      "status": "pending",
+      "template": "k4qoBVDygpRVZzN0gj",
+      "template_name": "Template1_design3",
+      "property_image": "https://media.rightmove.co.uk/16k/15969/159791096/15969_1320112_IMG_08_0000.jpeg"
+    },
+    {
+      "uid": "9e2VGL0qn6Vox75LQEAv5mxr1",
+      "status": "pending",
+      "template": "E9YaWrZMxGp7bnRd74",
+      "template_name": "Template1_design2",
+      "property_image": "https://media.rightmove.co.uk/16k/15969/159791096/15969_1320112_IMG_09_0000.jpeg"
+    },
+    {
+      "uid": "APW1bDp49YKoM0RPYjmVoORax",
+      "status": "pending",
+      "template": "vz9ByYbNa7nrDRGXrw",
+      "template_name": "Template1_design1",
+      "property_image": "https://media.rightmove.co.uk/16k/15969/159791096/15969_1320112_IMG_10_0000.jpeg"
+    }
+  ],
+  "property": {
+    "price": "£2,000 pcm",
+    "address": "York Road, Acton, London, W3",
+    "bedrooms": "2",
+    "bathrooms": "1",
+    "agentLogo": "https://media.rightmove.co.uk/16k/15969/branch_logo_15969_0000.jpeg",
+    "agentAddress": "54 The Mall, London, W5 3NE"
+  }
+}

@@ -81,12 +81,16 @@ async function scrapeProperty(url) {
       throw new Error(`Roborabbit API error: ${response.status} - ${responseText}`);
     }
     
+    // Safely parse JSON, checking for empty strings
     let runData;
     try {
+      if (!responseText || responseText.trim() === '') {
+        throw new Error('Empty response from Roborabbit API');
+      }
       runData = JSON.parse(responseText);
     } catch (e) {
       console.error('Failed to parse API response:', e);
-      throw new Error(`Invalid JSON response from Roborabbit: ${responseText}`);
+      throw new Error(`Invalid JSON response from Roborabbit: ${e.message}. Raw response: ${responseText.substring(0, 100)}`);
     }
     
     console.log('Parsed API Response:', runData);
@@ -143,12 +147,26 @@ async function pollForResults(runUid) {
         throw new Error(`Failed to poll results: ${response.status} - ${responseText}`);
       }
 
+      // Check for empty response
+      if (!responseText || responseText.trim() === '') {
+        console.warn(`Empty response received in polling attempt ${attempts}`);
+        
+        // If we're still early in polling attempts, let's wait and try again
+        if (attempts < MAX_POLLING_ATTEMPTS / 2) {
+          console.log(`Waiting ${POLLING_INTERVAL_MS * 2}ms before next attempt...`);
+          await new Promise(resolve => setTimeout(resolve, POLLING_INTERVAL_MS * 2));
+          return poll();
+        } else {
+          throw new Error('Received empty responses too many times while polling');
+        }
+      }
+
       let data;
       try {
         data = JSON.parse(responseText);
       } catch (e) {
         console.error('Failed to parse polling response:', e);
-        throw new Error(`Invalid JSON in polling response: ${responseText}`);
+        throw new Error(`Invalid JSON in polling response: ${e.message}. Raw response: ${responseText.substring(0, 100)}`);
       }
 
       console.log(`Poll response data (attempt ${attempts}):`, data);
@@ -164,6 +182,7 @@ async function pollForResults(runUid) {
         throw new Error(`Unexpected status: ${data.status}`);
       }
 
+      // If still pending, wait and try again
       console.log(`Status: ${data.status}, waiting ${POLLING_INTERVAL_MS}ms before next attempt...`);
       await new Promise(resolve => setTimeout(resolve, POLLING_INTERVAL_MS));
       return poll();
@@ -360,16 +379,53 @@ export default async function handler(req, res) {
     console.log('Starting process with URL:', url);
 
     // Scrape property data
-    const propertyData = await scrapeProperty(url);
-    console.log('Scraped property data:', JSON.stringify(propertyData, null, 2));
+    let propertyData;
+    try {
+      propertyData = await scrapeProperty(url);
+      console.log('Scraped property data:', JSON.stringify(propertyData, null, 2));
+    } catch (error) {
+      console.error('Error scraping property:', error);
+      return res.status(500).json({
+        message: 'Error scraping property data',
+        error: error.message,
+        details: error.stack,
+        code: 'SCRAPING_ERROR'
+      });
+    }
+    
+    // Validate that we have the minimum required data
+    if (!propertyData || typeof propertyData !== 'object') {
+      return res.status(500).json({
+        message: 'Invalid property data format returned from scraper',
+        error: 'Property data is not an object',
+        code: 'INVALID_DATA_FORMAT'
+      });
+    }
 
     // Generate caption
-    const caption = generateCaption(propertyData);
-    console.log('Generated caption:', caption);
+    let caption;
+    try {
+      caption = generateCaption(propertyData);
+      console.log('Generated caption:', caption);
+    } catch (error) {
+      console.error('Error generating caption:', error);
+      caption = "✨ **Property Details** ✨\n\nView this property on Rightmove for more information!"; // Fallback caption
+    }
 
     // Generate Bannerbear images
-    const imageResult = await generateBannerbearImages(propertyData);
-    console.log('Bannerbear image generation initiated:', imageResult);
+    let imageResult;
+    try {
+      imageResult = await generateBannerbearImages(propertyData);
+      console.log('Bannerbear image generation initiated:', imageResult);
+    } catch (error) {
+      console.error('Error generating Bannerbear images:', error);
+      return res.status(500).json({
+        message: 'Error generating images',
+        error: error.message,
+        details: error.stack,
+        code: 'BANNERBEAR_ERROR'
+      });
+    }
 
     // Structure the response in the expected format
     return res.status(200).json({
@@ -396,10 +452,15 @@ export default async function handler(req, res) {
       stack: error.stack,
       cause: error.cause
     });
+    
+    // Detect JSON parse errors specifically
+    const isJsonError = error.message && error.message.includes('JSON');
+    
     return res.status(500).json({ 
-      message: 'Error processing request', 
+      message: isJsonError ? 'Error parsing data from external API' : 'Error processing request', 
       error: error.message,
-      details: error.stack
+      details: error.stack,
+      code: isJsonError ? 'JSON_PARSE_ERROR' : 'GENERAL_ERROR'
     });
   }
 } 

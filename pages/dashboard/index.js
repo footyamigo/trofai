@@ -39,26 +39,45 @@ export default function Dashboard() {
       setError(null);
       
       // Make API call to process the URL
-      const response = await fetch('/api/process', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url })
-      });
-    
-      const responseData = await response.json();
-      console.log('API Response:', responseData);
-      
-      if (!response.ok) {
-        console.error('API Error:', responseData);
-        throw new Error(responseData.error || responseData.message || responseData.details || 'Failed to process URL');
+      let responseData;
+      try {
+        const response = await fetch('/api/process', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url })
+        });
+        
+        // Special handling for JSON parsing errors
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/json')) {
+          responseData = await response.json();
+        } else {
+          // If not JSON, handle as text
+          const text = await response.text();
+          throw new Error(`Server returned non-JSON response: ${text.substring(0, 100)}`);
+        }
+        
+        console.log('API Response:', responseData);
+        
+        if (!response.ok) {
+          console.error('API Error:', responseData);
+          throw new Error(responseData.error || responseData.message || responseData.details || 'Failed to process URL');
+        }
+      } catch (jsonError) {
+        // Handle JSON parsing errors specifically
+        if (jsonError.name === 'SyntaxError' && jsonError.message.includes('JSON')) {
+          console.error('JSON Parse Error:', jsonError);
+          throw new Error('Error parsing JSON response from server. The Rightmove scraper may be encountering issues.');
+        }
+        throw jsonError;
       }
-      
+
       // Check if data has the expected structure
       if (!responseData || !responseData.data) {
         console.error('Missing data structure in API response', responseData);
         throw new Error('Invalid API response format');
       }
-      
+
       // Set results with the complete data structure
       setResults({
         bannerbear: responseData.data.bannerbear || null,
@@ -68,7 +87,8 @@ export default function Dashboard() {
       console.error('Error processing URL:', error);
       setError({
         message: error.message || 'An unexpected error occurred',
-        details: error.stack || ''
+        details: error.stack || '',
+        code: error.code
       });
     }
   };
@@ -94,6 +114,7 @@ export default function Dashboard() {
         <ErrorDisplay 
           message={error.message} 
           details={error.details} 
+          code={error.code}
           onDismiss={() => setError(null)} 
         />
       )}

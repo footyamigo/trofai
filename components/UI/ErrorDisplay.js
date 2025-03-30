@@ -1,6 +1,7 @@
-export default function ErrorDisplay({ message, details, onDismiss }) {
+export default function ErrorDisplay({ message, details, code, onDismiss }) {
   // Extract specific error types to provide more helpful messages
   const isAddressError = message?.includes('address') || details?.includes('address');
+  const isJsonError = message?.includes('JSON') || code === 'JSON_PARSE_ERROR' || details?.includes('JSON');
 
   return (
     <div className="error-container">
@@ -18,6 +19,19 @@ export default function ErrorDisplay({ message, details, onDismiss }) {
               <li>The Rightmove page structure has changed</li>
             </ul>
             <p>Try a different Rightmove property URL.</p>
+          </div>
+        )}
+        
+        {isJsonError && (
+          <div className="error-hint">
+            <strong>Hint:</strong> There was a problem parsing data from Rightmove. 
+            This could be due to:
+            <ul>
+              <li>The scraper received an empty or invalid response</li>
+              <li>The Rightmove website might be temporarily blocking scrapers</li>
+              <li>The property data format may have changed</li>
+            </ul>
+            <p>Try again in a few minutes or try a different property URL.</p>
           </div>
         )}
         

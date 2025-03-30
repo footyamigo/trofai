@@ -4,12 +4,12 @@ import ErrorDisplay from '../UI/ErrorDisplay';
 export default function PropertyURLForm({ onSubmit, buttonText = 'Trof it!' }) {
   const [url, setUrl] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [error, setError] = useState({ message: '', details: '' });
+  const [error, setError] = useState({ message: '', details: '', code: '' });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsProcessing(true);
-    setError({ message: '', details: '' });
+    setError({ message: '', details: '', code: '' });
     
     try {
       // Validate URL
@@ -26,7 +26,8 @@ export default function PropertyURLForm({ onSubmit, buttonText = 'Trof it!' }) {
       console.error('Form submission error:', err);
       setError({ 
         message: err.message || 'An error occurred processing this URL',
-        details: err.stack || ''
+        details: err.stack || '',
+        code: err.code || ''
       });
     } finally {
       setIsProcessing(false);
@@ -57,7 +58,8 @@ export default function PropertyURLForm({ onSubmit, buttonText = 'Trof it!' }) {
         <ErrorDisplay 
           message={error.message} 
           details={error.details}
-          onDismiss={() => setError({ message: '', details: '' })} 
+          code={error.code}
+          onDismiss={() => setError({ message: '', details: '', code: '' })} 
         />
       )}
 

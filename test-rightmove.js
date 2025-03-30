@@ -430,14 +430,55 @@ async function generateBannerbearImage(propertyData) {
     }
 }
 
-// Add collection handling functionality
+// Update the test function to use collections by default
+async function testScraper() {
+    // Get URL from command line arguments or use default
+    const testUrl = process.argv[2] || 'https://www.rightmove.co.uk/properties/159791096#/?channel=RES_LET';
+    console.log('Testing URL:', testUrl);
+    
+    const cleanUrl = cleanRightmoveUrl(testUrl);
+    console.log('Cleaned URL:', cleanUrl);
+    
+    const propertyData = await scrapeRightmoveProperty(cleanUrl);
+    if (propertyData) {
+        console.log('Successfully scraped property data!');
+        
+        // Use template set generation by default
+        const templateSetUid = process.env.BANNERBEAR_TEMPLATE_SET_UID;
+        
+        if (!templateSetUid) {
+            console.log('No template set UID configured, falling back to single template generation...');
+            const bannerbearResponse = await generateBannerbearImage(propertyData);
+            console.log('Single image generation initiated!');
+            console.log('Image UID for tracking:', bannerbearResponse.uid);
+            console.log('Webhook URL:', bannerbearResponse.webhook_url);
+            return;
+        }
+        
+        console.log('Generating collection using template set:', templateSetUid);
+        const collectionResponse = await generateBannerbearCollection(propertyData, templateSetUid);
+        
+        console.log('Collection generation initiated!');
+        console.log('Collection UID for tracking:', collectionResponse.uid);
+        console.log('Webhook URL:', collectionResponse.webhook_url);
+        console.log('\nTo check collection status, visit:');
+        console.log(`http://localhost:3000/image-status/${collectionResponse.uid}`);
+    }
+}
+
+// Update collection generation function to include project_id
 async function generateBannerbearCollection(propertyData, templateSetUid) {
     try {
         // Prepare the collection payload
         const collectionPayload = {
             template_set: templateSetUid,
             modifications: propertyData.bannerbear.modifications,
-            project_id: 'E56OLrMKYWnzwl3oQj'
+            project_id: 'E56OLrMKYWnzwl3oQj',
+            metadata: {
+                source: "rightmove",
+                scraped_at: new Date().toISOString(),
+                property_id: propertyData.raw.property.id
+            }
         };
 
         // Add webhook configuration if available
@@ -447,13 +488,6 @@ async function generateBannerbearCollection(propertyData, templateSetUid) {
                 'Authorization': `Bearer ${process.env.BANNERBEAR_WEBHOOK_SECRET}`
             };
         }
-
-        // Add metadata
-        collectionPayload.metadata = {
-            source: "rightmove",
-            scraped_at: new Date().toISOString(),
-            property_id: propertyData.raw.property.id
-        };
 
         console.log('Sending Bannerbear collection request with payload:', JSON.stringify(collectionPayload, null, 2));
 
@@ -514,71 +548,14 @@ function processBannerbearWebhook(webhookData) {
     }
 }
 
-// Update the test function to handle webhook-based updates
-async function testScraper() {
-    // Get URL from command line arguments or use default
-    const testUrl = process.argv[2] || 'https://www.rightmove.co.uk/properties/159791096#/?channel=RES_LET';
-    console.log('Testing URL:', testUrl);
-    
-    const cleanUrl = cleanRightmoveUrl(testUrl);
-    console.log('Cleaned URL:', cleanUrl);
-    
-    const propertyData = await scrapeRightmoveProperty(cleanUrl);
-    if (propertyData) {
-        console.log('Successfully scraped property data!');
-        
-        // Test Bannerbear image generation with webhook
-        console.log('Testing Bannerbear image generation...');
-        const bannerbearResponse = await generateBannerbearImage(propertyData);
-        
-        console.log('Image generation initiated!');
-        console.log('Image UID for tracking:', bannerbearResponse.uid);
-        console.log('Webhook URL:', bannerbearResponse.webhook_url);
-        console.log('\nTo check image status, visit:');
-        console.log(`http://localhost:3000/image-status/${bannerbearResponse.uid}`);
-    }
-}
-
-// Add a test function for collections (will be used once template set is created)
-async function testCollectionGeneration() {
-    const testUrl = 'https://www.rightmove.co.uk/properties/159791096#/?channel=RES_LET';
-    console.log('Testing URL:', testUrl);
-    
-    const cleanUrl = cleanRightmoveUrl(testUrl);
-    console.log('Cleaned URL:', cleanUrl);
-    
-    const propertyData = await scrapeRightmoveProperty(cleanUrl);
-    if (propertyData) {
-        console.log('Successfully scraped property data!');
-        
-        // This will be replaced with your actual template set UID once created
-        const templateSetUid = process.env.BANNERBEAR_TEMPLATE_SET_UID;
-        
-        if (!templateSetUid) {
-            console.log('No template set UID configured. Using single template generation instead.');
-            return await testScraper();
-        }
-        
-        console.log('Testing Bannerbear collection generation...');
-        const collectionResponse = await generateBannerbearCollection(propertyData, templateSetUid);
-        
-        console.log('Collection generation initiated!');
-        console.log('Collection UID for tracking:', collectionResponse.uid);
-        console.log('Webhook URL:', collectionResponse.webhook_url);
-        console.log('\nTo check collection status, visit:');
-        console.log(`http://localhost:3000/image-status/${collectionResponse.uid}`);
-    }
-}
-
-// Export functions for use in other files
+// Export functions
 module.exports = {
     scrapeRightmoveProperty,
     generateBannerbearImage,
     generateBannerbearCollection,
     processBannerbearWebhook,
-    testScraper,
-    testCollectionGeneration
+    testScraper
 };
 
-// Keep the existing test call for now
+// Run the test
 testScraper(); 
