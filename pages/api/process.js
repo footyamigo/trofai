@@ -3,37 +3,37 @@ const AWS = require('aws-sdk');
 const fetch = require('node-fetch');
 const getConfig = require('next/config').default;
 
-// Get server config
-const { serverRuntimeConfig } = getConfig() || {
-  serverRuntimeConfig: {
-    ROBORABBIT_API_KEY: process.env.ROBORABBIT_API_KEY,
-    TASK_UID: process.env.TASK_UID,
-    BANNERBEAR_API_KEY: process.env.BANNERBEAR_API_KEY,
-    BANNERBEAR_TEMPLATE_UID: process.env.BANNERBEAR_TEMPLATE_UID,
-    BANNERBEAR_TEMPLATE_SET_UID: process.env.BANNERBEAR_TEMPLATE_SET_UID,
-    AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID,
-    AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY,
-    AWS_REGION: process.env.AWS_REGION || 'us-east-1',
-  }
-};
+// Get server config with clear fallbacks
+const { serverRuntimeConfig } = getConfig() || { serverRuntimeConfig: {} };
 
-// Configure AWS
-AWS.config.update({
-  accessKeyId: serverRuntimeConfig.AWS_ACCESS_KEY_ID,
-  secretAccessKey: serverRuntimeConfig.AWS_SECRET_ACCESS_KEY,
-  region: serverRuntimeConfig.AWS_REGION || 'eu-west-2'
-});
+// Extract all API keys and config with fallbacks
+const ROBORABBIT_API_KEY = serverRuntimeConfig.ROBORABBIT_API_KEY || process.env.ROBORABBIT_API_KEY;
+const TASK_UID = serverRuntimeConfig.TASK_UID || process.env.TASK_UID;
+const BANNERBEAR_API_KEY = serverRuntimeConfig.BANNERBEAR_API_KEY || process.env.BANNERBEAR_API_KEY;
+const BANNERBEAR_TEMPLATE_UID = serverRuntimeConfig.BANNERBEAR_TEMPLATE_UID || process.env.BANNERBEAR_TEMPLATE_UID;
+const BANNERBEAR_TEMPLATE_SET_UID = serverRuntimeConfig.BANNERBEAR_TEMPLATE_SET_UID || process.env.BANNERBEAR_TEMPLATE_SET_UID;
+const BANNERBEAR_WEBHOOK_URL = serverRuntimeConfig.BANNERBEAR_WEBHOOK_URL || process.env.BANNERBEAR_WEBHOOK_URL;
+const BANNERBEAR_WEBHOOK_SECRET = serverRuntimeConfig.BANNERBEAR_WEBHOOK_SECRET || process.env.BANNERBEAR_WEBHOOK_SECRET;
+const AWS_ACCESS_KEY_ID = serverRuntimeConfig.AWS_ACCESS_KEY_ID || process.env.ACCESS_KEY_ID;
+const AWS_SECRET_ACCESS_KEY = serverRuntimeConfig.AWS_SECRET_ACCESS_KEY || process.env.SECRET_ACCESS_KEY;
+const AWS_REGION = serverRuntimeConfig.AWS_REGION || process.env.REGION || 'us-east-1';
 
-// Initialize DynamoDB DocumentClient
-const dynamoDb = new AWS.DynamoDB.DocumentClient();
-
-// Roborabbit scraping constants
-const ROBORABBIT_API_KEY = serverRuntimeConfig.ROBORABBIT_API_KEY;
-const TASK_UID = serverRuntimeConfig.TASK_UID;
-
-// Bannerbear constants
-const BANNERBEAR_API_KEY = serverRuntimeConfig.BANNERBEAR_API_KEY;
-const BANNERBEAR_TEMPLATE_UID = serverRuntimeConfig.BANNERBEAR_TEMPLATE_UID;
+// Configure AWS with better error handling
+let dynamoDb;
+try {
+  AWS.config.update({
+    accessKeyId: AWS_ACCESS_KEY_ID,
+    secretAccessKey: AWS_SECRET_ACCESS_KEY,
+    region: AWS_REGION
+  });
+  
+  // Initialize DynamoDB DocumentClient
+  dynamoDb = new AWS.DynamoDB.DocumentClient();
+  console.log('DynamoDB configured successfully');
+} catch (error) {
+  console.error('Failed to configure AWS:', error);
+  // Continue without DynamoDB functionality
+}
 
 // Function to clean Rightmove URL
 function cleanRightmoveUrl(url) {
@@ -64,8 +64,10 @@ async function scrapeProperty(url) {
     };
     
     console.log('Request payload:', JSON.stringify(data, null, 2));
+    console.log('Using Roborabbit API key:', ROBORABBIT_API_KEY ? 'Set (not shown)' : 'Not set');
+    console.log('Using Task UID:', TASK_UID);
     
-    // Call Roborabbit API
+    // Call Roborabbit API with better error handling
     const response = await fetch(`https://api.roborabbit.com/v1/tasks/${TASK_UID}/runs`, {
       method: 'POST',
       headers: {
@@ -77,7 +79,7 @@ async function scrapeProperty(url) {
     
     // First try to get the response as text
     const responseText = await response.text();
-    console.log('Raw API Response length:', responseText.length);
+    console.log('Raw API Response length:', responseText.length, 'First 100 chars:', responseText.substring(0, 100));
     
     if (!response.ok) {
       throw new Error(`Roborabbit API error: ${response.status} - ${responseText}`);
@@ -108,7 +110,7 @@ async function scrapeProperty(url) {
       }
     }
     
-    console.log('Parsed API Response:', runData);
+    console.log('Parsed API Response type:', typeof runData);
     
     if (runData.message) {
       throw new Error(`Error from Roborabbit: ${runData.message}`);
@@ -156,7 +158,7 @@ async function pollForResults(runUid) {
       });
 
       const responseText = await response.text();
-      console.log(`Raw polling response (attempt ${attempts}):`, responseText);
+      console.log(`Raw polling response length (attempt ${attempts}):`, responseText.length);
 
       if (!response.ok) {
         throw new Error(`Failed to poll results: ${response.status} - ${responseText}`);
@@ -184,7 +186,7 @@ async function pollForResults(runUid) {
         throw new Error(`Invalid JSON in polling response: ${e.message}. Raw response: ${responseText.substring(0, 100)}`);
       }
 
-      console.log(`Poll response data (attempt ${attempts}):`, data);
+      console.log(`Poll status (attempt ${attempts}):`, data.status);
 
       if (data.status === 'finished' && data.outputs) {
         console.log('Scraping completed successfully!');
@@ -249,8 +251,10 @@ function formatPrice(price) {
 }
 
 // Function to process results
-async function processResults(data) {
+function processResults(data) {
   try {
+    console.log('Processing scraped data...');
+    
     // Get the first output key that contains the structured data
     const outputKeys = Object.keys(data.outputs || {});
     console.log('Available output keys:', outputKeys);
@@ -289,35 +293,56 @@ function isValidUrl(url) {
   try {
     // Check if it's a string first
     if (typeof url !== 'string') {
+      console.log('URL validation failed: Not a string');
       return false;
     }
 
     // Special case for Rightmove media URLs
-    if (url.startsWith('https://media.rightmove.co.uk/')) {
+    if (url.includes('media.rightmove.co.uk')) {
+      console.log('URL validation passed: Rightmove media URL');
       return true;
     }
 
     // For all other URLs, do standard validation
     const parsedUrl = new URL(url);
-    return parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:';
-  } catch {
+    const isValid = parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:';
+    console.log(`URL validation ${isValid ? 'passed' : 'failed'}: ${url}`);
+    return isValid;
+  } catch (error) {
+    console.log(`URL validation error: ${error.message} for URL: ${url}`);
     return false;
   }
 }
 
-// Bannerbear Functions
+// Bannerbear Functions - Matching integration-test.js approach
 async function generateBannerbearImages(propertyData) {
   try {
     console.log('Generating Bannerbear images...');
+    console.log('Property data type:', typeof propertyData);
     console.log('Property data keys:', Object.keys(propertyData));
     
-    // Validate property_images
-    if (!propertyData.property_images || !Array.isArray(propertyData.property_images) || propertyData.property_images.length === 0) {
-      console.error('No valid property images found:', propertyData.property_images);
+    // Validate property_images with better logging
+    console.log('property_images exists:', 'property_images' in propertyData);
+    console.log('property_images type:', typeof propertyData.property_images);
+    console.log('property_images is array:', Array.isArray(propertyData.property_images));
+    
+    if (!propertyData.property_images || !Array.isArray(propertyData.property_images)) {
+      console.error('property_images is not a valid array:', propertyData.property_images);
       throw new Error('No valid property images found');
     }
     
-    console.log('Found', propertyData.property_images.length, 'property images');
+    console.log('property_images length:', propertyData.property_images.length);
+    
+    if (propertyData.property_images.length === 0) {
+      console.error('property_images array is empty');
+      throw new Error('No valid property images found');
+    }
+
+    // Log the first few images
+    console.log('First few property images:');
+    for (let i = 0; i < Math.min(propertyData.property_images.length, 3); i++) {
+      console.log(`Image ${i}:`, propertyData.property_images[i]);
+    }
 
     // Create base modifications for common fields
     const baseModifications = [
@@ -343,19 +368,25 @@ async function generateBannerbearImages(propertyData) {
       }
     ];
 
-    // Only add logo if it exists
-    if (propertyData.estate_agent_logo) {
+    // Only add logo if it exists and is valid
+    if (propertyData.estate_agent_logo && isValidUrl(propertyData.estate_agent_logo)) {
       baseModifications.push({
         name: "logo",
         image_url: propertyData.estate_agent_logo
       });
     }
 
-    // Add image modifications for each template
+    // Add image modifications for each template - Using exact same approach as integration-test.js
     const imageModifications = [];
     for (let i = 0; i <= 23; i++) {
       const layerName = i === 0 ? "property_image" : `property_image${i}`;
+      // Use modulo to cycle through available images
       const imageIndex = i % propertyData.property_images.length;
+      
+      console.log(`Adding image modification for ${layerName}:`, {
+        index: imageIndex,
+        url: propertyData.property_images[imageIndex]
+      });
       
       imageModifications.push({
         name: layerName,
@@ -365,12 +396,12 @@ async function generateBannerbearImages(propertyData) {
 
     // Create collection request with all modifications
     const requestData = {
-      template_set: serverRuntimeConfig.BANNERBEAR_TEMPLATE_SET_UID,
+      template_set: BANNERBEAR_TEMPLATE_SET_UID,
       modifications: [...baseModifications, ...imageModifications],
       project_id: 'E56OLrMKYWnzwl3oQj',
-      webhook_url: serverRuntimeConfig.BANNERBEAR_WEBHOOK_URL,
+      webhook_url: BANNERBEAR_WEBHOOK_URL,
       webhook_headers: {
-        'Authorization': `Bearer ${serverRuntimeConfig.BANNERBEAR_WEBHOOK_SECRET}`
+        'Authorization': `Bearer ${BANNERBEAR_WEBHOOK_SECRET}`
       },
       metadata: {
         source: "rightmove",
@@ -401,12 +432,13 @@ async function generateBannerbearImages(propertyData) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${serverRuntimeConfig.BANNERBEAR_API_KEY}`
+        'Authorization': `Bearer ${BANNERBEAR_API_KEY}`
       },
       body: JSON.stringify(requestData)
     });
 
     const responseText = await response.text();
+    console.log('Raw Bannerbear API response length:', responseText.length, 'First 100 chars:', responseText.substring(0, 100));
 
     if (!response.ok) {
       console.error('Bannerbear API error response:', responseText);
@@ -484,8 +516,11 @@ export default async function handler(req, res) {
     BANNERBEAR_API_KEY: BANNERBEAR_API_KEY ? '✓ Set' : '✗ Missing',
     BANNERBEAR_TEMPLATE_UID: BANNERBEAR_TEMPLATE_UID ? '✓ Set' : '✗ Missing',
     BANNERBEAR_TEMPLATE_SET_UID: BANNERBEAR_TEMPLATE_SET_UID ? '✓ Set' : '✗ Missing',
-    BANNERBEAR_WEBHOOK_URL: serverRuntimeConfig.BANNERBEAR_WEBHOOK_URL ? '✓ Set' : '✗ Missing',
-    BANNERBEAR_WEBHOOK_SECRET: serverRuntimeConfig.BANNERBEAR_WEBHOOK_SECRET ? '✓ Set' : '✗ Missing'
+    BANNERBEAR_WEBHOOK_URL: BANNERBEAR_WEBHOOK_URL ? '✓ Set' : '✗ Missing',
+    BANNERBEAR_WEBHOOK_SECRET: BANNERBEAR_WEBHOOK_SECRET ? '✓ Set' : '✗ Missing',
+    AWS_ACCESS_KEY_ID: AWS_ACCESS_KEY_ID ? '✓ Set' : '✗ Missing',
+    AWS_SECRET_ACCESS_KEY: AWS_SECRET_ACCESS_KEY ? '✓ Set' : '✗ Missing',
+    AWS_REGION: AWS_REGION
   });
 
   try {
@@ -529,7 +564,7 @@ export default async function handler(req, res) {
     let caption;
     try {
       caption = generateCaption(propertyData);
-      console.log('Generated caption:', caption);
+      console.log('Generated caption length:', caption.length);
     } catch (error) {
       console.error('Error generating caption:', error);
       caption = "✨ **Property Details** ✨\n\nView this property on Rightmove for more information!"; // Fallback caption
