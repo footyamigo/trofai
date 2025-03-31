@@ -75,6 +75,7 @@ async function scrapeProperty(url) {
       body: JSON.stringify(data)
     });
     
+    // First try to get the response as text
     const responseText = await response.text();
     console.log('Raw API Response:', responseText);
     
@@ -82,16 +83,29 @@ async function scrapeProperty(url) {
       throw new Error(`Roborabbit API error: ${response.status} - ${responseText}`);
     }
     
-    // Safely parse JSON, checking for empty strings
+    // Try to parse the response as JSON
     let runData;
     try {
+      // Check if we have a valid response
       if (!responseText || responseText.trim() === '') {
         throw new Error('Empty response from Roborabbit API');
       }
+      
+      // Try to parse as JSON
       runData = JSON.parse(responseText);
+      
+      // If we got a string that looks like JSON, try parsing it again
+      if (typeof runData === 'string' && runData.trim().startsWith('{')) {
+        runData = JSON.parse(runData);
+      }
     } catch (e) {
       console.error('Failed to parse API response:', e);
-      throw new Error(`Invalid JSON response from Roborabbit: ${e.message}. Raw response: ${responseText.substring(0, 100)}`);
+      // If the response looks like JSON but failed to parse, it might be double-encoded
+      try {
+        runData = JSON.parse(JSON.parse(responseText));
+      } catch (e2) {
+        throw new Error(`Invalid JSON response from Roborabbit: ${e.message}. Raw response: ${responseText.substring(0, 100)}`);
+      }
     }
     
     console.log('Parsed API Response:', runData);
@@ -200,39 +214,69 @@ async function pollForResults(runUid) {
 async function processResults(data) {
   console.log('Processing raw data:', JSON.stringify(data, null, 2));
 
-  // Get the first output key that contains the structured data
-  const outputKey = Object.keys(data.outputs || {}).find(key => key.endsWith('_save_structured_data'));
-  
-  if (!outputKey || !data.outputs[outputKey]) {
-    console.error('No structured data found in outputs:', data.outputs);
-    throw new Error('No valid data found in results');
-  }
+  try {
+    // Get the first output key that contains the structured data
+    const outputKeys = Object.keys(data.outputs || {});
+    console.log('Available output keys:', outputKeys);
 
-  const propertyData = data.outputs[outputKey];
-  
-  // Validate essential fields
-  if (!propertyData) {
-    throw new Error('Property data is undefined');
+    // Find the key that contains our data
+    const outputKey = outputKeys.find(key => 
+      key.includes('save_structured_data') || 
+      (data.outputs[key] && typeof data.outputs[key] === 'object')
+    );
+    
+    if (!outputKey) {
+      console.error('No structured data found in outputs:', data.outputs);
+      throw new Error('No valid data found in results');
+    }
+
+    console.log('Using output key:', outputKey);
+    let propertyData = data.outputs[outputKey];
+
+    // If the data is a string (JSON string), try to parse it
+    if (typeof propertyData === 'string') {
+      try {
+        propertyData = JSON.parse(propertyData);
+      } catch (e) {
+        console.error('Failed to parse property data string:', e);
+      }
+    }
+
+    // Validate essential fields
+    if (!propertyData || typeof propertyData !== 'object') {
+      throw new Error('Property data is invalid');
+    }
+    
+    // Check if required fields exist
+    if (!propertyData.location_name) {
+      console.warn('Missing location_name in property data');
+      propertyData.location_name = 'Location not available';
+    }
+    
+    if (!propertyData.estate_agent_address) {
+      console.warn('Missing estate_agent_address in property data');
+      propertyData.estate_agent_address = 'Agent address not available';
+    }
+    
+    if (!propertyData.property_images || !propertyData.property_images.length) {
+      console.warn('Missing property images in property data');
+      propertyData.property_images = ['/images/placeholder.jpg'];
+    }
+
+    // Add additional logging
+    console.log('Processed property data:', {
+      location: propertyData.location_name,
+      images: propertyData.property_images?.length || 0,
+      price: propertyData.price,
+      agent: propertyData.estate_agent_name
+    });
+    
+    // Return the validated property data
+    return propertyData;
+  } catch (error) {
+    console.error('Error processing results:', error);
+    throw new Error(`Failed to process property data: ${error.message}`);
   }
-  
-  // Check if required fields exist
-  if (!propertyData.location_name) {
-    console.warn('Missing location_name in property data');
-    propertyData.location_name = 'Location not available';
-  }
-  
-  if (!propertyData.estate_agent_address) {
-    console.warn('Missing estate_agent_address in property data');
-    propertyData.estate_agent_address = 'Agent address not available';
-  }
-  
-  if (!propertyData.property_images || !propertyData.property_images.length) {
-    console.warn('Missing property images in property data');
-    propertyData.property_images = ['/images/placeholder.jpg'];
-  }
-  
-  // Return the validated property data
-  return propertyData;
 }
 
 // Bannerbear Functions
