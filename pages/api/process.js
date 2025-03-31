@@ -279,49 +279,77 @@ async function processResults(data) {
   }
 }
 
+// Function to validate URL
+function isValidUrl(url) {
+  try {
+    new URL(url);
+    return url.startsWith('http://') || url.startsWith('https://');
+  } catch {
+    return false;
+  }
+}
+
 // Bannerbear Functions
 async function generateBannerbearImages(propertyData) {
   console.log('Generating Bannerbear images for:', propertyData);
 
   try {
+    // Validate and filter property images
+    if (!propertyData.property_images || !Array.isArray(propertyData.property_images)) {
+      console.error('No valid property images array found');
+      throw new Error('Property images are required');
+    }
+
+    const validImages = propertyData.property_images.filter(url => isValidUrl(url));
+    console.log(`Found ${validImages.length} valid images out of ${propertyData.property_images.length}`);
+
+    if (validImages.length === 0) {
+      console.error('No valid image URLs found in property data');
+      throw new Error('No valid property images found');
+    }
+
     // Create base modifications for common fields
     const baseModifications = [
       {
         name: "property_price",
-        text: propertyData.price
+        text: propertyData.price || 'Price on application'
       },
       {
         name: "property_location",
-        text: propertyData.location_name
+        text: propertyData.location_name || 'Location not available'
       },
       {
         name: "bedrooms",
-        text: propertyData.bedroom
+        text: propertyData.bedroom || 'N/A'
       },
       {
         name: "bathrooms",
-        text: propertyData.bathrooms
+        text: propertyData.bathrooms || 'N/A'
       },
       {
         name: "estate_agent_address",
-        text: propertyData.estate_agent_address
-      },
-      {
-        name: "logo",
-        image_url: propertyData.estate_agent_logo
+        text: propertyData.estate_agent_address || 'Contact agent for details'
       }
     ];
+
+    // Only add logo if it's a valid URL
+    if (propertyData.estate_agent_logo && isValidUrl(propertyData.estate_agent_logo)) {
+      baseModifications.push({
+        name: "logo",
+        image_url: propertyData.estate_agent_logo
+      });
+    }
 
     // Add image modifications for each template
     // We'll cycle through available images if we have more templates than images
     const imageModifications = [];
     for (let i = 0; i <= 23; i++) {
       const layerName = i === 0 ? "property_image" : `property_image${i}`;
-      const imageIndex = i % propertyData.property_images.length; // Cycle through images if we run out
+      const imageIndex = i % validImages.length; // Cycle through valid images if we run out
       
       imageModifications.push({
         name: layerName,
-        image_url: propertyData.property_images[imageIndex]
+        image_url: validImages[imageIndex]
       });
     }
 
@@ -337,7 +365,8 @@ async function generateBannerbearImages(propertyData) {
       metadata: {
         source: "rightmove",
         scraped_at: new Date().toISOString(),
-        total_images: propertyData.property_images.length
+        total_images: validImages.length,
+        original_images: propertyData.property_images.length
       }
     };
 
@@ -346,7 +375,8 @@ async function generateBannerbearImages(propertyData) {
       template_set: requestData.template_set,
       webhook_url: requestData.webhook_url,
       total_modifications: requestData.modifications.length,
-      total_images: propertyData.property_images.length
+      total_images: validImages.length,
+      sample_image: validImages[0]
     });
 
     // Validate required configuration
@@ -369,6 +399,8 @@ async function generateBannerbearImages(propertyData) {
 
     if (!response.ok) {
       const errorText = await response.text();
+      console.error('Bannerbear API error response:', errorText);
+      console.error('Request data that caused error:', JSON.stringify(requestData, null, 2));
       throw new Error(`Bannerbear API error: ${response.status} - ${errorText}`);
     }
 
