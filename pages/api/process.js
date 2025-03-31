@@ -210,6 +210,44 @@ async function pollForResults(runUid) {
   return await poll();
 }
 
+// Function to format address
+function formatAddress(address) {
+  if (!address) return null;
+  
+  // Remove extra whitespace, normalize line endings, and fix multiple commas
+  return address
+    .replace(/\r\n/g, ',')
+    .replace(/,+/g, ',')
+    .replace(/\s+/g, ' ')
+    .replace(/\s*,\s*/g, ', ')
+    .trim();
+}
+
+// Function to format price
+function formatPrice(price) {
+  if (!price) return null;
+  
+  // Remove any existing currency symbols and commas
+  const cleanPrice = price.replace(/[£,]/g, '').trim();
+  
+  // Extract numeric value and period (pcm, pw)
+  const matches = cleanPrice.match(/^(\d+(?:\.\d+)?)\s*(pcm|pw)?$/i);
+  if (!matches) return price; // Return original if format not recognized
+
+  const [_, amount, period] = matches;
+  const numericAmount = parseFloat(amount);
+
+  // Format with currency symbol and commas, but without decimals
+  const formattedAmount = new Intl.NumberFormat('en-GB', {
+    style: 'currency',
+    currency: 'GBP',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  }).format(numericAmount);
+
+  return `${formattedAmount} ${period || ''}`.trim();
+}
+
 // Function to process results
 async function processResults(data) {
   console.log('Processing raw data:', JSON.stringify(data, null, 2));
@@ -239,40 +277,38 @@ async function processResults(data) {
         propertyData = JSON.parse(propertyData);
       } catch (e) {
         console.error('Failed to parse property data string:', e);
+        try {
+          propertyData = JSON.parse(JSON.parse(propertyData));
+        } catch (e2) {
+          console.error('Failed to parse double-encoded property data:', e2);
+          throw new Error('Failed to parse property data');
+        }
       }
     }
 
-    // Validate essential fields
-    if (!propertyData || typeof propertyData !== 'object') {
-      throw new Error('Property data is invalid');
-    }
-    
-    // Check if required fields exist
-    if (!propertyData.location_name) {
-      console.warn('Missing location_name in property data');
-      propertyData.location_name = 'Location not available';
-    }
-    
-    if (!propertyData.estate_agent_address) {
-      console.warn('Missing estate_agent_address in property data');
-      propertyData.estate_agent_address = 'Agent address not available';
-    }
-    
-    if (!propertyData.property_images || !propertyData.property_images.length) {
-      console.warn('Missing property images in property data');
-      propertyData.property_images = ['/images/placeholder.jpg'];
-    }
+    // Format and validate the data
+    const formattedData = {
+      property: {
+        address: formatAddress(propertyData.location_name),
+        price: formatPrice(propertyData.price),
+        bedrooms: propertyData.bedroom,
+        bathrooms: propertyData.bathrooms,
+        mainImage: propertyData.property_images?.[0],
+        allImages: propertyData.property_images || [],
+        keyFeatures: propertyData.key_features,
+        description: propertyData.listing_description
+      },
+      agent: {
+        name: propertyData.estate_agent_name,
+        address: formatAddress(propertyData.estate_agent_address),
+        logo: propertyData.estate_agent_logo,
+        about: propertyData.estate_agent_about
+      }
+    };
 
-    // Add additional logging
-    console.log('Processed property data:', {
-      location: propertyData.location_name,
-      images: propertyData.property_images?.length || 0,
-      price: propertyData.price,
-      agent: propertyData.estate_agent_name
-    });
+    console.log('Formatted property data:', formattedData);
     
-    // Return the validated property data
-    return propertyData;
+    return formattedData;
   } catch (error) {
     console.error('Error processing results:', error);
     throw new Error(`Failed to process property data: ${error.message}`);
@@ -302,20 +338,14 @@ function isValidUrl(url) {
 
 // Bannerbear Functions
 async function generateBannerbearImages(propertyData) {
-  console.log('Generating Bannerbear images for:', propertyData);
+  console.log('Starting Bannerbear image generation with property data:', propertyData);
 
   try {
-    // Validate and filter property images
-    if (!propertyData.property_images || !Array.isArray(propertyData.property_images)) {
-      console.error('No valid property images array found');
-      throw new Error('Property images are required');
-    }
+    // Get all available property images
+    const propertyImages = propertyData.property.allImages;
+    console.log('Available property images:', propertyImages.length);
 
-    const validImages = propertyData.property_images.filter(url => isValidUrl(url));
-    console.log(`Found ${validImages.length} valid images out of ${propertyData.property_images.length}`);
-
-    if (validImages.length === 0) {
-      console.error('No valid image URLs found in property data');
+    if (!propertyImages || !Array.isArray(propertyImages) || propertyImages.length === 0) {
       throw new Error('No valid property images found');
     }
 
@@ -323,44 +353,43 @@ async function generateBannerbearImages(propertyData) {
     const baseModifications = [
       {
         name: "property_price",
-        text: propertyData.price || 'Price on application'
+        text: propertyData.property.price || 'Price on application'
       },
       {
         name: "property_location",
-        text: propertyData.location_name || 'Location not available'
+        text: propertyData.property.address || 'Location not available'
       },
       {
         name: "bedrooms",
-        text: propertyData.bedroom || 'N/A'
+        text: propertyData.property.bedrooms || 'N/A'
       },
       {
         name: "bathrooms",
-        text: propertyData.bathrooms || 'N/A'
+        text: propertyData.property.bathrooms || 'N/A'
       },
       {
         name: "estate_agent_address",
-        text: propertyData.estate_agent_address || 'Contact agent for details'
+        text: propertyData.agent.address || 'Contact agent for details'
       }
     ];
 
-    // Only add logo if it's a valid URL
-    if (propertyData.estate_agent_logo && isValidUrl(propertyData.estate_agent_logo)) {
+    // Only add logo if it exists
+    if (propertyData.agent.logo) {
       baseModifications.push({
         name: "logo",
-        image_url: propertyData.estate_agent_logo
+        image_url: propertyData.agent.logo
       });
     }
 
     // Add image modifications for each template
-    // We'll cycle through available images if we have more templates than images
     const imageModifications = [];
     for (let i = 0; i <= 23; i++) {
       const layerName = i === 0 ? "property_image" : `property_image${i}`;
-      const imageIndex = i % validImages.length; // Cycle through valid images if we run out
+      const imageIndex = i % propertyImages.length; // Cycle through images if we run out
       
       imageModifications.push({
         name: layerName,
-        image_url: validImages[imageIndex]
+        image_url: propertyImages[imageIndex]
       });
     }
 
@@ -376,18 +405,17 @@ async function generateBannerbearImages(propertyData) {
       metadata: {
         source: "rightmove",
         scraped_at: new Date().toISOString(),
-        total_images: validImages.length,
-        original_images: propertyData.property_images.length
+        total_images: propertyImages.length
       }
     };
 
     // Log configuration for debugging
-    console.log('Bannerbear configuration:', {
+    console.log('Bannerbear request configuration:', {
       template_set: requestData.template_set,
       webhook_url: requestData.webhook_url,
       total_modifications: requestData.modifications.length,
-      total_images: validImages.length,
-      sample_image: validImages[0]
+      total_images: propertyImages.length,
+      sample_image: propertyImages[0]
     });
 
     // Validate required configuration
@@ -399,6 +427,7 @@ async function generateBannerbearImages(propertyData) {
       throw new Error('BANNERBEAR_WEBHOOK_URL is not configured');
     }
 
+    console.log('Sending request to Bannerbear API...');
     const response = await fetch('https://api.bannerbear.com/v2/collections', {
       method: 'POST',
       headers: {
@@ -408,15 +437,24 @@ async function generateBannerbearImages(propertyData) {
       body: JSON.stringify(requestData)
     });
 
+    const responseText = await response.text();
+    console.log('Raw Bannerbear API response:', responseText);
+
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Bannerbear API error response:', errorText);
+      console.error('Bannerbear API error response:', responseText);
       console.error('Request data that caused error:', JSON.stringify(requestData, null, 2));
-      throw new Error(`Bannerbear API error: ${response.status} - ${errorText}`);
+      throw new Error(`Bannerbear API error: ${response.status} - ${responseText}`);
     }
 
-    const data = await response.json();
-    console.log('Bannerbear API response:', data);
+    let data;
+    try {
+      data = JSON.parse(responseText);
+    } catch (e) {
+      console.error('Failed to parse Bannerbear response:', e);
+      throw new Error(`Invalid JSON response from Bannerbear: ${responseText}`);
+    }
+
+    console.log('Parsed Bannerbear API response:', data);
 
     return {
       uid: data.uid,
@@ -424,7 +462,7 @@ async function generateBannerbearImages(propertyData) {
       type: 'collection'
     };
   } catch (error) {
-    console.error('Error generating Bannerbear images:', error);
+    console.error('Error in generateBannerbearImages:', error);
     throw error;
   }
 }
@@ -549,11 +587,11 @@ export default async function handler(req, res) {
         },
         caption: caption,
         property: {
-          address: propertyData.location_name || 'Address not available',
-          price: propertyData.price || 'Price not available',
-          bedrooms: propertyData.bedroom || 'N/A',
-          bathrooms: propertyData.bathrooms || 'N/A',
-          images: propertyData.property_images || []
+          address: propertyData.property.address || 'Address not available',
+          price: propertyData.property.price || 'Price not available',
+          bedrooms: propertyData.property.bedrooms || 'N/A',
+          bathrooms: propertyData.property.bathrooms || 'N/A',
+          images: propertyData.property.allImages || []
         }
       }
     });
