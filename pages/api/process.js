@@ -282,8 +282,19 @@ async function processResults(data) {
 // Function to validate URL
 function isValidUrl(url) {
   try {
-    new URL(url);
-    return url.startsWith('http://') || url.startsWith('https://');
+    // Check if it's a string first
+    if (typeof url !== 'string') {
+      return false;
+    }
+
+    // Special case for Rightmove media URLs
+    if (url.startsWith('https://media.rightmove.co.uk/')) {
+      return true;
+    }
+
+    // For all other URLs, do standard validation
+    const parsedUrl = new URL(url);
+    return parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:';
   } catch {
     return false;
   }
