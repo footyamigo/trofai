@@ -4,6 +4,7 @@ export default function ImageDisplay({ bannerbear, isCollection }) {
   const [isDownloading, setIsDownloading] = useState(false);
   const [status, setStatus] = useState(bannerbear);
   const [isPolling, setIsPolling] = useState(false);
+  const [bannerBearImages, setBannerBearImages] = useState([]);
 
   useEffect(() => {
     if (!bannerbear?.uid || status?.status === 'completed') return;
@@ -31,6 +32,34 @@ export default function ImageDisplay({ bannerbear, isCollection }) {
           
           if (newStatus.status === 'completed') {
             setIsPolling(false);
+            
+            // If we have images data in the response, use it
+            if (newStatus.images && newStatus.images.length > 0) {
+              setBannerBearImages(newStatus.images);
+            }
+            // If we have image_urls but no images array, extract them
+            else if (newStatus.image_urls && Object.keys(newStatus.image_urls).length > 0) {
+              const extractedImages = [];
+              
+              // Process image_urls by looking for entries that don't end with _jpg
+              // Each of these represents one image
+              Object.entries(newStatus.image_urls).forEach(([templateId, url]) => {
+                if (!templateId.endsWith('_jpg')) {
+                  extractedImages.push({
+                    template: templateId,
+                    image_url: url,
+                    image_url_png: url,
+                    image_url_jpg: newStatus.image_urls[`${templateId}_jpg`]
+                  });
+                }
+              });
+              
+              setBannerBearImages(extractedImages);
+            }
+            // If we still have no images, fetch directly from Bannerbear
+            else {
+              fetchBannerbearImagesDirectly(newStatus.uid);
+            }
           }
         }
       } catch (error) {
@@ -41,6 +70,43 @@ export default function ImageDisplay({ bannerbear, isCollection }) {
     const interval = setInterval(pollStatus, 2000);
     return () => clearInterval(interval);
   }, [bannerbear?.uid, status?.status, isCollection]);
+
+  // Function to fetch images directly from Bannerbear
+  const fetchBannerbearImagesDirectly = async (uid) => {
+    try {
+      console.log('Fetching Bannerbear collection directly:', uid);
+      const response = await fetch(`/api/direct-images?uid=${uid}&type=collection`);
+      if (!response.ok) {
+        console.error('Failed to get direct images:', response.statusText);
+        return;
+      }
+      
+      const data = await response.json();
+      console.log('Direct Bannerbear response:', data);
+      
+      if (data.images && data.images.length > 0) {
+        setBannerBearImages(data.images);
+      } else if (data.image_urls && Object.keys(data.image_urls).length > 0) {
+        // Extract images from image_urls object
+        const extractedImages = [];
+        
+        Object.entries(data.image_urls).forEach(([templateId, url]) => {
+          if (!templateId.endsWith('_jpg')) {
+            extractedImages.push({
+              template: templateId,
+              image_url: url,
+              image_url_png: url,
+              image_url_jpg: data.image_urls[`${templateId}_jpg`]
+            });
+          }
+        });
+        
+        setBannerBearImages(extractedImages);
+      }
+    } catch (error) {
+      console.error('Error fetching Bannerbear collection directly:', error);
+    }
+  };
 
   // Return fallback UI if bannerbear data is missing
   if (!bannerbear) {
@@ -91,9 +157,19 @@ export default function ImageDisplay({ bannerbear, isCollection }) {
     const currentStatus = status || bannerbear;
     const isComplete = currentStatus?.status === 'completed';
     const hasImages = currentStatus?.image_urls && Object.keys(currentStatus.image_urls).length > 0;
+    const hasBannerBearImages = bannerBearImages && bannerBearImages.length > 0;
     
     console.log('Collection status:', currentStatus);
+    console.log('Has extracted images:', hasBannerBearImages, bannerBearImages.length);
     console.log('Has images:', hasImages, Object.keys(currentStatus?.image_urls || {}));
+
+    // When status is complete but we haven't processed images yet, do it now
+    useEffect(() => {
+      if (isComplete && !hasBannerBearImages && bannerbear?.uid) {
+        console.log('Status complete but no images loaded, fetching directly...');
+        fetchBannerbearImagesDirectly(bannerbear.uid);
+      }
+    }, [isComplete, hasBannerBearImages, bannerbear?.uid]);
 
     return (
       <div className="collection-container">
@@ -104,7 +180,38 @@ export default function ImageDisplay({ bannerbear, isCollection }) {
           )}
         </p>
 
-        {isComplete && currentStatus?.images && currentStatus.images.length > 0 && (
+        {/* Display extracted images from Bannerbear if available */}
+        {hasBannerBearImages && (
+          <div className="images-grid">
+            {bannerBearImages.map((image, index) => (
+              <div key={index} className="image-card">
+                <h4>Design {index + 1}</h4>
+                <div className="image-wrapper">
+                  <img src={image.image_url} alt={`Design ${index + 1}`} />
+                </div>
+                <button 
+                  className="download-button"
+                  onClick={() => downloadImage(image.image_url_png || image.image_url, `property-design-${index + 1}.png`)}
+                  disabled={isDownloading}
+                >
+                  Download PNG
+                </button>
+                {image.image_url_jpg && (
+                  <button 
+                    className="download-button secondary"
+                    onClick={() => downloadImage(image.image_url_jpg, `property-design-${index + 1}.jpg`)}
+                    disabled={isDownloading}
+                  >
+                    Download JPG
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Display images array from status if available and we have no extracted images */}
+        {isComplete && !hasBannerBearImages && currentStatus?.images && currentStatus.images.length > 0 && (
           <div className="images-grid">
             {currentStatus.images.map((image, index) => (
               <div key={index} className="image-card">
@@ -133,7 +240,8 @@ export default function ImageDisplay({ bannerbear, isCollection }) {
           </div>
         )}
 
-        {isComplete && hasImages && (
+        {/* Display image_urls object if available and we have no extracted images */}
+        {isComplete && !hasBannerBearImages && hasImages && !currentStatus?.images?.length && (
           <div className="images-grid">
             {Object.entries(currentStatus.image_urls).map(([templateId, url], index) => {
               // Only show PNG versions, skip JPG versions
@@ -177,9 +285,15 @@ export default function ImageDisplay({ bannerbear, isCollection }) {
           </div>
         )}
 
-        {isComplete && !hasImages && !currentStatus?.images?.length && (
+        {isComplete && !hasBannerBearImages && !hasImages && !currentStatus?.images?.length && (
           <div className="no-images-message">
-            <p>Collection is complete but no images were generated. Please try again.</p>
+            <p>Collection is complete but no images were found. Attempting to fetch directly from Bannerbear...</p>
+            <button
+              className="refresh-button"
+              onClick={() => fetchBannerbearImagesDirectly(bannerbear.uid)}
+            >
+              Refresh Images
+            </button>
             <pre>{JSON.stringify(currentStatus, null, 2)}</pre>
           </div>
         )}
@@ -284,6 +398,17 @@ export default function ImageDisplay({ bannerbear, isCollection }) {
             border-radius: 4px;
             overflow: auto;
             font-size: 0.8rem;
+          }
+          
+          .refresh-button {
+            background: #17a2b8;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            padding: 0.5rem 1rem;
+            margin: 1rem 0;
+            cursor: pointer;
+            font-weight: bold;
           }
         `}</style>
       </div>
