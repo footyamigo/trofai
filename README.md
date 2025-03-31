@@ -27,6 +27,7 @@ ROBORABBIT_API_KEY=your_roborabbit_key
 TASK_UID=your_task_uid
 BANNERBEAR_API_KEY=your_bannerbear_key
 BANNERBEAR_TEMPLATE_UID=your_template_uid
+BANNERBEAR_TEMPLATE_SET_UID=your_template_set_uid
 BANNERBEAR_WEBHOOK_SECRET=your_webhook_secret
 
 # AWS Configuration (Do not prefix with AWS_)

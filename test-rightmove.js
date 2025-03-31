@@ -1,9 +1,19 @@
 require('dotenv').config();
 const fetch = require('node-fetch');
 const { generatePropertyCaptions, CAPTION_TYPES } = require('./caption-generator');
+const getConfig = require('next/config').default;
 
-const ROBORABBIT_API_KEY = process.env.ROBORABBIT_API_KEY;
-const TASK_UID = process.env.TASK_UID;
+const { serverRuntimeConfig } = getConfig() || {
+  serverRuntimeConfig: {
+    ROBORABBIT_API_KEY: process.env.ROBORABBIT_API_KEY,
+    TASK_UID: process.env.TASK_UID,
+    BANNERBEAR_API_KEY: process.env.BANNERBEAR_API_KEY,
+    BANNERBEAR_TEMPLATE_UID: process.env.BANNERBEAR_TEMPLATE_UID,
+    BANNERBEAR_TEMPLATE_SET_UID: process.env.BANNERBEAR_TEMPLATE_SET_UID,
+    BANNERBEAR_WEBHOOK_URL: process.env.BANNERBEAR_WEBHOOK_URL,
+    BANNERBEAR_WEBHOOK_SECRET: process.env.BANNERBEAR_WEBHOOK_SECRET,
+  }
+};
 
 // Constants
 const MAX_RETRY_ATTEMPTS = 3;
@@ -160,11 +170,11 @@ async function scrapeRightmoveProperty(propertyUrl) {
         console.log('Request payload:', JSON.stringify(data, null, 2));
 
         const runData = await retryWithBackoff(async () => {
-            const response = await fetch(`https://api.roborabbit.com/v1/tasks/${TASK_UID}/runs`, {
+            const response = await fetch(`https://api.roborabbit.com/v1/tasks/${serverRuntimeConfig.TASK_UID}/runs`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${ROBORABBIT_API_KEY}`
+                    'Authorization': `Bearer ${serverRuntimeConfig.ROBORABBIT_API_KEY}`
                 },
                 body: JSON.stringify(data)
             });
@@ -208,9 +218,9 @@ async function pollForResults(runUid) {
         attempts++;
         console.log(`Polling attempt ${attempts}...`);
 
-        const response = await fetch(`https://api.roborabbit.com/v1/tasks/${TASK_UID}/runs/${runUid}`, {
+        const response = await fetch(`https://api.roborabbit.com/v1/tasks/${serverRuntimeConfig.TASK_UID}/runs/${runUid}`, {
             headers: {
-                'Authorization': `Bearer ${ROBORABBIT_API_KEY}`
+                'Authorization': `Bearer ${serverRuntimeConfig.ROBORABBIT_API_KEY}`
             }
         });
 
@@ -267,7 +277,7 @@ async function processResults(data) {
 
     // Create Bannerbear-ready structure with configurable layers
     const bannerbearData = {
-        template: process.env.BANNERBEAR_TEMPLATE_UID,
+        template: serverRuntimeConfig.BANNERBEAR_TEMPLATE_UID,
         modifications: [
             {
                 name: BANNERBEAR_TEMPLATE_CONFIG.layers.propertyImage,
@@ -301,8 +311,8 @@ async function processResults(data) {
         ...BANNERBEAR_TEMPLATE_CONFIG.options
     };
 
-    if (process.env.BANNERBEAR_WEBHOOK_URL) {
-        bannerbearData.webhook_url = process.env.BANNERBEAR_WEBHOOK_URL;
+    if (serverRuntimeConfig.BANNERBEAR_WEBHOOK_URL) {
+        bannerbearData.webhook_url = serverRuntimeConfig.BANNERBEAR_WEBHOOK_URL;
     }
 
     bannerbearData.metadata = {
@@ -336,7 +346,7 @@ async function pollBannerbearImage(imageUid) {
             const response = await fetch(`https://api.bannerbear.com/v2/images/${imageUid}?project_id=E56OLrMKYWnzwl3oQj`, {
                 method: 'GET',
                 headers: {
-                    'Authorization': `Bearer ${process.env.BANNERBEAR_API_KEY}`,
+                    'Authorization': `Bearer ${serverRuntimeConfig.BANNERBEAR_API_KEY}`,
                     'Content-Type': 'application/json'
                 }
             });
@@ -391,10 +401,10 @@ async function generateBannerbearImage(propertyData) {
         };
 
         // Add webhook configuration
-        if (process.env.BANNERBEAR_WEBHOOK_URL) {
-            bannerbearPayload.webhook_url = process.env.BANNERBEAR_WEBHOOK_URL;
+        if (serverRuntimeConfig.BANNERBEAR_WEBHOOK_URL) {
+            bannerbearPayload.webhook_url = serverRuntimeConfig.BANNERBEAR_WEBHOOK_URL;
             bannerbearPayload.webhook_headers = {
-                'Authorization': `Bearer ${process.env.BANNERBEAR_WEBHOOK_SECRET}`
+                'Authorization': `Bearer ${serverRuntimeConfig.BANNERBEAR_WEBHOOK_SECRET}`
             };
         }
 
@@ -403,7 +413,7 @@ async function generateBannerbearImage(propertyData) {
         const response = await fetch('https://api.bannerbear.com/v2/images', {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${process.env.BANNERBEAR_API_KEY}`,
+                'Authorization': `Bearer ${serverRuntimeConfig.BANNERBEAR_API_KEY}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(bannerbearPayload)
@@ -444,7 +454,7 @@ async function testScraper() {
         console.log('Successfully scraped property data!');
         
         // Use template set generation by default
-        const templateSetUid = process.env.BANNERBEAR_TEMPLATE_SET_UID;
+        const templateSetUid = serverRuntimeConfig.BANNERBEAR_TEMPLATE_SET_UID;
         
         if (!templateSetUid) {
             console.log('No template set UID configured, falling back to single template generation...');
@@ -469,23 +479,69 @@ async function testScraper() {
 // Update collection generation function to include project_id
 async function generateBannerbearCollection(propertyData, templateSetUid) {
     try {
+        // Get all available property images
+        const propertyImages = propertyData.raw.property.allImages;
+        console.log('Available property images:', propertyImages.length);
+
+        // Create base modifications for common fields
+        const baseModifications = [
+            {
+                name: "property_price",
+                text: propertyData.raw.property.price
+            },
+            {
+                name: "property_location",
+                text: propertyData.raw.property.address
+            },
+            {
+                name: "bedrooms",
+                text: propertyData.raw.property.bedrooms
+            },
+            {
+                name: "bathrooms",
+                text: propertyData.raw.property.bathrooms
+            },
+            {
+                name: "logo",
+                image_url: propertyData.raw.agent.logo
+            },
+            {
+                name: "estate_agent_address",
+                text: propertyData.raw.agent.address
+            }
+        ];
+
+        // Add image modifications for each template
+        // We'll cycle through available images if we have more templates than images
+        const imageModifications = [];
+        for (let i = 0; i <= 23; i++) {
+            const layerName = i === 0 ? "property_image" : `property_image${i}`;
+            const imageIndex = i % propertyImages.length; // Cycle through images if we run out
+            
+            imageModifications.push({
+                name: layerName,
+                image_url: propertyImages[imageIndex]
+            });
+        }
+
         // Prepare the collection payload
         const collectionPayload = {
             template_set: templateSetUid,
-            modifications: propertyData.bannerbear.modifications,
+            modifications: [...baseModifications, ...imageModifications],
             project_id: 'E56OLrMKYWnzwl3oQj',
             metadata: {
                 source: "rightmove",
                 scraped_at: new Date().toISOString(),
-                property_id: propertyData.raw.property.id
+                property_id: propertyData.raw.property.id,
+                total_images: propertyImages.length
             }
         };
 
         // Add webhook configuration if available
-        if (process.env.BANNERBEAR_WEBHOOK_URL) {
-            collectionPayload.webhook_url = process.env.BANNERBEAR_WEBHOOK_URL;
+        if (serverRuntimeConfig.BANNERBEAR_WEBHOOK_URL) {
+            collectionPayload.webhook_url = serverRuntimeConfig.BANNERBEAR_WEBHOOK_URL;
             collectionPayload.webhook_headers = {
-                'Authorization': `Bearer ${process.env.BANNERBEAR_WEBHOOK_SECRET}`
+                'Authorization': `Bearer ${serverRuntimeConfig.BANNERBEAR_WEBHOOK_SECRET}`
             };
         }
 
@@ -494,7 +550,7 @@ async function generateBannerbearCollection(propertyData, templateSetUid) {
         const response = await fetch('https://api.bannerbear.com/v2/collections', {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${process.env.BANNERBEAR_API_KEY}`,
+                'Authorization': `Bearer ${serverRuntimeConfig.BANNERBEAR_API_KEY}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(collectionPayload)

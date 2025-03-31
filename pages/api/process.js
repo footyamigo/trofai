@@ -10,6 +10,7 @@ const { serverRuntimeConfig } = getConfig() || {
     TASK_UID: process.env.TASK_UID,
     BANNERBEAR_API_KEY: process.env.BANNERBEAR_API_KEY,
     BANNERBEAR_TEMPLATE_UID: process.env.BANNERBEAR_TEMPLATE_UID,
+    BANNERBEAR_TEMPLATE_SET_UID: process.env.BANNERBEAR_TEMPLATE_SET_UID,
     AWS_ACCESS_KEY_ID: process.env.AWS_ACCESS_KEY_ID,
     AWS_SECRET_ACCESS_KEY: process.env.AWS_SECRET_ACCESS_KEY,
     AWS_REGION: process.env.AWS_REGION || 'us-east-1',
@@ -239,62 +240,80 @@ async function generateBannerbearImages(propertyData) {
   console.log('Generating Bannerbear images for:', propertyData);
 
   try {
-    // Create collection request with raw data
-    const requestData = {
-      template_set: process.env.BANNERBEAR_TEMPLATE_SET_UID,
-      modifications: [
-        {
-          name: "property_image",
-          image_url: propertyData.property_images[0]
-        },
-        {
-          name: "property_price",
-          text: propertyData.price
-        },
-        {
-          name: "property_location",
-          text: propertyData.location_name
-        },
-        {
-          name: "bedrooms",
-          text: propertyData.bedroom
-        },
-        {
-          name: "bathrooms",
-          text: propertyData.bathrooms
-        },
-        {
-          name: "estate_agent_address",
-          text: propertyData.estate_agent_address
-        },
-        {
-          name: "logo",
-          image_url: propertyData.estate_agent_logo
-        }
-      ],
-      webhook_url: process.env.BANNERBEAR_WEBHOOK_URL,
-      project_id: 'E56OLrMKYWnzwl3oQj',
-      metadata: {
-        source: "rightmove",
-        scraped_at: new Date().toISOString()
+    // Create base modifications for common fields
+    const baseModifications = [
+      {
+        name: "property_price",
+        text: propertyData.price
+      },
+      {
+        name: "property_location",
+        text: propertyData.location_name
+      },
+      {
+        name: "bedrooms",
+        text: propertyData.bedroom
+      },
+      {
+        name: "bathrooms",
+        text: propertyData.bathrooms
+      },
+      {
+        name: "estate_agent_address",
+        text: propertyData.estate_agent_address
+      },
+      {
+        name: "logo",
+        image_url: propertyData.estate_agent_logo
       }
-    };
+    ];
 
-    // Add image_urls_by_template to specify different images for each template
-    if (propertyData.property_images.length > 1) {
-      requestData.image_urls_by_template = {};
-      propertyData.property_images.forEach((imageUrl, index) => {
-        requestData.image_urls_by_template[`property_image_${index + 1}`] = imageUrl;
+    // Add image modifications for each template
+    // We'll cycle through available images if we have more templates than images
+    const imageModifications = [];
+    for (let i = 0; i <= 23; i++) {
+      const layerName = i === 0 ? "property_image" : `property_image${i}`;
+      const imageIndex = i % propertyData.property_images.length; // Cycle through images if we run out
+      
+      imageModifications.push({
+        name: layerName,
+        image_url: propertyData.property_images[imageIndex]
       });
     }
 
+    // Create collection request with all modifications
+    const requestData = {
+      template_set: serverRuntimeConfig.BANNERBEAR_TEMPLATE_SET_UID,
+      modifications: [...baseModifications, ...imageModifications],
+      project_id: 'E56OLrMKYWnzwl3oQj',
+      metadata: {
+        source: "rightmove",
+        scraped_at: new Date().toISOString(),
+        total_images: propertyData.property_images.length
+      }
+    };
+
+    // Add webhook configuration if available
+    if (serverRuntimeConfig.BANNERBEAR_WEBHOOK_URL) {
+      requestData.webhook_url = serverRuntimeConfig.BANNERBEAR_WEBHOOK_URL;
+      requestData.webhook_headers = {
+        'Authorization': `Bearer ${serverRuntimeConfig.BANNERBEAR_WEBHOOK_SECRET}`
+      };
+    }
+
+    // Log the template set being used
+    console.log('Using template set:', requestData.template_set);
     console.log('Bannerbear request data:', JSON.stringify(requestData, null, 2));
+
+    if (!requestData.template_set) {
+      throw new Error('BANNERBEAR_TEMPLATE_SET_UID is not configured');
+    }
 
     const response = await fetch('https://api.bannerbear.com/v2/collections', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${process.env.BANNERBEAR_API_KEY}`
+        'Authorization': `Bearer ${serverRuntimeConfig.BANNERBEAR_API_KEY}`
       },
       body: JSON.stringify(requestData)
     });
