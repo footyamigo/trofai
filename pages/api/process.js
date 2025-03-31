@@ -286,6 +286,10 @@ async function generateBannerbearImages(propertyData) {
       template_set: serverRuntimeConfig.BANNERBEAR_TEMPLATE_SET_UID,
       modifications: [...baseModifications, ...imageModifications],
       project_id: 'E56OLrMKYWnzwl3oQj',
+      webhook_url: serverRuntimeConfig.BANNERBEAR_WEBHOOK_URL,
+      webhook_headers: {
+        'Authorization': `Bearer ${serverRuntimeConfig.BANNERBEAR_WEBHOOK_SECRET}`
+      },
       metadata: {
         source: "rightmove",
         scraped_at: new Date().toISOString(),
@@ -293,20 +297,21 @@ async function generateBannerbearImages(propertyData) {
       }
     };
 
-    // Add webhook configuration if available
-    if (serverRuntimeConfig.BANNERBEAR_WEBHOOK_URL) {
-      requestData.webhook_url = serverRuntimeConfig.BANNERBEAR_WEBHOOK_URL;
-      requestData.webhook_headers = {
-        'Authorization': `Bearer ${serverRuntimeConfig.BANNERBEAR_WEBHOOK_SECRET}`
-      };
-    }
+    // Log configuration for debugging
+    console.log('Bannerbear configuration:', {
+      template_set: requestData.template_set,
+      webhook_url: requestData.webhook_url,
+      total_modifications: requestData.modifications.length,
+      total_images: propertyData.property_images.length
+    });
 
-    // Log the template set being used
-    console.log('Using template set:', requestData.template_set);
-    console.log('Bannerbear request data:', JSON.stringify(requestData, null, 2));
-
+    // Validate required configuration
     if (!requestData.template_set) {
       throw new Error('BANNERBEAR_TEMPLATE_SET_UID is not configured');
+    }
+
+    if (!requestData.webhook_url) {
+      throw new Error('BANNERBEAR_WEBHOOK_URL is not configured');
     }
 
     const response = await fetch('https://api.bannerbear.com/v2/collections', {
