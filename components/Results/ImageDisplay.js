@@ -11,7 +11,7 @@ export default function ImageDisplay({ bannerbear, isCollection }) {
     const pollStatus = async () => {
       try {
         setIsPolling(true);
-        const response = await fetch(`/api/status/${bannerbear.uid}`);
+        const response = await fetch(`/api/status/${bannerbear.uid}?type=${isCollection ? 'collection' : 'single'}`);
         if (!response.ok) {
           console.error('Failed to get status:', response.statusText);
           return;
@@ -20,9 +20,11 @@ export default function ImageDisplay({ bannerbear, isCollection }) {
         const newStatus = await response.json();
         console.log('Status update:', newStatus);
         
+        // Update status if we have new data
         if (newStatus && (
           newStatus.status !== status?.status ||
-          Object.keys(newStatus.image_urls || {}).length > Object.keys(status?.image_urls || {}).length
+          Object.keys(newStatus.image_urls || {}).length > Object.keys(status?.image_urls || {}).length ||
+          newStatus.zip_url !== status?.zip_url
         )) {
           console.log('Updating status with new data:', newStatus);
           setStatus(newStatus);
@@ -38,7 +40,7 @@ export default function ImageDisplay({ bannerbear, isCollection }) {
 
     const interval = setInterval(pollStatus, 2000);
     return () => clearInterval(interval);
-  }, [bannerbear?.uid, status?.status]);
+  }, [bannerbear?.uid, status?.status, isCollection]);
 
   // Return fallback UI if bannerbear data is missing
   if (!bannerbear) {
@@ -86,18 +88,54 @@ export default function ImageDisplay({ bannerbear, isCollection }) {
   };
 
   if (isCollection) {
+    const currentStatus = status || bannerbear;
+    const isComplete = currentStatus?.status === 'completed';
+    const hasImages = currentStatus?.image_urls && Object.keys(currentStatus.image_urls).length > 0;
+    
+    console.log('Collection status:', currentStatus);
+    console.log('Has images:', hasImages, Object.keys(currentStatus?.image_urls || {}));
+
     return (
       <div className="collection-container">
         <p className="status">
-          Collection Status: {bannerbear?.status || 'pending'}
-          {bannerbear?.status !== 'completed' && (
+          Collection Status: {currentStatus?.status || 'pending'}
+          {!isComplete && (
             <span className="loading-dots">•••</span>
           )}
         </p>
 
-        {bannerbear?.status === 'completed' && bannerbear?.image_urls && (
+        {isComplete && currentStatus?.images && currentStatus.images.length > 0 && (
           <div className="images-grid">
-            {Object.entries(bannerbear.image_urls).map(([templateId, url], index) => {
+            {currentStatus.images.map((image, index) => (
+              <div key={index} className="image-card">
+                <h4>Design {index + 1}</h4>
+                <div className="image-wrapper">
+                  <img src={image.image_url} alt={`Design ${index + 1}`} />
+                </div>
+                <button 
+                  className="download-button"
+                  onClick={() => downloadImage(image.image_url_png || image.image_url, `property-design-${index + 1}.png`)}
+                  disabled={isDownloading}
+                >
+                  Download PNG
+                </button>
+                {image.image_url_jpg && (
+                  <button 
+                    className="download-button secondary"
+                    onClick={() => downloadImage(image.image_url_jpg, `property-design-${index + 1}.jpg`)}
+                    disabled={isDownloading}
+                  >
+                    Download JPG
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {isComplete && hasImages && (
+          <div className="images-grid">
+            {Object.entries(currentStatus.image_urls).map(([templateId, url], index) => {
               // Only show PNG versions, skip JPG versions
               if (templateId.endsWith('_jpg')) return null;
               
@@ -116,7 +154,7 @@ export default function ImageDisplay({ bannerbear, isCollection }) {
                   </button>
                   <button 
                     className="download-button secondary"
-                    onClick={() => downloadImage(bannerbear.image_urls[`${templateId}_jpg`], `property-design-${index + 1}.jpg`)}
+                    onClick={() => downloadImage(currentStatus.image_urls[`${templateId}_jpg`], `property-design-${index + 1}.jpg`)}
                     disabled={isDownloading}
                   >
                     Download JPG
@@ -127,15 +165,22 @@ export default function ImageDisplay({ bannerbear, isCollection }) {
           </div>
         )}
 
-        {bannerbear?.status === 'completed' && bannerbear?.zip_url && (
+        {isComplete && currentStatus?.zip_url && (
           <div className="download-all">
             <button 
               className="download-button"
-              onClick={() => downloadImage(bannerbear.zip_url, 'property-designs.zip')}
+              onClick={() => downloadImage(currentStatus.zip_url, 'property-designs.zip')}
               disabled={isDownloading}
             >
               Download All Images (ZIP)
             </button>
+          </div>
+        )}
+
+        {isComplete && !hasImages && !currentStatus?.images?.length && (
+          <div className="no-images-message">
+            <p>Collection is complete but no images were generated. Please try again.</p>
+            <pre>{JSON.stringify(currentStatus, null, 2)}</pre>
           </div>
         )}
 
@@ -223,6 +268,22 @@ export default function ImageDisplay({ bannerbear, isCollection }) {
           @keyframes pulse {
             0%, 100% { opacity: 0.3; }
             50% { opacity: 1; }
+          }
+
+          .no-images-message {
+            background: #fff3cd;
+            border: 1px solid #ffeeba;
+            padding: 1rem;
+            border-radius: 4px;
+            margin-top: 1rem;
+          }
+          
+          pre {
+            background: #f8f9fa;
+            padding: 0.5rem;
+            border-radius: 4px;
+            overflow: auto;
+            font-size: 0.8rem;
           }
         `}</style>
       </div>
