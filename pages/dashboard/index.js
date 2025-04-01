@@ -1,14 +1,21 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Layout from '../../components/Layout/Layout';
 import PropertyURLForm from '../../components/Forms/PropertyURLForm';
 import ResultsContainer from '../../components/Results/ResultsContainer';
 import HistoryList from '../../components/Dashboard/HistoryList';
 import Card from '../../components/UI/Card';
 import ErrorDisplay from '../../components/UI/ErrorDisplay';
+import LoadingSpinner from '../../components/UI/LoadingSpinner';
 
 export default function Dashboard() {
   const [results, setResults] = useState(null);
   const [error, setError] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [currentUid, setCurrentUid] = useState(null);
+  const [currentType, setCurrentType] = useState(null);
+  
+  const pollIntervalRef = useRef(null);
+
   const [history, setHistory] = useState([
     {
       id: '1',
@@ -32,13 +39,85 @@ export default function Dashboard() {
     }
   ]);
 
+  useEffect(() => {
+    const pollStatus = async () => {
+      if (!currentUid || !currentType) return;
+
+      console.log(`Polling status for UID: ${currentUid}, Type: ${currentType}`);
+      try {
+        const response = await fetch(`/api/status/${currentUid}?type=${currentType}`);
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.message || `Failed to fetch status (${response.status})`);
+        }
+
+        console.log('Poll Response:', data);
+
+        if (data.status === 'completed') {
+          console.log('Processing completed!');
+          setResults({
+            bannerbear: data,
+            caption: results?.caption || "Caption generated earlier"
+          });
+          setIsLoading(false);
+          setCurrentUid(null);
+          setCurrentType(null);
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        } else if (data.status === 'failed') {
+          console.error('Processing failed:', data);
+          setError({ message: 'Image/Collection generation failed.', details: JSON.stringify(data) });
+          setIsLoading(false);
+          setCurrentUid(null);
+          setCurrentType(null);
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        } else {
+          console.log('Status still pending...');
+        }
+      } catch (err) {
+        console.error('Polling error:', err);
+        setError({ message: 'Error checking status.', details: err.message });
+        setIsLoading(false);
+        setCurrentUid(null);
+        setCurrentType(null);
+        if (pollIntervalRef.current) {
+          clearInterval(pollIntervalRef.current);
+          pollIntervalRef.current = null;
+        }
+      }
+    };
+
+    if (currentUid && isLoading && !pollIntervalRef.current) {
+      pollStatus(); 
+      pollIntervalRef.current = setInterval(pollStatus, 5000);
+    }
+
+    return () => {
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+        console.log('Polling interval cleared.');
+      }
+    };
+  }, [currentUid, currentType, isLoading, results?.caption]);
+
   const handleSubmit = async (url) => {
-    try {
-      // Clear previous results and errors
-      setResults(null);
-      setError(null);
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
       
-      // Make API call to process the URL
+    setResults(null);
+    setError(null);
+    setCurrentUid(null);
+    setCurrentType(null);
+    setIsLoading(true); 
+    
+    let initialCaption = "Generating caption...";
+
+    try {      
       let responseData;
       try {
         const response = await fetch('/api/process', {
@@ -47,24 +126,21 @@ export default function Dashboard() {
           body: JSON.stringify({ url })
         });
         
-        // Special handling for JSON parsing errors
         const contentType = response.headers.get('content-type');
         if (contentType && contentType.includes('application/json')) {
           responseData = await response.json();
         } else {
-          // If not JSON, handle as text
           const text = await response.text();
           throw new Error(`Server returned non-JSON response: ${text.substring(0, 100)}`);
         }
         
-        console.log('API Response:', responseData);
+        console.log('Initial API Response:', responseData);
         
         if (!response.ok) {
           console.error('API Error:', responseData);
           throw new Error(responseData.error || responseData.message || responseData.details || 'Failed to process URL');
         }
       } catch (jsonError) {
-        // Handle JSON parsing errors specifically
         if (jsonError.name === 'SyntaxError' && jsonError.message.includes('JSON')) {
           console.error('JSON Parse Error:', jsonError);
           throw new Error('Error parsing JSON response from server. The Rightmove scraper may be encountering issues.');
@@ -72,24 +148,35 @@ export default function Dashboard() {
         throw jsonError;
       }
 
-      // Check if data has the expected structure
-      if (!responseData || !responseData.data) {
-        console.error('Missing data structure in API response', responseData);
-        throw new Error('Invalid API response format');
+      if (!responseData || !responseData.data || !responseData.data.bannerbear || !responseData.data.bannerbear.uid) {
+        console.error('Missing uid or expected structure in API response', responseData);
+        throw new Error('Invalid API response format from /api/process');
       }
+      
+      initialCaption = responseData.data.caption || "Caption generation pending...";
 
-      // Set results with the complete data structure
+      setCurrentUid(responseData.data.bannerbear.uid);
+      setCurrentType(responseData.data.bannerbear.type || 'collection');
+      
       setResults({
-        bannerbear: responseData.data.bannerbear || null,
-        caption: responseData.data.caption || "No caption available"
+        bannerbear: {
+           uid: responseData.data.bannerbear.uid,
+           status: 'pending',
+           type: responseData.data.bannerbear.type || 'collection' 
+        },
+        caption: initialCaption
       });
+
     } catch (error) {
       console.error('Error processing URL:', error);
       setError({
-        message: error.message || 'An unexpected error occurred',
+        message: error.message || 'An unexpected error occurred during initial processing',
         details: error.stack || '',
         code: error.code
       });
+      setIsLoading(false);
+      setCurrentUid(null);
+      setCurrentType(null);
     }
   };
 
@@ -110,6 +197,8 @@ export default function Dashboard() {
         <PropertyURLForm onSubmit={handleSubmit} />
       </Card>
 
+      {isLoading && <LoadingSpinner />}
+
       {error && (
         <ErrorDisplay 
           message={error.message} 
@@ -119,7 +208,7 @@ export default function Dashboard() {
         />
       )}
 
-      {results && <ResultsContainer results={results} />}
+      {results && <ResultsContainer results={results} isLoading={isLoading} />}
 
       <HistoryList history={history} onViewItem={handleViewHistoryItem} />
     </Layout>

@@ -159,26 +159,26 @@ export default async function handler(req, res) {
     let status = await getStatusFromDynamo(uid);
     
     // Check if we need to retrieve fresh data from Bannerbear
-    const needsFreshData = !status || 
-                          status.status === 'pending' ||
-                          (status.status === 'completed' && 
-                          isCollection && 
-                          (!status.images || status.images.length === 0) && 
-                          (!status.image_urls || Object.keys(status.image_urls).length === 0));
+    // const needsFreshData = !status || 
+    //                       status.status === 'pending' ||
+    //                       (status.status === 'completed' && 
+    //                       isCollection && 
+    //                       (!status.images || status.images.length === 0) && 
+    //                       (!status.image_urls || Object.keys(status.image_urls).length === 0));
     
-    if (needsFreshData) {
-      console.log('Fetching fresh data from Bannerbear for uid:', uid);
-      // Try Bannerbear API directly
-      const freshStatus = await getStatusFromBannerbear(uid, isCollection);
+    // if (needsFreshData) {
+    //   console.log('Fetching fresh data from Bannerbear for uid:', uid);
+    //   // Try Bannerbear API directly
+    //   const freshStatus = await getStatusFromBannerbear(uid, isCollection);
       
-      if (freshStatus) {
-        // Update our status with fresh data
-        status = freshStatus;
+    //   if (freshStatus) {
+    //     // Update our status with fresh data
+    //     status = freshStatus;
         
-        // If we got status from Bannerbear, store it in DynamoDB
-        await saveStatusToDynamo(status);
-      }
-    }
+    //     // If we got status from Bannerbear, store it in DynamoDB
+    //     await saveStatusToDynamo(status);
+    //   }
+    // }
 
     if (!status) {
       return res.status(404).json({ 
