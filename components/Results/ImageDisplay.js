@@ -2,6 +2,33 @@ import { useState, useEffect } from 'react';
 
 export default function ImageDisplay({ bannerbear, isCollection }) {
   const [isDownloading, setIsDownloading] = useState(false);
+  const [collectionImages, setCollectionImages] = useState([]);
+
+  useEffect(() => {
+    if (bannerbear?.status === 'completed' && bannerbear?.type === 'collection') {
+      // Process collection images
+      let images = [];
+      
+      // Check for image_urls (direct URLs to each template variation)
+      if (bannerbear.image_urls && Object.keys(bannerbear.image_urls).length > 0) {
+        images = Object.entries(bannerbear.image_urls).map(([key, url]) => ({
+          template: key,
+          image_url: url,
+          image_url_jpg: url.replace(/\.png$/, '.jpg')
+        }));
+      } 
+      // Check for images array (from webhook data)
+      else if (bannerbear.images && bannerbear.images.length > 0) {
+        images = bannerbear.images.map((img, index) => ({
+          template: `image_${index + 1}`,
+          image_url: img.image_url,
+          image_url_jpg: img.image_url_jpg || img.image_url.replace(/\.png$/, '.jpg')
+        }));
+      }
+      
+      setCollectionImages(images);
+    }
+  }, [bannerbear]);
 
   const downloadImage = async (url, filename = 'property-image.jpg') => {
     if (!url) return;
@@ -40,15 +67,6 @@ export default function ImageDisplay({ bannerbear, isCollection }) {
     );
   }
 
-  // Get all template image URLs (they end with _image_url but don't end with _jpg)
-  const templateUrls = Object.entries(bannerbear)
-    .filter(([key, value]) => key.endsWith('_image_url') && !key.endsWith('_jpg'))
-    .map(([key, value]) => ({
-      template: key,
-      image_url: value,
-      image_url_jpg: bannerbear[`${key}_jpg`]
-    }));
-
   return (
     <div className="collection-container">
       <p className="status">
@@ -58,9 +76,9 @@ export default function ImageDisplay({ bannerbear, isCollection }) {
         )}
       </p>
 
-      {templateUrls.length > 0 && (
+      {bannerbear?.status === 'completed' && collectionImages.length > 0 && (
         <div className="images-grid">
-          {templateUrls.map((image, index) => (
+          {collectionImages.map((image, index) => (
             <div key={image.template} className="image-card">
               <h4>Design {index + 1}</h4>
               <div className="image-wrapper">

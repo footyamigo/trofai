@@ -45,7 +45,7 @@ export default function Dashboard() {
 
       console.log(`Polling status for UID: ${currentUid}, Type: ${currentType}`);
       try {
-        const response = await fetch(`/api/status/${currentUid}?type=${currentType}`);
+        const response = await fetch(`/api/pipedream-status?uid=${currentUid}&type=${currentType}`);
         const data = await response.json();
 
         if (!response.ok) {
@@ -65,6 +65,21 @@ export default function Dashboard() {
           setCurrentType(null);
           clearInterval(pollIntervalRef.current);
           pollIntervalRef.current = null;
+          
+          if (data.status === 'completed') {
+            const newHistoryItem = {
+              id: Date.now().toString(),
+              date: new Date().toISOString().split('T')[0],
+              status: 'completed',
+              title: results?.metadata?.property_title || 'Property',
+              price: results?.metadata?.property_price || '',
+              uid: data.uid,
+              bannerbear: data,
+              caption: results?.caption || ''
+            };
+            
+            setHistory(prev => [newHistoryItem, ...prev.slice(0, 4)]);
+          }
         } else if (data.status === 'failed') {
           console.error('Processing failed:', data);
           setError({ message: 'Image/Collection generation failed.', details: JSON.stringify(data) });
@@ -101,7 +116,7 @@ export default function Dashboard() {
         console.log('Polling interval cleared.');
       }
     };
-  }, [currentUid, currentType, isLoading, results?.caption]);
+  }, [currentUid, currentType, isLoading, results?.caption, results?.metadata]);
 
   const handleSubmit = async (url) => {
     if (pollIntervalRef.current) {

@@ -1,0 +1,11 @@
+{
+  "name": "trofai-webhook-handler",
+  "version": "1.0.0",
+  "description": "Webhook handler for Bannerbear on Trofai",
+  "main": "index.js",
+  "dependencies": {
+    "aws-sdk": "^2.1490.0"
+  },
+  "author": "",
+  "license": "MIT"
+} 
