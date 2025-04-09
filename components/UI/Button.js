@@ -1,74 +1,79 @@
-export default function Button({ 
+import React from 'react';
+
+const Button = ({ 
   children, 
   onClick, 
+  type = 'button', 
   disabled = false, 
-  type = 'button',
-  variant = 'primary',
-  size = 'medium',
+  className = '',
+  isLoading = false,
   fullWidth = false,
-  className = ''
-}) {
+}) => {
   return (
-    <button 
-      type={type} 
-      className={`button ${variant} ${size} ${fullWidth ? 'full-width' : ''} ${className}`}
-      onClick={onClick}
-      disabled={disabled}
-    >
-      {children}
+    <>
+      <button
+        type={type}
+        onClick={onClick}
+        disabled={disabled || isLoading}
+        className={`base-button ${fullWidth ? 'full-width' : ''} ${className}`}
+      >
+        {isLoading ? (
+          <span className="loading-spinner"></span>
+        ) : children}
+      </button>
 
       <style jsx>{`
-        .button {
-          font-weight: bold;
+        .base-button {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          padding: 0.75rem 1.5rem;
+          background: #62d76b;
+          color: black;
+          border: 2px solid black;
+          border-radius: 6px;
+          font-weight: 600;
+          font-size: 0.875rem;
           cursor: pointer;
-          border: none;
-          border-radius: 4px;
-          transition: background-color 0.2s;
+          transition: all 0.2s ease;
+          box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.8);
         }
-        
-        .button:disabled {
+
+        .base-button:hover {
+          background: #56c15f;
+          box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.8);
+          transform: translateY(-1px);
+        }
+
+        .base-button:disabled {
+          background: #e2e8f0;
+          color: #a0aec0;
+          border-color: #a0aec0;
           cursor: not-allowed;
-          opacity: 0.7;
+          transform: none;
+          box-shadow: none;
         }
-        
-        .primary {
-          background-color: #0070f3;
-          color: white;
-        }
-        
-        .primary:hover:not(:disabled) {
-          background-color: #0060df;
-        }
-        
-        .secondary {
-          background-color: #f5f5f5;
-          color: #333;
-          border: 1px solid #ddd;
-        }
-        
-        .secondary:hover:not(:disabled) {
-          background-color: #e5e5e5;
-        }
-        
-        .small {
-          padding: 0.4rem 0.8rem;
-          font-size: 0.8rem;
-        }
-        
-        .medium {
-          padding: 0.8rem 1.5rem;
-          font-size: 1rem;
-        }
-        
-        .large {
-          padding: 1rem 2rem;
-          font-size: 1.2rem;
-        }
-        
+
         .full-width {
           width: 100%;
         }
+
+        .loading-spinner {
+          display: inline-block;
+          width: 1rem;
+          height: 1rem;
+          border: 2px solid rgba(26, 26, 26, 0.3);
+          border-radius: 50%;
+          border-top-color: #1a1a1a;
+          animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
       `}</style>
-    </button>
+    </>
   );
-} 
+};
+
+export default Button; 

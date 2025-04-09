@@ -31,6 +31,7 @@ async function createTestCollection() {
       body: JSON.stringify({
         template_set_uid: BANNERBEAR_TEMPLATE_SET_UID,
         webhook_url: BANNERBEAR_WEBHOOK_URL,
+        project_id: 'trofai-test',
         modifications: [
           {
             name: 'Test Property',

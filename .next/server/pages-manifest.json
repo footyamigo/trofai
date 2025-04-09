@@ -1,1 +1,12 @@
-{}
+{
+  "/_app": "pages/_app.js",
+  "/_error": "pages/_error.js",
+  "/_document": "pages/_document.js",
+  "/auth/signin": "pages/auth/signin.js",
+  "/api/s3-template-previews": "pages/api/s3-template-previews.js",
+  "/dashboard": "pages/dashboard.js",
+  "/api/properties/list": "pages/api/properties/list.js",
+  "/api/properties/content": "pages/api/properties/content.js",
+  "/api/auth/validate-session": "pages/api/auth/validate-session.js",
+  "/api/properties/delete": "pages/api/properties/delete.js"
+}

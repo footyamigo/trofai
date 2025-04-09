@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import ErrorDisplay from '../UI/ErrorDisplay';
+import Button from '../UI/Button';
 
-export default function PropertyURLForm({ onSubmit, buttonText = 'Trof it!' }) {
+export default function PropertyURLForm({ onSubmit, buttonText = 'Trof it!', placeholder = "Enter Rightmove or Zillow property URL" }) {
   const [url, setUrl] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState({ message: '', details: '', code: '' });
@@ -14,11 +15,15 @@ export default function PropertyURLForm({ onSubmit, buttonText = 'Trof it!' }) {
     try {
       // Validate URL
       if (!url) {
-        throw new Error('Please enter a Rightmove property URL');
+        throw new Error('Please enter a property URL');
       }
       
-      if (!url.includes('rightmove.co.uk/properties/')) {
-        throw new Error('Please enter a valid Rightmove property URL');
+      // Check for supported property sites
+      const isRightmove = url.includes('rightmove.co.uk/properties/');
+      const isZillow = url.includes('zillow.com/');
+      
+      if (!isRightmove && !isZillow) {
+        throw new Error('Please enter a valid Rightmove or Zillow property URL');
       }
       
       await onSubmit(url);
@@ -37,21 +42,25 @@ export default function PropertyURLForm({ onSubmit, buttonText = 'Trof it!' }) {
   return (
     <div className="form-container">
       <form onSubmit={handleSubmit} className="form">
-        <input
-          type="text"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="Enter Rightmove property URL"
-          className="input"
-          required
-        />
-        <button 
-          type="submit" 
-          className="button"
-          disabled={isProcessing}
-        >
-          {isProcessing ? 'Processing...' : buttonText}
-        </button>
+        <div className="input-group">
+          <input
+            type="text"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder={placeholder}
+            className="input"
+            required
+          />
+          <Button 
+            type="submit" 
+            variant="success"
+            size="large"
+            disabled={isProcessing}
+            className="form-button"
+          >
+            {isProcessing ? 'Processing...' : buttonText}
+          </Button>
+        </div>
       </form>
       
       {error.message && (
@@ -69,44 +78,53 @@ export default function PropertyURLForm({ onSubmit, buttonText = 'Trof it!' }) {
         }
         
         .form {
-          display: flex;
+          width: 100%;
           margin-bottom: 1rem;
+        }
+        
+        .input-group {
+          display: flex;
+          align-items: stretch;
+          width: 100%;
+          border: 2px solid black;
+          border-radius: 8px;
+          overflow: hidden;
+          background: white;
         }
         
         .input {
           flex: 1;
-          padding: 0.8rem;
-          font-size: 1rem;
-          border: 1px solid #ddd;
-          border-radius: 4px 0 0 4px;
-        }
-        
-        .button {
-          padding: 0.8rem 1.5rem;
-          background: #0070f3;
-          color: white;
+          padding: 1rem 1.5rem;
+          font-size: 1.1rem;
           border: none;
-          border-radius: 0 4px 4px 0;
-          cursor: pointer;
-          font-weight: bold;
+          outline: none;
+          min-width: 0;
         }
         
-        .button:disabled {
-          background: #999;
+        .form-button {
+          white-space: nowrap;
+          padding: 0.75rem 1.5rem;
+          font-size: 1rem;
+          border: none;
+          border-left: 2px solid black;
+          border-radius: 0;
+          margin: 0;
+          height: auto;
         }
         
         @media (max-width: 600px) {
-          .form {
+          .input-group {
             flex-direction: column;
           }
           
           .input {
-            border-radius: 4px;
-            margin-bottom: 1rem;
+            width: 100%;
+            border-bottom: 2px solid black;
           }
           
-          .button {
-            border-radius: 4px;
+          .form-button {
+            width: 100%;
+            border-left: none;
           }
         }
       `}</style>

@@ -1,0 +1,196 @@
+import { IoNotificationsOutline } from 'react-icons/io5';
+import { FiHelpCircle, FiLogOut } from 'react-icons/fi';
+import { HiOutlineDocumentText } from 'react-icons/hi';
+import { BiChevronDown } from 'react-icons/bi';
+import { RiTeamLine } from 'react-icons/ri';
+import { useAuth } from '../../src/context/AuthContext';
+import Link from 'next/link';
+
+export default function DashboardHeader() {
+  const { user, loading, signOut } = useAuth();
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
+
+  return (
+    <header className="dashboard-header">
+      <div className="left-section">
+        <div className="team-selector">
+          <RiTeamLine className="team-icon" />
+          <span>Personal Team</span>
+          <BiChevronDown />
+        </div>
+      </div>
+
+      <div className="right-section">
+        <button className="header-button">
+          <IoNotificationsOutline />
+        </button>
+
+        <button className="header-button credits">
+          <span>Get Free Credits</span>
+        </button>
+
+        <button className="header-button">
+          <FiHelpCircle />
+          <span>Help</span>
+        </button>
+
+        <button className="header-button">
+          <HiOutlineDocumentText />
+          <span>Docs</span>
+        </button>
+
+        {loading ? (
+          <div className="loading-auth">Loading...</div>
+        ) : user ? (
+          <div className="auth-container">
+            <span className="welcome-text">Welcome, {user.username}</span>
+            <Link href="/profile">
+              <button className="header-button profile">
+                <span>Profile</span>
+              </button>
+            </Link>
+            <button className="header-button auth" onClick={handleSignOut}>
+              <FiLogOut />
+              <span>Sign Out</span>
+            </button>
+          </div>
+        ) : null}
+
+        <button className="header-button upgrade">
+          <span>Upgrade Plan</span>
+        </button>
+      </div>
+
+      <style jsx>{`
+        .dashboard-header {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 0.75rem 1.5rem;
+          background: white;
+          border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+        }
+
+        @media (max-width: 768px) {
+          .dashboard-header {
+            display: none;
+          }
+        }
+
+        .left-section {
+          display: flex;
+          align-items: center;
+        }
+
+        .team-selector {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding: 0.5rem 0.75rem;
+          font-size: 0.9375rem;
+          color: #1a1a1a;
+          border-radius: 6px;
+          cursor: pointer;
+          transition: background-color 0.2s ease;
+        }
+
+        .team-selector:hover {
+          background: rgba(0, 0, 0, 0.04);
+        }
+
+        :global(.team-icon) {
+          width: 1.25rem;
+          height: 1.25rem;
+          color: #FF6B6B;
+        }
+
+        .right-section {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+        }
+
+        .header-button {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+          padding: 0.5rem 0.75rem;
+          border: none;
+          background: none;
+          color: #4A5568;
+          font-size: 0.9375rem;
+          border-radius: 6px;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+
+        .header-button:hover {
+          background: rgba(0, 0, 0, 0.04);
+          color: #1a1a1a;
+        }
+
+        .header-button.credits {
+          color: #276749;
+          font-weight: 500;
+        }
+
+        .header-button.upgrade {
+          background: #1a1a1a;
+          color: white;
+          font-weight: 500;
+        }
+
+        .header-button.upgrade:hover {
+          background: #000000;
+          color: white;
+        }
+
+        .auth-container {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+
+        .welcome-text {
+          font-size: 0.9375rem;
+          color: #4A5568;
+          margin-right: 0.5rem;
+        }
+
+        .header-button.auth {
+          background: #62d76b;
+          color: #1a1a1a;
+          font-weight: 500;
+        }
+
+        .header-button.auth:hover {
+          background: #56c15f;
+          color: #000;
+        }
+
+        .header-button.profile {
+          background: #f0f0f0;
+          color: #1a1a1a;
+        }
+
+        .loading-auth {
+          font-size: 0.9375rem;
+          color: #4A5568;
+          padding: 0.5rem 0.75rem;
+        }
+
+        :global(.header-button svg) {
+          width: 1.25rem;
+          height: 1.25rem;
+        }
+      `}</style>
+    </header>
+  );
+} 

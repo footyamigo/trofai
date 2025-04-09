@@ -2,13 +2,18 @@
 const AWS = require('aws-sdk');
 const fetch = require('node-fetch');
 const getConfig = require('next/config').default;
+const { OpenAI } = require('openai');
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+
+// Import our unified scraper module
+const { scrapeProperty, generateBannerbearImage, generateBannerbearCollection } = require('../../scraper');
 
 // Get server config with clear fallbacks
 const { serverRuntimeConfig } = getConfig() || { serverRuntimeConfig: {} };
 
 // Extract all API keys and config with fallbacks
-const ROBORABBIT_API_KEY = serverRuntimeConfig.ROBORABBIT_API_KEY || process.env.ROBORABBIT_API_KEY;
-const TASK_UID = serverRuntimeConfig.TASK_UID || process.env.TASK_UID;
 const BANNERBEAR_API_KEY = serverRuntimeConfig.BANNERBEAR_API_KEY || process.env.BANNERBEAR_API_KEY;
 const BANNERBEAR_TEMPLATE_UID = serverRuntimeConfig.BANNERBEAR_TEMPLATE_UID || process.env.BANNERBEAR_TEMPLATE_UID;
 const BANNERBEAR_TEMPLATE_SET_UID = serverRuntimeConfig.BANNERBEAR_TEMPLATE_SET_UID || process.env.BANNERBEAR_TEMPLATE_SET_UID;
@@ -17,202 +22,57 @@ const BANNERBEAR_WEBHOOK_SECRET = serverRuntimeConfig.BANNERBEAR_WEBHOOK_SECRET 
 const AWS_ACCESS_KEY_ID = serverRuntimeConfig.AWS_ACCESS_KEY_ID || process.env.ACCESS_KEY_ID;
 const AWS_SECRET_ACCESS_KEY = serverRuntimeConfig.AWS_SECRET_ACCESS_KEY || process.env.SECRET_ACCESS_KEY;
 const AWS_REGION = serverRuntimeConfig.AWS_REGION || process.env.REGION || 'us-east-1';
+const OPENAI_API_KEY = serverRuntimeConfig.OPENAI_API_KEY || process.env.OPENAI_API_KEY;
+const OPENAI_MODEL = serverRuntimeConfig.OPENAI_MODEL || process.env.OPENAI_MODEL || 'gpt-4o-mini';
+const FIRECRAWL_API_KEY = serverRuntimeConfig.FIRECRAWL_API_KEY || process.env.FIRECRAWL_API_KEY;
 
-// Configure AWS with better error handling
-let dynamoDb;
-try {
-  AWS.config.update({
-    accessKeyId: AWS_ACCESS_KEY_ID,
-    secretAccessKey: AWS_SECRET_ACCESS_KEY,
-    region: AWS_REGION
-  });
-  
-  // Initialize DynamoDB DocumentClient
-  dynamoDb = new AWS.DynamoDB.DocumentClient();
-  console.log('DynamoDB configured successfully');
-} catch (error) {
-  console.error('Failed to configure AWS:', error);
-  // Continue without DynamoDB functionality
-}
+// Add this after the other constants
+const BANNERBEAR_POLLING_INTERVAL = 2000; // 2 seconds
+const BANNERBEAR_MAX_POLLING_ATTEMPTS = 30; // 1 minute total polling time 
+
+// Initialize OpenAI client
+const openai = new OpenAI({
+  apiKey: OPENAI_API_KEY,
+});
+
+// Configure AWS SDK
+AWS.config.update({
+  accessKeyId: AWS_ACCESS_KEY_ID,
+  secretAccessKey: AWS_SECRET_ACCESS_KEY,
+  region: AWS_REGION
+});
+
+// Initialize DynamoDB
+const dynamoDb = new AWS.DynamoDB.DocumentClient();
+
+// Define table names
+const TABLES = {
+  PROPERTIES: 'trofai-properties',
+  CAPTIONS: 'trofai-captions',
+  DESIGNS: 'trofai-designs',
+  IMAGE_STATUS: 'trofai-image-status',
+  USERS: 'trofai-users',
+  PROPERTY_CONTENT: 'trofai-property-content'
+};
 
 // Function to clean Rightmove URL
 function cleanRightmoveUrl(url) {
+  try {
+    if (url.includes('rightmove.co.uk')) {
   const propertyId = url.split('/properties/')[1].split(/[#?]/)[0];
   return `https://www.rightmove.co.uk/properties/${propertyId}`;
 }
-
-// Function to scrape property data
-async function scrapeProperty(url) {
-  console.log('Starting scrape for:', url);
-  
-  try {
-    // Clean the URL first
-    const cleanedUrl = cleanRightmoveUrl(url);
-    console.log('Cleaned URL:', cleanedUrl);
-    
-    // Create request payload
-    const data = {
-      "steps": [
-        {
-          "uid": "w1AE6azd8n7dzxWnYp",
-          "action": "go",
-          "config": {
-            "url": cleanedUrl
-          }
-        }
-      ]
-    };
-    
-    console.log('Request payload:', JSON.stringify(data, null, 2));
-    console.log('Using Roborabbit API key:', ROBORABBIT_API_KEY ? 'Set (not shown)' : 'Not set');
-    console.log('Using Task UID:', TASK_UID);
-    
-    // Call Roborabbit API with better error handling
-    const response = await fetch(`https://api.roborabbit.com/v1/tasks/${TASK_UID}/runs`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${ROBORABBIT_API_KEY}`
-      },
-      body: JSON.stringify(data)
-    });
-    
-    // First try to get the response as text
-    const responseText = await response.text();
-    console.log('Raw API Response length:', responseText.length, 'First 100 chars:', responseText.substring(0, 100));
-    
-    if (!response.ok) {
-      throw new Error(`Roborabbit API error: ${response.status} - ${responseText}`);
-    }
-    
-    // Try to parse the response as JSON
-    let runData;
-    try {
-      // Check if we have a valid response
-      if (!responseText || responseText.trim() === '') {
-        throw new Error('Empty response from Roborabbit API');
-      }
-      
-      // Try to parse as JSON
-      runData = JSON.parse(responseText);
-      
-      // If we got a string that looks like JSON, try parsing it again
-      if (typeof runData === 'string' && runData.trim().startsWith('{')) {
-        runData = JSON.parse(runData);
-      }
-    } catch (e) {
-      console.error('Failed to parse API response:', e);
-      // If the response looks like JSON but failed to parse, it might be double-encoded
-      try {
-        runData = JSON.parse(JSON.parse(responseText));
-      } catch (e2) {
-        throw new Error(`Invalid JSON response from Roborabbit: ${e.message}. Raw response first 100 chars: ${responseText.substring(0, 100)}`);
-      }
-    }
-    
-    console.log('Parsed API Response type:', typeof runData);
-    
-    if (runData.message) {
-      throw new Error(`Error from Roborabbit: ${runData.message}`);
-    }
-    
-    // Poll for results
-    if (!runData.uid) {
-      throw new Error('No run ID returned from Roborabbit');
-    }
-
-    console.log('Starting polling with run ID:', runData.uid);
-    const results = await pollForResults(runData.uid);
-    
-    if (!results) {
-      throw new Error('No results returned from polling');
-    }
-    
-    console.log('Processing results...');
-    return processResults(results);
+    // If not a Rightmove URL, return as is
+    return url;
   } catch (error) {
-    console.error('Error in scrapeProperty:', error);
-    throw new Error(`Scraping failed: ${error.message}`);
+    console.warn('Failed to clean URL, using original:', error);
+    return url;
   }
 }
 
-// Function to poll for results
-async function pollForResults(runUid) {
-  const MAX_POLLING_ATTEMPTS = 60;
-  const POLLING_INTERVAL_MS = 2000;
-  let attempts = 0;
+// Note: The original scrapeProperty, pollForResults, and processResults functions are replaced by the imported scraper module
 
-  const poll = async () => {
-    if (attempts >= MAX_POLLING_ATTEMPTS) {
-      throw new Error('Max polling attempts reached');
-    }
-
-    attempts++;
-    console.log(`Polling attempt ${attempts}...`);
-
-    try {
-      const response = await fetch(`https://api.roborabbit.com/v1/tasks/${TASK_UID}/runs/${runUid}`, {
-        headers: {
-          'Authorization': `Bearer ${ROBORABBIT_API_KEY}`
-        }
-      });
-
-      const responseText = await response.text();
-      console.log(`Raw polling response length (attempt ${attempts}):`, responseText.length);
-
-      if (!response.ok) {
-        throw new Error(`Failed to poll results: ${response.status} - ${responseText}`);
-      }
-
-      // Check for empty response
-      if (!responseText || responseText.trim() === '') {
-        console.warn(`Empty response received in polling attempt ${attempts}`);
-        
-        // If we're still early in polling attempts, let's wait and try again
-        if (attempts < MAX_POLLING_ATTEMPTS / 2) {
-          console.log(`Waiting ${POLLING_INTERVAL_MS * 2}ms before next attempt...`);
-          await new Promise(resolve => setTimeout(resolve, POLLING_INTERVAL_MS * 2));
-          return poll();
-        } else {
-          throw new Error('Received empty responses too many times while polling');
-        }
-      }
-
-      let data;
-      try {
-        data = JSON.parse(responseText);
-      } catch (e) {
-        console.error('Failed to parse polling response:', e);
-        throw new Error(`Invalid JSON in polling response: ${e.message}. Raw response: ${responseText.substring(0, 100)}`);
-      }
-
-      console.log(`Poll status (attempt ${attempts}):`, data.status);
-
-      if (data.status === 'finished' && data.outputs) {
-        console.log('Scraping completed successfully!');
-        return data;
-      } else if (data.status === 'failed') {
-        const errorMessage = data.error || data.message || 'Unknown error';
-        console.error('Scraping failed:', errorMessage);
-        throw new Error(`Scraping failed: ${errorMessage}`);
-      } else if (!['running', 'pending'].includes(data.status)) {
-        throw new Error(`Unexpected status: ${data.status}`);
-      }
-
-      // If still pending, wait and try again
-      console.log(`Status: ${data.status}, waiting ${POLLING_INTERVAL_MS}ms before next attempt...`);
-      await new Promise(resolve => setTimeout(resolve, POLLING_INTERVAL_MS));
-      return poll();
-    } catch (error) {
-      console.error(`Error in polling attempt ${attempts}:`, error);
-      throw error;
-    }
-  };
-
-  return await poll();
-}
-
-// Function to format address
+// Function to format address (kept for compatibility with existing code)
 function formatAddress(address) {
   if (!address) return null;
   
@@ -225,7 +85,7 @@ function formatAddress(address) {
     .trim();
 }
 
-// Function to format price
+// Function to format price (kept for compatibility with existing code)
 function formatPrice(price) {
   if (!price) return null;
   
@@ -248,44 +108,6 @@ function formatPrice(price) {
   }).format(numericAmount);
 
   return `${formattedAmount} ${period || ''}`.trim();
-}
-
-// Function to process results
-function processResults(data) {
-  try {
-    console.log('Processing scraped data...');
-    
-    // Get the first output key that contains the structured data
-    const outputKeys = Object.keys(data.outputs || {});
-    console.log('Available output keys:', outputKeys);
-
-    // Find the key that contains our data
-    const outputKey = outputKeys.find(key => key.includes('save_structured_data'));
-    
-    if (!outputKey) {
-      console.error('No structured data found in outputs:', data.outputs);
-      throw new Error('No valid data found in results');
-    }
-
-    console.log('Using output key:', outputKey);
-    const propertyData = data.outputs[outputKey];
-    
-    // Log property images
-    if (propertyData.property_images) {
-      console.log('Property images found:', {
-        count: propertyData.property_images.length,
-        isArray: Array.isArray(propertyData.property_images),
-        sample: propertyData.property_images[0]
-      });
-    } else {
-      console.error('No property_images found in data');
-    }
-    
-    return propertyData;
-  } catch (error) {
-    console.error('Error processing results:', error);
-    throw new Error(`Failed to process property data: ${error.message}`);
-  }
 }
 
 // Function to validate URL
@@ -314,311 +136,489 @@ function isValidUrl(url) {
   }
 }
 
-// Bannerbear Functions - Matching integration-test.js approach
-async function generateBannerbearImages(propertyData) {
+// Now directly using the imported generateCaption function from the scraper
+async function generateCaption(propertyData) {
   try {
-    console.log('Generating Bannerbear images...');
-    console.log('Property data type:', typeof propertyData);
-    console.log('Property data keys:', Object.keys(propertyData));
-    
-    // Validate property_images with better logging
-    console.log('property_images exists:', 'property_images' in propertyData);
-    console.log('property_images type:', typeof propertyData.property_images);
-    console.log('property_images is array:', Array.isArray(propertyData.property_images));
-    
-    if (!propertyData.property_images || !Array.isArray(propertyData.property_images)) {
-      console.error('property_images is not a valid array:', propertyData.property_images);
-      throw new Error('No valid property images found');
+    // If we don't have OpenAI configured, fall back to a basic caption
+  if (!OPENAI_API_KEY) {
+      console.warn('No OpenAI API key found, using fallback caption');
+    return { 
+        main: generateFallbackCaption(propertyData),
+        alt: generateAlternativeFallbackCaption(propertyData)
+      };
     }
     
-    console.log('property_images length:', propertyData.property_images.length);
-    
-    if (propertyData.property_images.length === 0) {
-      console.error('property_images array is empty');
-      throw new Error('No valid property images found');
-    }
+    // For simplicity, we'll just make sure we have some key fields populated
+    const systemPrompt = `You are a luxury real estate copywriter known for creating compelling, sophisticated property listings. Your captions:
+- Have a captivating hook that creates curiosity
+- Use vivid, descriptive language that paints a picture of living in the property
+- Highlight key features and luxury aspects
+- Include subtle references to the property's investment potential
+- End with a clear call-to-action
+- Include appropriate emojis for visual breaks (but not excessively)
+- Include 3-5 relevant hashtags`;
 
-    // Log the first few images
-    console.log('First few property images:');
-    for (let i = 0; i < Math.min(propertyData.property_images.length, 3); i++) {
-      console.log(`Image ${i}:`, propertyData.property_images[i]);
-    }
+    const userPrompt = `Create a luxury real estate caption for this property:
+- Location: ${propertyData.location_name || 'Not specified'}
+- Price: ${propertyData.price || 'Not specified'}
+- Bedrooms: ${propertyData.bedroom || 'Not specified'}
+- Bathrooms: ${propertyData.bathrooms || 'Not specified'}
+- Description: ${propertyData.description || 'Not available'}
+- Agent: ${propertyData.estate_agent_name || 'Property Agent'}
 
-    // Create base modifications for common fields
-    const baseModifications = [
-      {
-        name: "property_price",
-        text: propertyData.price || 'Price on application'
-      },
-      {
-        name: "property_location",
-        text: propertyData.location_name || 'Location not available'
-      },
-      {
-        name: "bedrooms",
-        text: propertyData.bedroom || 'N/A'
-      },
-      {
-        name: "bathrooms",
-        text: propertyData.bathrooms || 'N/A'
-      },
-      {
-        name: "estate_agent_address",
-        text: propertyData.estate_agent_address || 'Contact agent for details'
-      }
-    ];
+Write in a sophisticated, aspirational style with 2-3 paragraphs. Include 3-5 relevant hashtags at the end. Maximum 2000 characters.`;
 
-    // Only add logo if it exists and is valid
-    if (propertyData.estate_agent_logo && isValidUrl(propertyData.estate_agent_logo)) {
-      baseModifications.push({
-        name: "logo",
-        image_url: propertyData.estate_agent_logo
-      });
-    }
-
-    // Add image modifications for each template - Using exact same approach as integration-test.js
-    const imageModifications = [];
-    for (let i = 0; i <= 23; i++) {
-      const layerName = i === 0 ? "property_image" : `property_image${i}`;
-      // Use modulo to cycle through available images
-      const imageIndex = i % propertyData.property_images.length;
-      
-      console.log(`Adding image modification for ${layerName}:`, {
-        index: imageIndex,
-        url: propertyData.property_images[imageIndex]
-      });
-      
-      imageModifications.push({
-        name: layerName,
-        image_url: propertyData.property_images[imageIndex]
-      });
-    }
-
-    // Create collection request with all modifications
-    const requestData = {
-      template_set: BANNERBEAR_TEMPLATE_SET_UID,
-      modifications: [...baseModifications, ...imageModifications],
-      project_id: 'E56OLrMKYWnzwl3oQj',
-      webhook_url: BANNERBEAR_WEBHOOK_URL,
-      webhook_headers: {
-        'Authorization': `Bearer ${BANNERBEAR_WEBHOOK_SECRET}`
-      },
-      metadata: {
-        source: "rightmove",
-        scraped_at: new Date().toISOString(),
-        total_images: propertyData.property_images.length
-      }
-    };
-
-    // Log configuration for debugging
-    console.log('Bannerbear request configuration:', {
-      template_set: requestData.template_set,
-      webhook_url: requestData.webhook_url,
-      total_modifications: requestData.modifications.length,
-      total_images: propertyData.property_images.length
+    const response = await openai.chat.completions.create({
+      model: OPENAI_MODEL,
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt }
+      ],
+      max_tokens: 1000,
+      temperature: 0.7,
+      presence_penalty: 0.3,
+      frequency_penalty: 0.3
     });
-
-    // Validate required configuration
-    if (!requestData.template_set) {
-      throw new Error('BANNERBEAR_TEMPLATE_SET_UID is not configured');
-    }
-
-    if (!requestData.webhook_url) {
-      throw new Error('BANNERBEAR_WEBHOOK_URL is not configured');
-    }
-
-    console.log('Sending request to Bannerbear API...');
-    const response = await fetch('https://api.bannerbear.com/v2/collections', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${BANNERBEAR_API_KEY}`
-      },
-      body: JSON.stringify(requestData)
-    });
-
-    const responseText = await response.text();
-    console.log('Raw Bannerbear API response length:', responseText.length, 'First 100 chars:', responseText.substring(0, 100));
-
-    if (!response.ok) {
-      console.error('Bannerbear API error response:', responseText);
-      throw new Error(`Bannerbear API error: ${response.status} - ${responseText}`);
-    }
-
-    let data;
-    try {
-      data = JSON.parse(responseText);
-    } catch (e) {
-      console.error('Failed to parse Bannerbear response:', e);
-      throw new Error(`Invalid JSON response from Bannerbear: ${responseText}`);
-    }
-
-    console.log('Bannerbear API response:', data);
-
+    
+    const caption = response.choices[0].message.content.trim();
+    console.log('Generated caption length:', caption.length);
+    
     return {
-      uid: data.uid,
-      status: 'pending',
-      type: 'collection'
+      main: caption,
+      alt: generateAlternativeFallbackCaption(propertyData) // Always provide a fallback as alt
     };
+    
   } catch (error) {
-    console.error('Error in generateBannerbearImages:', error);
-    throw error;
+    console.error('Error generating caption with OpenAI:', error);
+    console.warn('Falling back to basic caption');
+    return { 
+      main: generateFallbackCaption(propertyData),
+      alt: generateAlternativeFallbackCaption(propertyData)
+    };
   }
 }
 
-// Function to generate caption
-function generateCaption(propertyData) {
-  console.log('Generating caption...');
+// Simple caption generation for fallback
+function generateFallbackCaption(propertyData) {
+  const price = propertyData.price || 'Contact for price';
+  const location = propertyData.location_name || 'Prime location';
+  const bedroomCount = propertyData.bedroom || '';
+  const bathroomCount = propertyData.bathrooms || '';
   
-  // Extract location parts
-  const location = propertyData.location_name || 'Property';
-  const firstPart = location.split(',')[0] || 'Property';
+  let bedroomPhrase = '';
+  if (bedroomCount) {
+    bedroomPhrase = `${bedroomCount} bedroom${bedroomCount === 1 ? '' : 's'}`;
+  }
   
-  // Get property details
-  const bedrooms = propertyData.bedroom || 'multiple';
-  const bathrooms = propertyData.bathrooms || 'multiple';
-  const price = propertyData.price || 'Price on application';
-  const agentName = propertyData.estate_agent_name || 'us';
+  let bathroomPhrase = '';
+  if (bathroomCount) {
+    bathroomPhrase = `${bathroomCount} bathroom${bathroomCount === 1 ? '' : 's'}`;
+  }
   
-  // Clean up key features
-  const keyFeatures = propertyData.key_features || 'Fantastic property with great features';
+  let sizePhrase = '';
+  if (bedroomPhrase && bathroomPhrase) {
+    sizePhrase = `${bedroomPhrase}, ${bathroomPhrase}`;
+  } else if (bedroomPhrase) {
+    sizePhrase = bedroomPhrase;
+  } else if (bathroomPhrase) {
+    sizePhrase = bathroomPhrase;
+  }
   
-  // Get description
-  const description = propertyData.listing_description 
-    ? propertyData.listing_description.substring(0, 150) + '...'
-    : 'This property offers excellent value and is located in a prime area.';
+  const agent = propertyData.estate_agent_name || 'Contact us';
+  const locationTag = location.split(',')[0].trim().replace(/\s+/g, '');
   
-  // Generate hashtag from location
-  const locationTag = firstPart.replace(/\s+/g, '');
-  
-  // Generate caption
-  return `✨ **Your New Home Awaits in ${firstPart}!** ✨
+  return `✨ **Luxury Living** ✨
 
-This stunning ${bedrooms} bedroom property offers modern living at its finest with ${bathrooms} bathroom${bathrooms > 1 && bathrooms !== 'multiple' ? 's' : ''}. ${keyFeatures}
+${sizePhrase ? `Stunning ${sizePhrase} property available in ` : 'Exceptional property in '}${location}. Offered at ${price}.
 
-Located in ${location}, you'll enjoy easy access to local amenities and excellent transportation links. ${description}
+Contact ${agent} today to arrange a viewing of this highly desirable property before it's gone!
 
-Contact ${agentName} today to arrange a viewing!
+#LuxuryProperty #${locationTag} #RealEstateLondon`;
+}
 
-#PropertyListing #DreamHome #${locationTag} #RealEstate`;
+function generateAlternativeFallbackCaption(propertyData) {
+  const price = propertyData.price || 'Contact for price';
+  const location = propertyData.location_name || 'Prime location';
+  const bedroomCount = propertyData.bedroom || '';
+  const agent = propertyData.estate_agent_name || 'us';
+  const locationTag = location.split(',')[0].trim().replace(/\s+/g, '');
+  
+  let bedroomPhrase = bedroomCount ? `${bedroomCount}-bedroom ` : '';
+  
+  return `🏠 Discover this ${bedroomPhrase}property in ${location} at ${price}!
+
+Arrange a viewing with ${agent} today to secure this exceptional living space in a prime location.
+
+#LuxuryLiving #${locationTag} #VertusHomes #LondonRentals`;
+}
+
+// Add this new function before the main handler 
+async function pollBannerbearStatus(uid, propertyId, isCollection = true) {
+  console.log(`Starting to poll Bannerbear for ${isCollection ? 'collection' : 'image'} with UID ${uid}`);
+  
+  let attempts = 0;
+  
+  const fetchStatus = async () => {
+    if (attempts >= BANNERBEAR_MAX_POLLING_ATTEMPTS) {
+      console.warn(`Max polling attempts (${BANNERBEAR_MAX_POLLING_ATTEMPTS}) reached for ${uid}`);
+      return null;
+    }
+    
+    attempts++;
+    console.log(`Polling attempt ${attempts}/${BANNERBEAR_MAX_POLLING_ATTEMPTS} for ${uid}`);
+    
+    try {
+      const apiPath = isCollection ? 'collections' : 'images';
+      const response = await fetch(`https://api.bannerbear.com/v2/${apiPath}/${uid}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${BANNERBEAR_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        console.error(`Bannerbear API error: ${response.status}`);
+        const errorText = await response.text();
+        console.error(`Error response: ${errorText}`);
+        return null;
+      }
+      
+      const data = await response.json();
+      console.log(`Bannerbear status for ${uid}: ${data.status}`);
+      
+      if (data.status === 'completed') {
+        // Update DynamoDB with completed data
+        console.log('Updating DynamoDB with completed Bannerbear data');
+        await dynamoDb.update({
+          TableName: TABLES.PROPERTY_CONTENT,
+          Key: { id: propertyId },
+          UpdateExpression: 'SET #status = :status, images = :images, updatedAt = :updatedAt, bannerbearResponse = :bannerbearResponse, zip_url = :zip_url, image_urls = :image_urls',
+          ExpressionAttributeNames: {
+            '#status': 'status'
+          },
+          ExpressionAttributeValues: {
+            ':status': 'completed',
+            ':images': data.images || [],
+            ':updatedAt': new Date().toISOString(),
+            ':bannerbearResponse': data,
+            ':zip_url': data.zip_url || null,
+            ':image_urls': data.image_urls || {}
+          }
+        }).promise();
+        
+        console.log('Successfully updated DynamoDB with completed Bannerbear data');
+        return data;
+      }
+      
+      // If still pending, wait and try again
+      await new Promise(resolve => setTimeout(resolve, BANNERBEAR_POLLING_INTERVAL));
+      return fetchStatus();
+    } catch (error) {
+      console.error(`Error polling Bannerbear: ${error.message}`);
+      return null;
+    }
+  };
+  
+  return fetchStatus();
 }
 
 // Main API handler
 export default async function handler(req, res) {
+  console.log('Starting API request');
+  console.log('Request method:', req.method);
+
+  // Only allow POST requests
   if (req.method !== 'POST') {
     return res.status(405).json({ message: 'Method not allowed' });
   }
 
-  // Log environment variables (without exposing full keys)
-  console.log('Environment check:', {
-    ROBORABBIT_API_KEY: ROBORABBIT_API_KEY ? '✓ Set' : '✗ Missing',
-    TASK_UID: TASK_UID ? '✓ Set' : '✗ Missing',
-    BANNERBEAR_API_KEY: BANNERBEAR_API_KEY ? '✓ Set' : '✗ Missing',
-    BANNERBEAR_TEMPLATE_UID: BANNERBEAR_TEMPLATE_UID ? '✓ Set' : '✗ Missing',
-    BANNERBEAR_TEMPLATE_SET_UID: BANNERBEAR_TEMPLATE_SET_UID ? '✓ Set' : '✗ Missing',
-    BANNERBEAR_WEBHOOK_URL: BANNERBEAR_WEBHOOK_URL ? '✓ Set' : '✗ Missing',
-    BANNERBEAR_WEBHOOK_SECRET: BANNERBEAR_WEBHOOK_SECRET ? '✓ Set' : '✗ Missing',
-    AWS_ACCESS_KEY_ID: AWS_ACCESS_KEY_ID ? '✓ Set' : '✗ Missing',
-    AWS_SECRET_ACCESS_KEY: AWS_SECRET_ACCESS_KEY ? '✓ Set' : '✗ Missing',
-    AWS_REGION: AWS_REGION
-  });
-
   try {
-    const { url } = req.body;
-    
-    if (!url) {
-      return res.status(400).json({ message: 'Property URL is required' });
+    // Get the user from the session token
+    const session = req.headers.authorization?.replace('Bearer ', '');
+    if (!session) {
+      return res.status(401).json({ message: 'Unauthorized - No session provided' });
     }
 
-    console.log('Starting process with URL:', url);
-
-    // Scrape property data
-    let propertyData;
-    try {
-      propertyData = await scrapeProperty(url);
-      console.log('Scraped property data:', {
-        location: propertyData.location_name,
-        price: propertyData.price,
-        images: propertyData.property_images?.length || 0
-      });
-    } catch (error) {
-      console.error('Error scraping property:', error);
-      return res.status(500).json({
-        message: 'Error scraping property data',
-        error: error.message,
-        details: error.stack,
-        code: 'SCRAPING_ERROR'
-      });
-    }
-    
-    // Validate that we have the minimum required data
-    if (!propertyData || typeof propertyData !== 'object') {
-      return res.status(500).json({
-        message: 'Invalid property data format returned from scraper',
-        error: 'Property data is not an object',
-        code: 'INVALID_DATA_FORMAT'
-      });
-    }
-
-    // Generate caption
-    let caption;
-    try {
-      caption = generateCaption(propertyData);
-      console.log('Generated caption length:', caption.length);
-    } catch (error) {
-      console.error('Error generating caption:', error);
-      caption = "✨ **Property Details** ✨\n\nView this property on Rightmove for more information!"; // Fallback caption
-    }
-
-    // Generate Bannerbear images
-    let imageResult;
-    try {
-      imageResult = await generateBannerbearImages(propertyData);
-      console.log('Bannerbear image generation initiated:', imageResult);
-    } catch (error) {
-      console.error('Error generating Bannerbear images:', error);
-      return res.status(500).json({
-        message: 'Error generating images',
-        error: error.message,
-        details: error.stack,
-        code: 'BANNERBEAR_ERROR'
-      });
-    }
-
-    // Structure the response in the expected format
-    return res.status(200).json({
-      message: 'Processing started',
-      data: {
-        bannerbear: {
-          uid: imageResult.uid,
-          status: imageResult.status,
-          type: imageResult.type || 'collection'
-        },
-        caption: caption,
-        property: {
-          address: propertyData.location_name || 'Address not available',
-          price: propertyData.price || 'Price not available',
-          bedrooms: propertyData.bedroom || 'N/A',
-          bathrooms: propertyData.bathrooms || 'N/A',
-          images: propertyData.property_images || []
-        }
+    // Validate session with DynamoDB
+    const userResponse = await dynamoDb.query({
+      TableName: TABLES.USERS,
+      IndexName: 'SessionIndex',
+      KeyConditionExpression: '#sess = :session',
+      ExpressionAttributeNames: {
+        '#sess': 'session'
+      },
+      ExpressionAttributeValues: {
+        ':session': session
       }
+    }).promise();
+
+    if (!userResponse.Items || userResponse.Items.length === 0) {
+      return res.status(401).json({ message: 'Unauthorized - Invalid session' });
+    }
+
+    const userId = userResponse.Items[0].userId;
+
+    // Get parameters from either query or body for backward compatibility
+    const params = { ...req.query, ...req.body };
+    const { url } = params;
+
+    if (!url) {
+      return res.status(400).json({ message: 'URL parameter is required' });
+    }
+
+    // Log environment variables (without exposing full keys)
+    console.log('Environment check:', {
+      BANNERBEAR_API_KEY: BANNERBEAR_API_KEY ? '✓ Set' : '✗ Missing',
+      BANNERBEAR_TEMPLATE_UID: BANNERBEAR_TEMPLATE_UID ? '✓ Set' : '✗ Missing',
+      AWS_ACCESS_KEY_ID: AWS_ACCESS_KEY_ID ? '✓ Set' : '✗ Missing',
+      AWS_SECRET_ACCESS_KEY: AWS_SECRET_ACCESS_KEY ? '✓ Set' : '✗ Missing',
+      OPENAI_API_KEY: OPENAI_API_KEY ? '✓ Set' : '✗ Missing',
+      FIRECRAWL_API_KEY: FIRECRAWL_API_KEY ? '✓ Set' : '✗ Missing',
+      USE_FIRECRAWL: serverRuntimeConfig.USE_FIRECRAWL || process.env.USE_FIRECRAWL
     });
+    
+    let propertyData;
+    let propertyUrl = url;
+    
+    // If we have a property ID but not a URL, get it from DynamoDB
+    if (url && !url.includes('rightmove.co.uk')) {
+      console.log('Attempting to fetch property from DynamoDB with URL:', url);
+      
+      if (!dynamoDb) {
+        return res.status(400).json({ error: 'DynamoDB not configured and no URL provided' });
+      }
+      
+      const { Item } = await dynamoDb.get({
+        TableName: TABLES.PROPERTIES,
+        Key: { url: url }
+      }).promise();
+      
+      if (!Item) {
+        return res.status(404).json({ error: 'Property not found in database' });
+      }
+      
+      propertyUrl = Item.url;
+      propertyData = Item.data;
+      
+      console.log('Retrieved property from database:', {
+        url: propertyUrl
+      });
+    }
+    
+    // If we don't have property data yet, scrape it
+    if (!propertyData) {
+      console.log('Starting property scrape with URL:', propertyUrl);
+      
+      // Clean the URL first
+      const cleanedUrl = cleanRightmoveUrl(propertyUrl);
+      console.log('Cleaned URL:', cleanedUrl);
+      
+      try {
+        // Log which scraper module we're using
+        console.log('Using unified scraper module with USE_FIRECRAWL=', serverRuntimeConfig.USE_FIRECRAWL || process.env.USE_FIRECRAWL);
+        
+        // Perform the actual scraping using our unified scraper
+        console.log('Calling scraper.scrapeProperty()...');
+        propertyData = await scrapeProperty(cleanedUrl);
+        
+        if (!propertyData) {
+          console.error('scrapeProperty returned null or undefined');
+          return res.status(500).json({ error: 'Failed to scrape property data - no data returned' });
+        }
+        
+        console.log('Successfully scraped property data. Raw data keys:', Object.keys(propertyData));
+        console.log('Property type:', propertyData.raw?.property?.price);
+        console.log('Banner details:', propertyData.bannerbear?.template);
+      } catch (scrapeError) {
+        console.error('Error in scrapeProperty function:', scrapeError);
+      return res.status(500).json({
+          error: 'Failed to scrape property data',
+          message: scrapeError.message,
+          stack: scrapeError.stack 
+        });
+      }
+    }
+    
+    // Generate Bannerbear images
+    console.log('Initiating Bannerbear image generation');
+    
+    // Generate images using our imported generateBannerbearCollection function
+    let bannerbearResponse;
+    const templateSetToUse = params.templateId || BANNERBEAR_TEMPLATE_SET_UID;
+    
+    if (templateSetToUse) {
+      console.log('Using template set for collection generation:', templateSetToUse);
+      bannerbearResponse = await generateBannerbearCollection(propertyData, templateSetToUse);
+      console.log('Bannerbear response received:', JSON.stringify(bannerbearResponse, null, 2));
+    } else {
+      console.log('Using single template for image generation');
+      bannerbearResponse = await generateBannerbearImage(propertyData);
+    }
+    
+    if (!bannerbearResponse) {
+      return res.status(500).json({ error: 'Failed to generate Bannerbear response' });
+    }
+
+    console.log('Bannerbear generation completed successfully');
+    
+    // Generate propertyId outside the try block so it's available throughout
+    const propertyId = crypto.randomUUID();
+    const timestamp = new Date().toISOString();
+
+    // Update the bannerbear response to include propertyId in metadata for webhook handling
+    if (bannerbearResponse) {
+      bannerbearResponse.metadata = {
+        ...(bannerbearResponse.metadata || {}),
+        propertyId: propertyId
+      };
+    }
+
+    try {
+      // Store completed property content with full Bannerbear response
+      await dynamoDb.put({
+        TableName: TABLES.PROPERTY_CONTENT,
+        Item: {
+          id: propertyId,
+          userId: userId,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          propertyData: propertyData,
+          status: 'completed',
+          address: propertyData.raw?.property?.address || '',
+          price: propertyData.raw?.property?.price || '',
+          templateId: templateSetToUse,
+          // Store the complete Bannerbear response exactly as received
+          bannerbear: bannerbearResponse
+        }
+      }).promise();
+
+      // Save to properties table with user association
+      await dynamoDb.put({
+        TableName: TABLES.PROPERTIES,
+        Item: {
+          propertyId,
+          userId: userId,
+          url: propertyUrl,
+          data: propertyData.raw,
+          createdAt: timestamp,
+          updatedAt: timestamp
+        }
+      }).promise();
+
+      // Save to designs table with user association
+      await dynamoDb.put({
+        TableName: TABLES.DESIGNS,
+        Item: {
+          uid: bannerbearResponse.uid,
+          designId: bannerbearResponse.uid,
+          propertyId,
+          userId: userId,
+          status: bannerbearResponse.status || 'completed',
+          type: 'collection',
+          templateId: templateSetToUse,
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          // Store the complete response data
+          ...bannerbearResponse
+        }
+      }).promise();
+
+      // Store caption in DynamoDB
+      const captionId = crypto.randomUUID();
+      await dynamoDb.put({
+        TableName: TABLES.CAPTIONS,
+        Item: {
+          captionId,
+          userId,
+          propertyId,
+          designId: bannerbearResponse.uid,
+          caption: propertyData.caption,
+          captionOptions: propertyData.captionOptions || {},
+          createdAt: timestamp,
+          updatedAt: timestamp
+        }
+      }).promise();
+
+      // Save status to image-status table
+      await dynamoDb.put({
+        TableName: TABLES.IMAGE_STATUS,
+        Item: {
+          uid: bannerbearResponse.uid,
+          imageId: bannerbearResponse.uid,
+          propertyId,
+          userId: userId,
+          status: bannerbearResponse.status || 'completed',
+          createdAt: timestamp,
+          updatedAt: timestamp,
+          // Store the complete response data
+          ...bannerbearResponse
+        }
+      }).promise();
+
+      // Update user's properties list
+      try {
+        await dynamoDb.update({
+          TableName: TABLES.USERS,
+          Key: { userId: userId },
+          UpdateExpression: 'SET properties = list_append(if_not_exists(properties, :empty_list), :property_id)',
+          ExpressionAttributeValues: {
+            ':empty_list': [],
+            ':property_id': [propertyId]
+          }
+        }).promise();
+      } catch (userUpdateError) {
+        console.error('Failed to update user properties list:', userUpdateError);
+        await dynamoDb.put({
+          TableName: TABLES.USERS,
+          Item: {
+            userId: userId,
+            email: userResponse.Items[0].email,
+            properties: [propertyId],
+            createdAt: timestamp,
+            updatedAt: timestamp
+          }
+        }).promise();
+      }
+
+      console.log('Successfully saved initial Bannerbear response to DynamoDB');
+      
+      // Start polling for completed status
+      console.log('Starting background polling for Bannerbear status');
+      pollBannerbearStatus(
+        bannerbearResponse.uid, 
+        propertyId, 
+        !!bannerbearResponse.template_set
+      ).catch(error => {
+        console.error('Error in background polling:', error);
+      });
+
+      // Return success response with complete data
+      return res.status(200).json({
+        message: 'Processing completed',
+        data: {
+          propertyId,
+          bannerbear: bannerbearResponse,
+          caption: propertyData.caption || '',
+          property: {
+            address: propertyData.raw?.property?.address || '',
+            price: propertyData.raw?.property?.price || '',
+            bedrooms: propertyData.raw?.property?.bedrooms || '',
+            bathrooms: propertyData.raw?.property?.bathrooms || '',
+            squareFeet: propertyData.raw?.property?.square_ft || ''
+          }
+        }
+      });
+    } catch (dbError) {
+      console.error('Failed to store data in DynamoDB:', dbError);
+      return res.status(500).json({ 
+        error: 'Failed to store data',
+        message: dbError.message
+      });
+    }
+    
   } catch (error) {
-    console.error('Full error details:', {
-      message: error.message,
-      stack: error.stack,
-      cause: error.cause
-    });
-    
-    // Detect JSON parse errors specifically
-    const isJsonError = error.message && error.message.includes('JSON');
-    
-    return res.status(500).json({ 
-      message: isJsonError ? 'Error parsing data from external API' : 'Error processing request', 
-      error: error.message,
-      details: error.stack,
-      code: isJsonError ? 'JSON_PARSE_ERROR' : 'GENERAL_ERROR'
-    });
+    console.error('Error in API handler:', error);
+    return res.status(500).json({ error: error.message });
   }
 } 

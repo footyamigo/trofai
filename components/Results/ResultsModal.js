@@ -1,40 +1,46 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Modal from '../UI/Modal';
-import { FiDownload, FiCopy, FiShare2 } from 'react-icons/fi';
+import { FiDownload, FiCopy, FiShare2, FiChevronLeft, FiChevronRight, FiX, FiRefreshCw, FiSave } from 'react-icons/fi';
+import { FaInstagram, FaFacebookSquare } from 'react-icons/fa';
+import { toast } from 'react-hot-toast';
+import { useAuth } from '../../src/context/AuthContext';
 
 export default function ResultsModal({ isOpen, onClose, results }) {
   const [activeTab, setActiveTab] = useState('images');
   const [isDownloading, setIsDownloading] = useState(false);
-  const [copiedCaption, setCopiedCaption] = useState(false);
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [copiedCaption, setCopiedCaption] = useState(false);
   const [selectedCaptionOption, setSelectedCaptionOption] = useState('main');
   const [editedCaptions, setEditedCaptions] = useState({
     main: '',
     alternative: ''
   });
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
+  const { user } = useAuth();
+  const hasAlternativeCaption = Boolean(results?.captionOptions?.alternative);
+  const thumbnailsRef = useRef(null);
+  const [selectedImages, setSelectedImages] = useState([]);
+  const [isRegenerating, setIsRegenerating] = useState(false);
 
-  // Initialize edited captions from props when results change
+  // Initialize captions when results change
   useEffect(() => {
-    if (!results) return;
-    
-    setEditedCaptions({
-      main: results.captionOptions?.main || results.caption || '',
-      alternative: results.captionOptions?.alternative || ''
-    });
+    if (results) {
+      setEditedCaptions({
+        main: results.caption || '',
+        alternative: results.captionOptions?.alternative || ''
+      });
+      setIsSaved(false);
+    }
   }, [results]);
 
   // Early return after hooks are defined
   if (!results || !results.bannerbear) return null;
   
-  const { bannerbear, caption, captionOptions } = results;
+  const { bannerbear, caption, captionOptions, propertyData } = results;
   
   // Get the current caption based on selection or fallback
-  const currentCaption = selectedCaptionOption === 'main' 
-    ? editedCaptions.main
-    : editedCaptions.alternative;
-  
-  // Check if we have alternative caption option
-  const hasAlternativeCaption = captionOptions && captionOptions.alternative;
+  const currentCaption = editedCaptions[selectedCaptionOption] || '';
   
   // Format template name
   const formatTemplateName = (templateName) => {
@@ -57,7 +63,7 @@ export default function ResultsModal({ isOpen, onClose, results }) {
     if (bannerbear.image_urls && Object.keys(bannerbear.image_urls).length > 0) {
       images = Object.entries(bannerbear.image_urls)
         .filter(([key]) => !key.endsWith('_jpg'))
-        .map(([key, url]) => {
+        .map(([key, url], index, array) => {
           const templateName = key.replace('_image_url', '');
           const jpgKey = `${key}_jpg`;
           const jpgUrl = bannerbear.image_urls[jpgKey];
@@ -66,19 +72,21 @@ export default function ResultsModal({ isOpen, onClose, results }) {
             template: templateName,
             name: formatTemplateName(templateName),
             url: url,
-            jpgUrl: jpgUrl || url.replace(/\.png$/, '.jpg')
+            jpgUrl: jpgUrl || url.replace(/\.png$/, '.jpg'),
+            isStory: array.length - index <= 3  // Last 3 images are stories
           };
         });
     } 
     else if (bannerbear.images && bannerbear.images.length > 0) {
-      images = bannerbear.images.map((img, index) => {
+      images = bannerbear.images.map((img, index, array) => {
         const templateName = img.template || `Design ${index + 1}`;
         
         return {
           template: templateName,
           name: formatTemplateName(templateName),
           url: img.image_url,
-          jpgUrl: img.image_url_jpg || img.image_url.replace(/\.png$/, '.jpg')
+          jpgUrl: img.image_url_jpg || img.image_url.replace(/\.png$/, '.jpg'),
+          isStory: array.length - index <= 3  // Last 3 images are stories
         };
       });
     }
@@ -123,11 +131,9 @@ export default function ResultsModal({ isOpen, onClose, results }) {
   
   // Handle caption copy
   const copyCaption = () => {
-    if (currentCaption) {
-      navigator.clipboard.writeText(currentCaption);
-      setCopiedCaption(true);
-      setTimeout(() => setCopiedCaption(false), 2000);
-    }
+    navigator.clipboard.writeText(currentCaption);
+    setCopiedCaption(true);
+    setTimeout(() => setCopiedCaption(false), 2000);
   };
   
   // Handle caption option switch
@@ -137,11 +143,135 @@ export default function ResultsModal({ isOpen, onClose, results }) {
   
   // Handle caption editing
   const handleCaptionChange = (e) => {
-    const updatedValue = e.target.value;
+    const newCaption = e.target.value;
     setEditedCaptions({
       ...editedCaptions,
-      [selectedCaptionOption]: updatedValue
+      [selectedCaptionOption]: newCaption
     });
+  };
+
+  // Handle thumbnail scrolling
+  const scrollThumbnails = (direction) => {
+    if (thumbnailsRef.current) {
+      const scrollAmount = direction === 'left' ? -300 : 300;
+      thumbnailsRef.current.scrollBy({ left: scrollAmount, behavior: 'smooth' });
+    }
+  };
+
+  // Add image selection handler
+  const toggleImageSelection = (image, index) => {
+    setSelectedImages(prev => {
+      const isSelected = prev.some(img => img.url === image.url);
+      if (isSelected) {
+        return prev.filter(img => img.url !== image.url);
+      } else {
+        return [...prev, { ...image, originalIndex: index }];
+      }
+    });
+  };
+
+  // Add remove image handler
+  const removeSelectedImage = (imageUrl) => {
+    setSelectedImages(prev => prev.filter(img => img.url !== imageUrl));
+  };
+  
+  // Add regenerate handler
+  const handleRegenerateCaption = async () => {
+    setIsRegenerating(true);
+    try {
+      const response = await fetch('/api/regenerate-caption', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          currentCaption: currentCaption,
+          currentOption: selectedCaptionOption
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to regenerate caption');
+      }
+
+      const data = await response.json();
+      
+      setEditedCaptions(prev => ({
+        ...prev,
+        [selectedCaptionOption]: data.caption
+      }));
+
+      toast.success('Caption regenerated successfully!');
+    } catch (error) {
+      console.error('Failed to regenerate caption:', error);
+      toast.error(error.message || 'Failed to regenerate caption. Please try again.');
+    } finally {
+      setIsRegenerating(false);
+    }
+  };
+
+  // Handle save property
+  const handleSaveProperty = async () => {
+    if (!user) {
+      toast.error('Please sign in to save this property');
+      return;
+    }
+
+    if (isSaved) {
+      toast.success('Property already saved to your profile');
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      // Prepare the data to save
+      const propertyToSave = {
+        // Basic property info
+        address: propertyData?.address || 'Unknown Address',
+        price: propertyData?.price || 'Unknown Price',
+        bedrooms: propertyData?.bedrooms || 0,
+        bathrooms: propertyData?.bathrooms || 0,
+        propertyType: propertyData?.propertyType || 'Unknown',
+        description: propertyData?.description || '',
+        features: propertyData?.features || [],
+        
+        // Generated content
+        images: images.map(img => ({
+          url: img.url,
+          name: img.name,
+          isStory: img.isStory
+        })),
+        captions: {
+          main: editedCaptions.main,
+          alternative: editedCaptions.alternative
+        },
+        
+        // Metadata
+        generatedAt: new Date().toISOString()
+      };
+
+      const response = await fetch('/api/properties/save', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(propertyToSave),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to save property');
+      }
+
+      setIsSaved(true);
+      toast.success('Property saved to your profile');
+    } catch (error) {
+      console.error('Failed to save property:', error);
+      toast.error(error.message || 'Failed to save property. Please try again.');
+    } finally {
+      setIsSaving(false);
+    }
   };
   
   return (
@@ -150,213 +280,502 @@ export default function ResultsModal({ isOpen, onClose, results }) {
       onClose={onClose} 
       title="Your Generated Property Content"
     >
-      <div className="tabs">
-        <button 
-          className={`tab ${activeTab === 'images' ? 'active' : ''}`}
-          onClick={() => setActiveTab('images')}
-        >
-          Images
-        </button>
-        <button 
-          className={`tab ${activeTab === 'caption' ? 'active' : ''}`}
-          onClick={() => setActiveTab('caption')}
-        >
-          Caption
-        </button>
+      <div className="content-container">
+        <div className="tabs">
+          <button 
+            className={`tab ${activeTab === 'images' ? 'active' : ''}`}
+            onClick={() => setActiveTab('images')}
+          >
+            Images
+          </button>
+          <button 
+            className={`tab ${activeTab === 'caption' ? 'active' : ''}`}
+            onClick={() => setActiveTab('caption')}
+          >
+            Caption
+          </button>
+          <button 
+            className={`tab ${activeTab === 'social' ? 'active' : ''}`}
+            onClick={() => setActiveTab('social')}
+          >
+            Post to Social
+          </button>
+        </div>
+        
+        {activeTab === 'images' && (
+          <div className="images-tab">
+            <div className="images-layout">
+            <div className="main-image-container">
+              {selectedImage.url ? (
+                  <div className={`instagram-frame ${selectedImage.isStory ? 'story-frame' : ''}`}>
+                    {!selectedImage.isStory ? (
+                      <>
+                        <div className="instagram-header">
+                          <div className="profile-info">
+                            <div className="profile-picture"></div>
+                            <div className="profile-name">Your Profile</div>
+                          </div>
+                          <div className="more-options">•••</div>
+                        </div>
+                        <div className="instagram-image">
+                <img 
+                  src={selectedImage.url} 
+                  alt={selectedImage.name || 'Property Image'} 
+                  className="main-image" 
+                />
+                        </div>
+                        <div className="instagram-actions">
+                          <div className="action-icons">
+                            <span>♡</span>
+                            <span>💬</span>
+                            <span>↪</span>
+                          </div>
+                          <div className="bookmark">🔖</div>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="story-container">
+                        <div className="story-image">
+                          <img 
+                            src={selectedImage.url} 
+                            alt={selectedImage.name || 'Property Image'} 
+                            className="story-main-image" 
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+              ) : (
+                <div className="no-image">No images available</div>
+              )}
+            </div>
+            
+              {images.length > 1 && (
+                <div className="thumbnails-section">
+                  <div className="thumbnails-header">
+                    <h3 className="section-title">All Designs</h3>
+                    <div className="download-actions">
+                      {selectedImage.url && (
+                        <button 
+                          className="action-button"
+                          onClick={() => downloadImage(selectedImage.url, `property-${selectedImage.name || 'image'}.png`)}
+                          disabled={isDownloading}
+                        >
+                          <FiDownload className="icon" />
+                          <span>Download PNG</span>
+                        </button>
+                      )}
+                      {bannerbear.zip_url && (
+                        <button 
+                          className="download-all-button" 
+                          onClick={downloadZip}
+                          disabled={isDownloading}
+                        >
+                          <FiDownload className="icon" />
+                          <span>Download All (ZIP)</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className="thumbnails-wrapper">
+                    <div className="thumbnails" ref={thumbnailsRef}>
+                      {images.map((image, index) => (
+                        <div 
+                          key={index} 
+                          className={`thumbnail ${selectedImageIndex === index ? 'active' : ''}`}
+                          onClick={() => setSelectedImageIndex(index)}
+                        >
+                          <div className="thumbnail-image">
+                            <img src={image.url} alt={image.name || `Design ${index + 1}`} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+              </div>
+          </div>
+        )}
+        
+        {activeTab === 'caption' && (
+          <div className="caption-tab">
+            <div className="caption-container">
+              <div className="caption-header">
+                <h3 className="section-title">Instagram Caption</h3>
+                <div className="caption-actions">
+                  <button 
+                    className="caption-action regenerate" 
+                    onClick={handleRegenerateCaption}
+                    disabled={isRegenerating}
+                  >
+                    <FiRefreshCw className={`icon ${isRegenerating ? 'spinning' : ''}`} />
+                    <span>{isRegenerating ? 'Regenerating...' : 'Regenerate'}</span>
+                  </button>
+                <button 
+                  className="caption-action" 
+                  onClick={copyCaption}
+                >
+                  <FiCopy className="icon" />
+                  <span>{copiedCaption ? 'Copied!' : 'Copy'}</span>
+                </button>
+                </div>
+              </div>
+              
+              {hasAlternativeCaption && (
+                <div className="caption-options">
+                  <button 
+                    className={`caption-option-btn ${selectedCaptionOption === 'main' ? 'active' : ''}`}
+                    onClick={() => handleCaptionOptionChange('main')}
+                  >
+                    Option 1
+                  </button>
+                  <button 
+                    className={`caption-option-btn ${selectedCaptionOption === 'alternative' ? 'active' : ''}`}
+                    onClick={() => handleCaptionOptionChange('alternative')}
+                  >
+                    Option 2
+                  </button>
+                </div>
+              )}
+              
+              <div className="caption-content">
+                <textarea
+                  className="caption-textarea"
+                  value={currentCaption}
+                  onChange={handleCaptionChange}
+                  rows={12}
+                  placeholder="Your caption will appear here for editing..."
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'social' && (
+          <div className="social-tab">
+            <div className="social-content">
+              <div className="social-layout">
+                <div className="social-images-container">
+                  <h3 className="section-title">Select Images to Post</h3>
+                  <div className="social-images">
+                    <div className="social-thumbnails">
+                      {images
+                        .filter(image => !image.isStory)
+                        .map((image, index) => (
+                          <div 
+                            key={index} 
+                            className={`social-thumbnail ${selectedImages.some(img => img.url === image.url) ? 'active' : ''}`}
+                            onClick={() => toggleImageSelection(image, index)}
+                          >
+                            <img src={image.url} alt={image.name || `Design ${index + 1}`} />
+                            {selectedImages.some(img => img.url === image.url) && (
+                              <div className="selected-indicator">✓</div>
+                            )}
+                          </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {selectedImages.length > 0 && (
+                    <div className="selected-images">
+                      <h4 className="subsection-title">Selected Images</h4>
+                      <div className="selected-images-row">
+                        {selectedImages.map((image, index) => (
+                          <div key={index} className="selected-image-item">
+                            <img src={image.url} alt={image.name || `Selected ${index + 1}`} />
+                            <button 
+                              className="remove-image"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeSelectedImage(image.url);
+                              }}
+                            >
+                              <FiX />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="social-right-panel">
+                  <div className="social-caption">
+                    <div className="caption-header">
+                      <h3 className="section-title">Your Caption</h3>
+                      <button 
+                        className="caption-action" 
+                        onClick={copyCaption}
+                      >
+                        <FiCopy className="icon" />
+                        <span>{copiedCaption ? 'Copied!' : 'Copy'}</span>
+                      </button>
+                    </div>
+
+                    {hasAlternativeCaption && (
+                      <div className="caption-options">
+                        <button 
+                          className={`caption-option-btn ${selectedCaptionOption === 'main' ? 'active' : ''}`}
+                          onClick={() => handleCaptionOptionChange('main')}
+                        >
+                          Option 1
+                        </button>
+                        <button 
+                          className={`caption-option-btn ${selectedCaptionOption === 'alternative' ? 'active' : ''}`}
+                          onClick={() => handleCaptionOptionChange('alternative')}
+                        >
+                          Option 2
+                        </button>
+                      </div>
+                    )}
+
+                    <textarea
+                      className="caption-textarea"
+                      value={currentCaption}
+                      onChange={handleCaptionChange}
+                      placeholder="Your caption will appear here for editing..."
+                      rows={8}
+                    />
+                  </div>
+
+                  <div className="social-actions">
+                    <h3 className="section-title">Share to Social Media</h3>
+                    <div className="social-buttons">
+                      <a 
+                        href="https://www.instagram.com/"
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                        className="social-button instagram"
+                      >
+                        <FaInstagram className="icon" />
+                        <div className="button-content">
+                          <span className="button-title">Post to Instagram</span>
+                          <span className="button-desc">Share your property listing</span>
+                        </div>
+                      </a>
+                      <a 
+                        href="https://www.facebook.com/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="social-button facebook"
+                      >
+                        <FaFacebookSquare className="icon" />
+                        <div className="button-content">
+                          <span className="button-title">Share on Facebook</span>
+                          <span className="button-desc">Post to your business page</span>
+              </div>
+                      </a>
+                    </div>
+                    <p className="social-tip">
+                      💡 Tip: Copy your caption first, then click on the social media platform where you want to post. Paste your caption in the post creation page.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
       
-      {activeTab === 'images' && (
-        <div className="images-tab">
-          <div className="main-image-container">
-            {selectedImage.url ? (
-              <img 
-                src={selectedImage.url} 
-                alt={selectedImage.name || 'Property Image'} 
-                className="main-image" 
-              />
-            ) : (
-              <div className="no-image">No images available</div>
-            )}
-            
-            {selectedImage.url && (
-              <div className="image-actions">
-                <button 
-                  className="action-button" 
-                  onClick={() => downloadImage(selectedImage.url, `property-${selectedImage.name || 'image'}.png`)}
-                  disabled={isDownloading}
-                >
-                  <FiDownload className="icon" />
-                  <span>Download PNG</span>
-                </button>
-                
-                {selectedImage.jpgUrl && (
-                  <button 
-                    className="action-button" 
-                    onClick={() => downloadImage(selectedImage.jpgUrl, `property-${selectedImage.name || 'image'}.jpg`)}
-                    disabled={isDownloading}
-                  >
-                    <FiDownload className="icon" />
-                    <span>Download JPG</span>
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-          
-          {images.length > 0 && (
-            <div className="thumbnails">
-              {images.map((image, index) => (
-                <div 
-                  key={index} 
-                  className={`thumbnail ${selectedImageIndex === index ? 'active' : ''}`}
-                  onClick={() => setSelectedImageIndex(index)}
-                >
-                  <img src={image.url} alt={image.name || `Design ${index + 1}`} />
-                  <div className="thumbnail-name">{image.name || `Design ${index + 1}`}</div>
-                </div>
-              ))}
-            </div>
-          )}
-          
-          {bannerbear.zip_url && (
-            <div className="download-all">
-              <button 
-                className="download-all-button" 
-                onClick={downloadZip}
-                disabled={isDownloading}
-              >
-                <FiDownload className="icon" />
-                <span>Download All Images (ZIP)</span>
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-      
-      {activeTab === 'caption' && (
-        <div className="caption-tab">
-          <div className="caption-container">
-            <div className="caption-header">
-              <h3>Instagram Caption</h3>
-              <button 
-                className="caption-action" 
-                onClick={copyCaption}
-              >
-                <FiCopy className="icon" />
-                <span>{copiedCaption ? 'Copied!' : 'Copy'}</span>
-              </button>
-            </div>
-            
-            {hasAlternativeCaption && (
-              <div className="caption-options">
-                <button 
-                  className={`caption-option-btn ${selectedCaptionOption === 'main' ? 'active' : ''}`}
-                  onClick={() => handleCaptionOptionChange('main')}
-                >
-                  Option 1
-                </button>
-                <button 
-                  className={`caption-option-btn ${selectedCaptionOption === 'alternative' ? 'active' : ''}`}
-                  onClick={() => handleCaptionOptionChange('alternative')}
-                >
-                  Option 2
-                </button>
-              </div>
-            )}
-            
-            <div className="caption-content">
-              <textarea
-                className="caption-textarea"
-                value={currentCaption}
-                onChange={handleCaptionChange}
-                rows={12}
-                placeholder="Your caption will appear here for editing..."
-              />
-            </div>
-          </div>
-          
-          <div className="social-share">
-            <h3>Share Caption & Image</h3>
-            <div className="share-buttons">
-              <a 
-                href={`https://www.instagram.com/`} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="share-button instagram"
-              >
-                <FiShare2 className="icon" />
-                <span>Open Instagram</span>
-              </a>
-            </div>
-            <p className="share-note">
-              Copy your caption and download your image to share on Instagram.
-            </p>
-          </div>
-        </div>
-      )}
-      
       <style jsx>{`
+        .content-container {
+          max-height: 85vh;
+          overflow-y: auto;
+          padding: 0.5rem;
+          position: relative;
+          display: flex;
+          flex-direction: column;
+        }
+        
         .tabs {
           display: flex;
-          border-bottom: 1px solid #eaeaea;
+          border-bottom: 2px solid #f0f0f0;
           margin-bottom: 1.5rem;
+          position: sticky;
+          top: 0;
+          background: white;
+          z-index: 10;
+          padding: 0 0.5rem;
+          gap: 2rem;
         }
         
         .tab {
-          padding: 0.8rem 1.5rem;
+          padding: 0.75rem 0.5rem;
           background: none;
           border: none;
-          font-size: 1rem;
-          font-weight: 500;
-          color: #666;
+          font-size: 0.95rem;
+          font-weight: 600;
+          color: #94a3b8;
           cursor: pointer;
           position: relative;
-          transition: color 0.2s;
+          transition: all 0.2s ease;
+          min-width: 80px;
+          text-align: center;
+        }
+        
+        .tab:hover {
+          color: #64748b;
         }
         
         .tab.active {
-          color: #0070f3;
+          color: #62d76b;
+        }
+        
+        .tab::after {
+          content: '';
+          position: absolute;
+          bottom: -2px;
+          left: 0;
+          right: 0;
+          height: 2px;
+          background: transparent;
+          transition: all 0.2s ease;
         }
         
         .tab.active::after {
-          content: '';
-          position: absolute;
-          bottom: -1px;
-          left: 0;
-          right: 0;
-          height: 3px;
-          background: #0070f3;
-          border-radius: 3px 3px 0 0;
+          background: #62d76b;
+        }
+        
+        .section-title {
+          font-size: 1rem;
+          font-weight: 600;
+          color: #2d3748;
+          margin: 0;
         }
         
         .images-tab {
           display: flex;
           flex-direction: column;
-          gap: 1.5rem;
+          flex: 1;
+          min-height: 0;
+        }
+        
+        .images-layout {
+          display: flex;
+          gap: 1rem;
+          align-items: flex-start;
+          height: 100%;
+          max-width: 1200px;
+          margin: 0 auto;
         }
         
         .main-image-container {
-          width: 100%;
+          flex: 1;
+          min-width: 0;
           display: flex;
           flex-direction: column;
           align-items: center;
-          gap: 1rem;
+          background: transparent;
+          padding: 0;
+        }
+        
+        .instagram-frame {
+          width: 100%;
+          background: white;
+          border: 1px solid #dbdbdb;
           border-radius: 8px;
           overflow: hidden;
+        }
+        
+        .instagram-frame.story-frame {
+          aspect-ratio: 9/16;
+          max-width: 400px;
+          margin: 0 auto;
+          background: black;
+          position: relative;
+          border: none;
+        }
+        
+        .story-container {
+          width: 100%;
+          height: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: black;
+        }
+        
+        .story-image {
+          width: 100%;
+          height: 100%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        
+        .story-main-image {
+          width: 100%;
+          height: 100%;
+          object-fit: contain;
+        }
+        
+        .instagram-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 8px 12px;
+          border-bottom: 1px solid #dbdbdb;
+        }
+        
+        .profile-info {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+        
+        .profile-picture {
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          background: #dbdbdb;
+        }
+        
+        .profile-name {
+          font-weight: 600;
+          font-size: 14px;
+        }
+        
+        .more-options {
+          font-weight: bold;
+          color: #262626;
+        }
+        
+        .instagram-image {
+          width: 100%;
+          background: #000;
+          display: flex;
+          align-items: center;
+          justify-content: center;
         }
         
         .main-image {
           width: 100%;
           height: auto;
           object-fit: contain;
-          max-height: 500px;
-          border-radius: 8px;
-          box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+          max-height: 470px;
+        }
+        
+        .instagram-actions {
+          display: flex;
+          justify-content: space-between;
+          padding: 12px;
+          border-top: 1px solid #dbdbdb;
+        }
+        
+        .action-icons {
+          display: flex;
+          gap: 16px;
+          font-size: 22px;
+        }
+        
+        .bookmark {
+          font-size: 22px;
         }
         
         .no-image {
           width: 100%;
-          height: 300px;
+          height: 250px;
           display: flex;
           align-items: center;
           justify-content: center;
@@ -366,216 +785,258 @@ export default function ResultsModal({ isOpen, onClose, results }) {
           border-radius: 8px;
         }
         
-        .image-actions {
+        .thumbnails-section {
+          width: 380px;
+          flex-shrink: 0;
+          background: white;
+          border-radius: 10px;
+          padding: 0.75rem;
+          border: 1px solid #edf2f7;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+          height: fit-content;
+          max-height: 85vh;
           display: flex;
-          gap: 1rem;
-          flex-wrap: wrap;
-          justify-content: center;
-          width: 100%;
-          margin-top: 0.5rem;
+          flex-direction: column;
+          position: sticky;
+          top: 3rem;
         }
         
-        .action-button {
+        .thumbnails-header {
+          display: flex;
+          flex-direction: column;
+          gap: 0.75rem;
+          margin-bottom: 0.75rem;
+        }
+        
+        .download-actions {
+          display: flex;
+          gap: 0.5rem;
+          flex-wrap: wrap;
+        }
+        
+        .action-button,
+        .download-all-button {
           display: flex;
           align-items: center;
+          justify-content: center;
           gap: 0.5rem;
-          padding: 0.7rem 1.2rem;
-          background: linear-gradient(90deg, #4CAF50, #8BC34A);
-          color: white;
-          border: none;
+          padding: 0.5rem 0.75rem;
+          background: #62d76b;
+          color: black;
+          border: 2px solid black;
           border-radius: 6px;
-          font-weight: 500;
+          font-weight: 600;
+          font-size: 0.8rem;
           cursor: pointer;
           transition: all 0.2s ease;
-          box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+          box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.8);
+          white-space: nowrap;
+          flex: 1;
+          min-width: 0;
         }
         
-        .action-button:nth-child(2) {
-          background: linear-gradient(90deg, #3F9142, #7CB342);
-        }
-        
-        .action-button:hover {
-          background: linear-gradient(90deg, #43A047, #7CB342);
-          box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+        .action-button:hover,
+        .download-all-button:hover {
+          background: #56c15f;
+          box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.8);
           transform: translateY(-1px);
         }
         
-        .action-button:nth-child(2):hover {
-          background: linear-gradient(90deg, #388E3C, #689F38);
+        .action-button:active,
+        .download-all-button:active {
+          transform: translateY(1px);
+          box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.8);
         }
         
-        .action-button:disabled {
-          background: #999;
+        .action-button:disabled,
+        .download-all-button:disabled {
+          background: #ccc;
           cursor: not-allowed;
-          box-shadow: none;
+          opacity: 0.7;
           transform: none;
+          box-shadow: none;
+          border-color: #999;
         }
         
         .icon {
           font-size: 1.1rem;
         }
         
+        .thumbnails-wrapper {
+          overflow-y: auto;
+          padding-right: 4px;
+        }
+        
         .thumbnails {
-          display: flex;
-          gap: 1rem;
-          overflow-x: auto;
-          padding: 0.5rem 0;
-          scrollbar-width: thin;
-          scrollbar-color: #0070f3 #eaeaea;
-        }
-        
-        .thumbnails::-webkit-scrollbar {
-          height: 6px;
-        }
-        
-        .thumbnails::-webkit-scrollbar-track {
-          background: #eaeaea;
-          border-radius: 10px;
-        }
-        
-        .thumbnails::-webkit-scrollbar-thumb {
-          background-color: #0070f3;
-          border-radius: 10px;
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 0.75rem;
+          padding-bottom: 0.5rem;
         }
         
         .thumbnail {
-          min-width: 120px;
-          max-width: 120px;
+          width: 100%;
           cursor: pointer;
-          border-radius: 6px;
+          border-radius: 8px;
           overflow: hidden;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
           transition: transform 0.2s, box-shadow 0.2s;
-          display: flex;
-          flex-direction: column;
+          background: white;
+          aspect-ratio: 1;
         }
         
-        .thumbnail:hover {
-          transform: translateY(-3px);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        }
-        
-        .thumbnail.active {
-          box-shadow: 0 0 0 3px #0070f3, 0 4px 12px rgba(0, 0, 0, 0.15);
+        .thumbnail-image {
+          width: 100%;
+          height: 100%;
+          overflow: hidden;
         }
         
         .thumbnail img {
           width: 100%;
-          height: 80px;
+          height: 100%;
           object-fit: cover;
+          transition: transform 0.3s;
         }
         
-        .thumbnail-name {
-          font-size: 0.75rem;
-          padding: 0.5rem;
-          text-align: center;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          background: #f9f9f9;
+        .thumbnail:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
         }
         
-        .download-all {
-          display: flex;
-          justify-content: center;
-          margin-top: 1rem;
+        .thumbnail:hover img {
+          transform: scale(1.05);
         }
         
-        .download-all-button {
-          display: flex;
-          align-items: center;
-          gap: 0.5rem;
-          padding: 0.8rem 1.5rem;
-          background: linear-gradient(90deg, #4CAF50, #8BC34A);
-          color: white;
-          border: none;
-          border-radius: 8px;
-          font-weight: 500;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
-        }
-        
-        .download-all-button:hover {
-          background: linear-gradient(90deg, #43A047, #7CB342);
-          box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
-          transform: translateY(-1px);
-        }
-        
-        .download-all-button:disabled {
-          background: #999;
-          cursor: not-allowed;
-          box-shadow: none;
-          transform: none;
+        .thumbnail.active {
+          box-shadow: 0 0 0 2px #62d76b, 0 4px 8px rgba(0, 0, 0, 0.1);
         }
         
         .caption-tab {
           display: flex;
           flex-direction: column;
-          gap: 2rem;
+          gap: 1.25rem;
         }
         
         .caption-container {
           background: white;
-          border-radius: 8px;
-          padding: 1.5rem;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-          border: 1px solid #eaeaea;
+          border-radius: 10px;
+          padding: 1.25rem;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+          border: 1px solid #edf2f7;
         }
         
         .caption-header {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          margin-bottom: 1rem;
+          margin-bottom: 0.75rem;
         }
         
-        .caption-header h3 {
-          margin: 0;
-          color: #333;
+        .caption-actions {
+          display: flex;
+          gap: 0.5rem;
         }
         
         .caption-action {
           display: flex;
           align-items: center;
-          gap: 0.4rem;
-          padding: 0.5rem 1rem;
-          background: linear-gradient(90deg, #4CAF50, #8BC34A);
-          color: white;
-          border: none;
+          justify-content: center;
+          gap: 0.5rem;
+          padding: 0.5rem 0.75rem;
+          background: #62d76b;
+          color: black;
+          border: 2px solid black;
           border-radius: 6px;
-          font-weight: 500;
+          font-weight: 600;
+          font-size: 0.8rem;
           cursor: pointer;
           transition: all 0.2s ease;
-          box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+          box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.8);
+          white-space: nowrap;
         }
         
         .caption-action:hover {
-          background: linear-gradient(90deg, #43A047, #7CB342);
-          box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+          background: #56c15f;
+          box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.8);
           transform: translateY(-1px);
         }
         
-        .caption-content {
-          line-height: 1.6;
-          color: #333;
-          white-space: pre-wrap;
-          background: #f9f9f9;
-          padding: 0;
+        .caption-action:active {
+          transform: translateY(1px);
+          box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.8);
+        }
+        
+        .caption-action.regenerate {
+          background: #e2e8f0;
+        }
+        
+        .caption-action.regenerate:hover {
+          background: #cbd5e1;
+          box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.8);
+          transform: translateY(-1px);
+        }
+        
+        .caption-action.regenerate:active {
+          transform: translateY(1px);
+          box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.8);
+        }
+        
+        .caption-action:disabled {
+          background: #ccc;
+          cursor: not-allowed;
+          opacity: 0.7;
+          transform: none;
+          box-shadow: none;
+          border-color: #999;
+        }
+        
+        .caption-action .icon.spinning {
+          animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+          from {
+            transform: rotate(0deg);
+          }
+          to {
+            transform: rotate(360deg);
+          }
+        }
+        
+        .caption-options {
+          display: flex;
+          gap: 0.5rem;
+          margin-bottom: 0.75rem;
+        }
+        
+        .caption-option-btn {
+          padding: 0.5rem 1rem;
+          background: #f7fafc;
+          border: 1px solid #e2e8f0;
           border-radius: 6px;
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+          cursor: pointer;
+          font-weight: 500;
+          font-size: 0.85rem;
+          color: #4a5568;
+          transition: all 0.2s ease;
+        }
+        
+        .caption-option-btn.active {
+          color: #4CAF50;
+          border-color: #4CAF50;
+          background: rgba(76, 175, 80, 0.05);
         }
         
         .caption-textarea {
           width: 100%;
-          min-height: 250px;
-          padding: 1.25rem;
-          border: 1px solid #e0e0e0;
+          min-height: 240px;
+          padding: 1rem;
+          border: 1px solid #e2e8f0;
           border-radius: 8px;
           font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-          font-size: 1rem;
+          font-size: 0.95rem;
           line-height: 1.6;
-          color: #333;
+          color: #4a5568;
           resize: vertical;
           background-color: #ffffff;
           box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
@@ -585,101 +1046,461 @@ export default function ResultsModal({ isOpen, onClose, results }) {
         .caption-textarea:focus {
           outline: none;
           border-color: #4CAF50;
-          box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.2);
+          box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.15);
         }
         
-        .social-share {
-          background: #f9f9f9;
-          border-radius: 8px;
-          padding: 1.5rem;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        .social-tab {
+          padding: 1rem;
+          height: calc(100vh - 180px); /* Adjust based on your header/footer height */
         }
-        
-        .social-share h3 {
-          margin-top: 0;
-          margin-bottom: 1rem;
-          color: #333;
+
+        .social-content {
+          height: 100%;
         }
-        
-        .share-buttons {
+
+        .social-layout {
+          display: flex;
+          gap: 1.5rem;
+          height: 100%;
+        }
+
+        .social-images-container {
+          width: 45%;
+          display: flex;
+          flex-direction: column;
+          gap: 1.5rem;
+          height: 100%;
+        }
+
+        .social-images {
+          flex: 1;
+          background: white;
+          border-radius: 10px;
+          padding: 1.25rem;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+          border: 1px solid #edf2f7;
+          overflow-y: auto;
+        }
+
+        .social-images::-webkit-scrollbar {
+          width: 8px;
+        }
+
+        .social-images::-webkit-scrollbar-track {
+          background: #f1f1f1;
+          border-radius: 4px;
+        }
+
+        .social-images::-webkit-scrollbar-thumb {
+          background: #c1c1c1;
+          border-radius: 4px;
+        }
+
+        .social-images::-webkit-scrollbar-thumb:hover {
+          background: #a8a8a8;
+        }
+
+        .social-thumbnails {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 1rem;
+        }
+
+        .social-right-panel {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          gap: 1.5rem;
+          height: 100%;
+          overflow-y: hidden;
+        }
+
+        .social-caption {
+          background: white;
+          border-radius: 10px;
+          padding: 1.25rem;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+          border: 1px solid #edf2f7;
+        }
+
+        .social-actions {
+          background: white;
+          border-radius: 10px;
+          padding: 1.25rem;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+          border: 1px solid #edf2f7;
+        }
+
+        .social-buttons {
           display: flex;
           gap: 1rem;
-          margin-bottom: 1rem;
+          margin-top: 1rem;
         }
         
-        .share-button {
+        .social-button {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+          padding: 1rem;
+          border-radius: 10px;
+          text-decoration: none;
+          color: white;
+          transition: all 0.2s ease;
+        }
+
+        .social-button.instagram {
+          background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+        }
+
+        .social-button.facebook {
+          background: #1877f2;
+        }
+
+        .social-button:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .social-button .icon {
+          font-size: 2rem;
+        }
+
+        .button-content {
+          display: flex;
+          flex-direction: column;
+        }
+
+        .button-title {
+          font-weight: 600;
+          font-size: 1rem;
+        }
+
+        .button-desc {
+          font-size: 0.8rem;
+          opacity: 0.9;
+        }
+
+        .social-tip {
+          margin-top: 1rem;
+          padding: 1rem;
+          background: #f8f9fa;
+          border-radius: 8px;
+          font-size: 0.9rem;
+          color: #666;
+          border-left: 3px solid #62d76b;
+        }
+
+        .social-thumbnail {
+          position: relative;
+          aspect-ratio: 1;
+          border-radius: 8px;
+          overflow: hidden;
+          cursor: pointer;
+          border: 2px solid transparent;
+          transition: all 0.2s ease;
+        }
+
+        .social-thumbnail img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
+        .social-thumbnail:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .social-thumbnail.active {
+          border-color: #62d76b;
+          box-shadow: 0 0 0 2px rgba(98, 215, 107, 0.2);
+        }
+
+        .selected-indicator {
+          position: absolute;
+          top: 8px;
+          right: 8px;
+          width: 24px;
+          height: 24px;
+          background: #62d76b;
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          font-size: 14px;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .selected-images {
+          background: white;
+          border-radius: 10px;
+          padding: 1.25rem;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+          border: 1px solid #edf2f7;
+        }
+
+        .subsection-title {
+          font-size: 0.9rem;
+          font-weight: 600;
+          color: #2d3748;
+          margin: 0 0 1rem 0;
+        }
+
+        .selected-images-row {
+          display: flex;
+          gap: 0.75rem;
+          overflow-x: auto;
+          padding-bottom: 0.5rem;
+        }
+
+        .selected-images-row::-webkit-scrollbar {
+          height: 6px;
+        }
+
+        .selected-images-row::-webkit-scrollbar-track {
+          background: #f1f1f1;
+          border-radius: 3px;
+        }
+
+        .selected-images-row::-webkit-scrollbar-thumb {
+          background: #c1c1c1;
+          border-radius: 3px;
+        }
+
+        .selected-images-row::-webkit-scrollbar-thumb:hover {
+          background: #a8a8a8;
+        }
+
+        .selected-image-item {
+          position: relative;
+          width: 100px;
+          height: 100px;
+          flex-shrink: 0;
+          border-radius: 8px;
+          overflow: hidden;
+          border: 1px solid #edf2f7;
+        }
+
+        .selected-image-item img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
+        .remove-image {
+          position: absolute;
+          top: 4px;
+          right: 4px;
+          width: 20px;
+          height: 20px;
+          border-radius: 50%;
+          background: rgba(255, 255, 255, 0.9);
+          border: none;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          color: #e53e3e;
+          font-size: 14px;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+          transition: all 0.2s ease;
+        }
+
+        .remove-image:hover {
+          background: white;
+          transform: scale(1.1);
+        }
+
+        .caption-title-group {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+        }
+
+        .regenerate-button {
           display: flex;
           align-items: center;
           gap: 0.5rem;
-          padding: 0.7rem 1.2rem;
-          background: linear-gradient(90deg, #4CAF50, #8BC34A);
-          color: white;
-          text-decoration: none;
+          padding: 0.5rem 0.75rem;
+          background: #f3f4f6;
+          color: #4b5563;
+          border: 1px solid #e5e7eb;
           border-radius: 6px;
+          font-size: 0.85rem;
           font-weight: 500;
+          cursor: pointer;
           transition: all 0.2s ease;
-          box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
         }
-        
-        .share-button:hover {
-          background: linear-gradient(90deg, #43A047, #7CB342);
-          box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
-          transform: translateY(-1px);
+
+        .regenerate-button:hover {
+          background: #e5e7eb;
+          color: #1f2937;
+        }
+
+        .regenerate-button:disabled {
+          opacity: 0.7;
+          cursor: not-allowed;
+        }
+
+        .regenerate-button .icon {
+          font-size: 1rem;
+        }
+
+        .regenerate-button .icon.spinning {
+          animation: spin 1s linear infinite;
+        }
+
+        .share-section {
+          background: white;
+          border-radius: 10px;
+          padding: 1.25rem;
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+          border: 1px solid #edf2f7;
+          margin-top: 1rem;
+        }
+
+        .share-buttons {
+          display: flex;
+          gap: 1rem;
+          margin-top: 1rem;
+        }
+
+        .share-button {
+          flex: 1;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 0.75rem;
+          padding: 0.75rem 1.25rem;
+          border-radius: 8px;
+          font-weight: 600;
+          text-decoration: none;
+          color: white;
+          transition: all 0.2s ease;
         }
         
         .share-button.instagram {
-          background: linear-gradient(45deg, #405de6, #5851db, #833ab4, #c13584, #e1306c, #fd1d1d);
+          background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+        }
+
+        .share-button.facebook {
+          background: #1877f2;
+        }
+
+        .share-button:hover {
+          transform: translateY(-2px);
+          filter: brightness(110%);
+        }
+
+        .share-button .icon {
+          font-size: 1.25rem;
         }
         
         .share-note {
           margin-top: 1rem;
-          color: #666;
+          padding: 1rem;
+          background: #f8f9fa;
+          border-radius: 8px;
           font-size: 0.9rem;
-          font-style: italic;
-        }
-        
-        .caption-options {
-          display: flex;
-          gap: 1rem;
-          margin-bottom: 1rem;
-          border-bottom: 1px solid #eaeaea;
-          padding-bottom: 0.5rem;
-        }
-        
-        .caption-option-btn {
-          padding: 0.5rem 1rem;
-          background: none;
-          border: none;
-          border-bottom: 2px solid transparent;
-          cursor: pointer;
-          font-weight: 500;
           color: #666;
-          transition: all 0.2s ease;
-        }
-        
-        .caption-option-btn.active {
-          color: #4CAF50;
-          border-bottom-color: #4CAF50;
+          border-left: 3px solid #62d76b;
         }
         
         @media (max-width: 768px) {
-          .image-actions {
-            flex-direction: column;
-            width: 100%;
+          .content-container {
+            max-height: none;
+            overflow: visible;
           }
           
-          .action-button {
+          .images-layout {
+            flex-direction: column;
+          }
+          
+          .thumbnails-section {
             width: 100%;
+            position: static;
+            max-height: none;
           }
           
           .thumbnails {
-            gap: 0.5rem;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.75rem;
           }
           
-          .thumbnail {
-            min-width: 100px;
-            max-width: 100px;
+          .thumbnails-wrapper {
+            overflow: visible;
           }
+
+          .social-layout {
+            flex-direction: column;
+          }
+
+          .social-images-container {
+            width: 100%;
+            height: 400px; /* Fixed height on mobile */
+          }
+
+          .social-thumbnails {
+            grid-template-columns: repeat(2, 1fr);
+          }
+
+          .social-right-panel {
+            overflow-y: auto; /* Allow scrolling on mobile */
+          }
+
+          .selected-images-row {
+            grid-template-columns: repeat(4, 1fr);
+          }
+
+          .selected-image-item {
+            width: 80px;
+            height: 80px;
+          }
+        }
+        
+        @media (max-width: 480px) {
+          .tabs {
+            gap: 1rem;
+            padding: 0 0.25rem;
+          }
+          
+          .tab {
+            padding: 0.75rem 0.25rem;
+            font-size: 0.9rem;
+            min-width: 70px;
+          }
+          
+          .thumbnails {
+            grid-template-columns: repeat(3, 1fr);
+          }
+          
+          .share-buttons {
+            flex-direction: column;
+          }
+          
+          .share-button {
+            width: 100%;
+          }
+
+          .selected-images-row {
+            grid-template-columns: repeat(3, 1fr);
+          }
+        }
+
+        .save-button {
+          background-color: #4caf50;
+          color: white;
+          margin-right: 8px;
+        }
+        
+        .save-button:hover {
+          background-color: #45a049;
+        }
+        
+        .save-button.saved {
+          background-color: #2e7d32;
         }
       `}</style>
     </Modal>

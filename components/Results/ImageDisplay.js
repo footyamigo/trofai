@@ -1,9 +1,52 @@
 import { useState, useEffect } from 'react';
 
-export default function ImageDisplay({ bannerbear, isCollection }) {
+export default function ImageDisplay({ bannerbear, isCollection, propertyId }) {
   const [isDownloading, setIsDownloading] = useState(false);
   const [collectionImages, setCollectionImages] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [loadError, setLoadError] = useState(null);
 
+  // If bannerbear is still pending, fetch the latest status
+  useEffect(() => {
+    async function fetchLatestStatus() {
+      if (bannerbear?.uid && bannerbear?.status !== 'completed') {
+        setIsLoading(true);
+        setLoadError(null);
+        
+        try {
+          // Determine if this is a collection or single image
+          const type = bannerbear.template_set ? 'collection' : 'image';
+          
+          // Add propertyId to query if available
+          const propertyIdParam = propertyId ? `&propertyId=${propertyId}` : '';
+          
+          // Make API call to get latest status
+          const response = await fetch(`/api/direct-images?uid=${bannerbear.uid}&type=${type}${propertyIdParam}`);
+          
+          if (!response.ok) {
+            throw new Error(`Failed to fetch latest status: ${response.status}`);
+          }
+          
+          const data = await response.json();
+          console.log('Latest Bannerbear status:', data.status);
+          
+          // If data is now completed, update our local state
+          if (data.status === 'completed') {
+            // Replace the bannerbear object with the latest data
+            Object.assign(bannerbear, data);
+          }
+        } catch (error) {
+          console.error('Error fetching latest status:', error);
+          setLoadError(error.message);
+        } finally {
+          setIsLoading(false);
+        }
+      }
+    }
+    
+    fetchLatestStatus();
+  }, [bannerbear?.uid, bannerbear?.status, propertyId]);
+  
   useEffect(() => {
     if (bannerbear?.status === 'completed') {
       // Process collection images
@@ -109,6 +152,8 @@ export default function ImageDisplay({ bannerbear, isCollection }) {
         {bannerbear?.status !== 'completed' && (
           <span className="loading-dots">•••</span>
         )}
+        {isLoading && <span className="loading-message"> (Checking status...)</span>}
+        {loadError && <span className="error-message"> (Error: {loadError})</span>}
       </p>
 
       {bannerbear?.status === 'completed' && collectionImages.length > 0 && (
@@ -173,6 +218,16 @@ export default function ImageDisplay({ bannerbear, isCollection }) {
           margin-left: 0.5rem;
           animation: pulse 1.5s infinite;
         }
+        
+        .loading-message {
+          font-style: italic;
+          color: #666;
+        }
+        
+        .error-message {
+          color: #e53e3e;
+          font-size: 0.9rem;
+        }
 
         .images-grid {
           display: grid;
@@ -210,22 +265,34 @@ export default function ImageDisplay({ bannerbear, isCollection }) {
 
         .download-button {
           padding: 0.8rem 1.5rem;
-          background: #0070f3;
-          color: white;
-          border: none;
-          border-radius: 4px;
+          background: #62d76b;
+          color: black;
+          border: 2px solid black;
+          border-radius: 6px;
           cursor: pointer;
-          font-weight: bold;
+          font-weight: 600;
           width: 100%;
+          box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.8);
+          transition: all 0.2s ease;
+        }
+
+        .download-button:hover {
+          background: #56c15f;
+          box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.8);
+          transform: translateY(-1px);
         }
 
         .download-button.secondary {
-          background: #666;
+          background: #62d76b;
+          color: black;
         }
 
         .download-button:disabled {
-          background: #999;
+          background: #ccc;
           cursor: not-allowed;
+          opacity: 0.7;
+          transform: none;
+          box-shadow: none;
         }
 
         .download-all {
@@ -236,7 +303,6 @@ export default function ImageDisplay({ bannerbear, isCollection }) {
 
         .download-all .download-button {
           max-width: 300px;
-          background: #28a745;
         }
         
         .no-images {

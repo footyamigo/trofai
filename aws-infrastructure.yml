@@ -1,0 +1,305 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CloudFormation template for Trofai application infrastructure'
+
+Parameters:
+  Environment:
+    Description: Environment name (dev, staging, prod)
+    Type: String
+    Default: dev
+    AllowedValues: [dev, staging, prod]
+    
+  AppName:
+    Description: Application name
+    Type: String
+    Default: trofai
+    
+  AdminEmail:
+    Description: Email address for the admin user of the Cognito user pool
+    Type: String
+    
+  S3BucketName:
+    Description: Name for the S3 bucket (must be globally unique)
+    Type: String
+    Default: trofai-assets
+
+Resources:
+  # Cognito User Pool
+  UserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub '${AppName}-user-pool-${Environment}'
+      AutoVerifiedAttributes:
+        - email
+      UsernameAttributes:
+        - email
+      VerificationMessageTemplate:
+        DefaultEmailOption: CONFIRM_WITH_CODE
+        EmailMessage: 'Your verification code is {####}'
+        EmailSubject: 'Verify your account for Trofai'
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Mutable: true
+          Required: true
+        - Name: name
+          AttributeDataType: String
+          Mutable: true
+          Required: false
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+          RequireUppercase: true
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: false
+        InviteMessageTemplate:
+          EmailMessage: 'Your username is {username} and temporary password is {####}.'
+          EmailSubject: 'Your temporary password for Trofai'
+      MfaConfiguration: OFF
+
+  # Cognito User Pool Client
+  UserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub '${AppName}-client-${Environment}'
+      GenerateSecret: false
+      UserPoolId: !Ref UserPool
+      ExplicitAuthFlows:
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+        - ALLOW_USER_SRP_AUTH
+      PreventUserExistenceErrors: ENABLED
+      RefreshTokenValidity: 30
+
+  # Admin User
+  AdminUser:
+    Type: AWS::Cognito::UserPoolUser
+    Properties:
+      Username: !Ref AdminEmail
+      UserAttributes:
+        - Name: email
+          Value: !Ref AdminEmail
+        - Name: email_verified
+          Value: true
+      UserPoolId: !Ref UserPool
+  
+  # S3 Bucket for assets
+  AssetsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Ref S3BucketName
+      AccessControl: Private
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - '*'
+            AllowedMethods:
+              - GET
+              - PUT
+              - POST
+              - DELETE
+              - HEAD
+            AllowedOrigins:
+              - '*'
+            MaxAge: 3000
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
+      VersioningConfiguration:
+        Status: Enabled
+
+  # DynamoDB Tables
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${AppName}-users-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: email
+          AttributeType: S
+        - AttributeName: username
+          AttributeType: S
+      KeySchema:
+        - AttributeName: userId
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: email-index
+          KeySchema:
+            - AttributeName: email
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: username-index
+          KeySchema:
+            - AttributeName: username
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+  
+  PropertiesTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${AppName}-properties-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: propertyId
+          AttributeType: S
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: createdAt
+          AttributeType: S
+        - AttributeName: address
+          AttributeType: S
+      KeySchema:
+        - AttributeName: propertyId
+          KeyType: HASH
+        - AttributeName: userId
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: userId-createdAt-index
+          KeySchema:
+            - AttributeName: userId
+              KeyType: HASH
+            - AttributeName: createdAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: address-index
+          KeySchema:
+            - AttributeName: address
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+  
+  DesignsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${AppName}-designs-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: designId
+          AttributeType: S
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: createdAt
+          AttributeType: S
+        - AttributeName: propertyId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: designId
+          KeyType: HASH
+        - AttributeName: userId
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: userId-createdAt-index
+          KeySchema:
+            - AttributeName: userId
+              KeyType: HASH
+            - AttributeName: createdAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: propertyId-index
+          KeySchema:
+            - AttributeName: propertyId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+  
+  CaptionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub '${AppName}-captions-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: captionId
+          AttributeType: S
+        - AttributeName: userId
+          AttributeType: S
+        - AttributeName: createdAt
+          AttributeType: S
+        - AttributeName: designId
+          AttributeType: S
+        - AttributeName: propertyId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: captionId
+          KeyType: HASH
+        - AttributeName: userId
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: userId-createdAt-index
+          KeySchema:
+            - AttributeName: userId
+              KeyType: HASH
+            - AttributeName: createdAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+        - IndexName: designId-index
+          KeySchema:
+            - AttributeName: designId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+        - IndexName: propertyId-index
+          KeySchema:
+            - AttributeName: propertyId
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+Outputs:
+  UserPoolId:
+    Description: The ID of the Cognito User Pool
+    Value: !Ref UserPool
+    Export:
+      Name: !Sub '${AppName}-${Environment}-UserPoolId'
+      
+  UserPoolClientId:
+    Description: The ID of the Cognito User Pool Client
+    Value: !Ref UserPoolClient
+    Export:
+      Name: !Sub '${AppName}-${Environment}-UserPoolClientId'
+      
+  AssetsBucketName:
+    Description: The name of the S3 bucket for assets
+    Value: !Ref AssetsBucket
+    Export:
+      Name: !Sub '${AppName}-${Environment}-AssetsBucketName'
+      
+  AssetsBucketArn:
+    Description: The ARN of the S3 bucket for assets
+    Value: !GetAtt AssetsBucket.Arn
+    Export:
+      Name: !Sub '${AppName}-${Environment}-AssetsBucketArn'
+      
+  UsersTableName:
+    Description: The name of the DynamoDB table for users
+    Value: !Ref UsersTable
+    Export:
+      Name: !Sub '${AppName}-${Environment}-UsersTableName'
+      
+  PropertiesTableName:
+    Description: The name of the DynamoDB table for properties
+    Value: !Ref PropertiesTable
+    Export:
+      Name: !Sub '${AppName}-${Environment}-PropertiesTableName'
+      
+  DesignsTableName:
+    Description: The name of the DynamoDB table for designs
+    Value: !Ref DesignsTable
+    Export:
+      Name: !Sub '${AppName}-${Environment}-DesignsTableName'
+      
+  CaptionsTableName:
+    Description: The name of the DynamoDB table for captions
+    Value: !Ref CaptionsTable
+    Export:
+      Name: !Sub '${AppName}-${Environment}-CaptionsTableName' 

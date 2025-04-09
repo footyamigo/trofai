@@ -1,0 +1,43 @@
+[
+  {
+    "property": {
+      "price": "£15,000,000",
+      "images": [
+        "https://media.rightmove.co.uk/80k/79914/141476078/79914_RX281104_IMG_00_0000.jpeg",
+        "https://media.rightmove.co.uk/80k/79914/141476078/79914_RX281104_IMG_11_0000.jpeg",
+        "https://media.rightmove.co.uk/80k/79914/141476078/79914_RX281104_IMG_12_0000.jpeg",
+        "https://media.rightmove.co.uk/80k/79914/141476078/79914_RX281104_IMG_13_0000.jpeg",
+        "https://media.rightmove.co.uk/80k/79914/141476078/79914_RX281104_IMG_02_0000.jpeg",
+        "https://media.rightmove.co.uk/80k/79914/141476078/79914_RX281104_IMG_08_0000.jpeg",
+        "https://media.rightmove.co.uk/80k/79914/141476078/79914_RX281104_IMG_14_0000.jpeg",
+        "https://media.rightmove.co.uk/80k/79914/141476078/79914_RX281104_IMG_03_0000.jpeg",
+        "https://media.rightmove.co.uk/80k/79914/141476078/79914_RX281104_IMG_04_0000.jpeg",
+        "https://media.rightmove.co.uk/80k/79914/141476078/79914_RX281104_IMG_05_0000.jpeg",
+        "https://media.rightmove.co.uk/80k/79914/141476078/79914_RX281104_IMG_06_0000.jpeg",
+        "https://media.rightmove.co.uk/80k/79914/141476078/79914_RX281104_IMG_07_0000.jpeg",
+        "https://media.rightmove.co.uk/80k/79914/141476078/79914_RX281104_IMG_09_0000.jpeg",
+        "https://media.rightmove.co.uk/80k/79914/141476078/79914_RX281104_IMG_10_0000.jpeg",
+        "https://media.rightmove.co.uk/80k/79914/141476078/79914_RX281104_IMG_15_0000.jpeg"
+      ],
+      "address": "Cannon Lane East Heath Road, Hampstead, NW3",
+      "bedrooms": 5,
+      "bathrooms": 5,
+      "square_ft": 7940,
+      "description": "Extending to approximately 7,940 sq ft (737 sq m), this 21st-century house fuses stunning interior design with sustainable materials. The project is conscious of its impact on the environment. The inclined site on which it stands maximises privacy from the street while allowing for an abundance of natural light to pass through the rear elevation to illuminate the sublime interior.\n\nThe mature gardens at ground floor level were designed by RHS Chelsea Flower Show gold prize winning garden designer, Chris Beardshaw. The terrace at lower ground floor level is a cultured space for entertaining in privacy.\n\nEach principal room has a glass balustrade balcony, and the property comprises of a hallway, a formal reception room, an informal reception room with a dining area, a kitchen/breakfast room, a cinema room, a master bedroom with an ensuite bathroom and dressing room, four further bedrooms, three further bathrooms (two ensuite), a staff bedroom with self-contained access, leisure facilities including a swimming pool, a sauna, a steam room, changing rooms, a gymnasium and a treatment area. There are also three plant rooms and a sub-basement storeroom, and a two car garage with a car-lift.",
+      "key_features": [
+        "Cinema Room",
+        "Garden",
+        "Parking",
+        "Multiple Terraces",
+        "2 Car Garage with Car Lift",
+        "Lift to all floors",
+        "Pool"
+      ]
+    },
+    "estate_agent": {
+      "logo": "https://media.rightmove.co.uk/80k/79914/branch_logo_79914_1.jpg",
+      "name": "Beauchamp Estates Ltd, St John's Wood",
+      "address": "80 St. Johns Wood High Street, London, NW8 7SH"
+    }
+  }
+]

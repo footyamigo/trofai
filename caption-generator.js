@@ -19,57 +19,51 @@ const CAPTION_LENGTHS = {
 
 async function generatePropertyCaptions(propertyData, type = CAPTION_TYPES.INSTAGRAM) {
     try {
-        const systemPrompt = `You are an expert luxury real estate copywriter specializing in creating compelling, sophisticated property descriptions for high-end real estate agencies.
+        const systemPrompt = `You are a highly experienced real estate copywriter who specializes in crafting sophisticated, emotionally resonant property descriptions. Your writing:
 
-Your task is to craft an engaging property description that:
-1. Opens with a captivating hook about the property's most impressive feature
-2. Weaves in the agent's expertise and local market knowledge
-3. Highlights key location benefits and lifestyle opportunities
-4. Creates urgency and desire through emotive language
-5. Positions the property's unique value proposition
-6. Includes a strong call-to-action featuring the agent
+1. Creates an immediate emotional connection with the reader
+2. Paints a vivid picture of the lifestyle the property offers
+3. Weaves in property features naturally within a compelling narrative
+4. Uses elegant, refined language that appeals to discerning buyers
+5. Maintains warmth and authenticity while being professional
+6. Tells a story about the home and its potential
 
-For rental properties:
-- Focus on lifestyle and convenience aspects
-- Highlight proximity to transport, amenities, and workplaces
-- Emphasize move-in readiness and available dates
-- Mention any included amenities or bills
-- Use terms like "your new home" and "make this home yours"
+Important: Write in plain text with emojis only. Do not use any asterisks (*), markdown formatting, or other special characters.
 
 Style guidelines:
-- Write in a sophisticated, aspirational tone
-- Use rich, descriptive language that appeals to emotions and lifestyle
-- Break text into readable paragraphs with emojis as subtle section breaks
-- Include relevant hashtags that target both property and location
-- Emphasize the agent's expertise and market knowledge
-- Format numbers professionally (e.g., "six-bedroom" instead of "6-bed")
-- For rentals, use "per calendar month" or "pcm" appropriately`;
+- Write with sophistication and emotional intelligence
+- Focus on the experience of living in the property
+- Use emojis thoughtfully to complement the narrative
+- Include relevant hashtags elegantly
+- Keep descriptions evocative yet concise
+- Highlight unique character and potential`;
 
         const maxTokens = Math.floor(CAPTION_LENGTHS[type] * 1.5);
 
-        const userPrompt = `Create a ${type} property caption that positions this property perfectly for the market. Use these details:
+        const userPrompt = `Create a sophisticated and emotionally resonant property description that tells a compelling story. Write in plain text with emojis only, no special formatting or asterisks.
 
-Property Specifications:
-- Address: ${propertyData.property.address}
+Property Details:
+- Location: ${propertyData.property.address}
 - Price: ${propertyData.property.price}
-- Configuration: ${propertyData.property.bedrooms} bedrooms, ${propertyData.property.bathrooms} bathrooms
+- Layout: ${propertyData.property.bedrooms} bedrooms, ${propertyData.property.bathrooms} bathrooms
 - Key Features: ${propertyData.property.keyFeatures}
+- Additional Information: ${propertyData.property.facts || 'None provided'}
 
-Full Property Description:
+Property Story:
 ${propertyData.property.description}
 
-Agent Expertise:
-Agency: ${propertyData.agent.name}
-About the Agency: ${propertyData.agent.about}
+Agent Details:
+${propertyData.agent.name}
+${propertyData.agent.about || ''}
 
 Requirements:
 - Maximum length: ${CAPTION_LENGTHS[type]} characters
-- Create 3-4 paragraphs with natural breaks
-- Include 5-7 relevant hashtags
-- Add appropriate emojis for visual breaks
-- End with a compelling call-to-action featuring the agent
-- Emphasize unique selling points and investment potential
-- Highlight local area benefits and lifestyle opportunities`;
+- Create 2-3 engaging paragraphs that flow naturally
+- Use emojis thoughtfully to enhance the narrative
+- Include 3-5 relevant hashtags elegantly placed
+- Focus on lifestyle and emotional appeal
+- End with a warm call-to-action featuring the agent
+- Do not use any asterisks or special formatting characters`;
 
         const response = await openai.chat.completions.create({
             model: process.env.OPENAI_MODEL,
@@ -83,7 +77,8 @@ Requirements:
             frequency_penalty: 0.3
         });
 
-        return response.choices[0].message.content.trim();
+        // Remove any asterisks or markdown formatting from the generated caption
+        return response.choices[0].message.content.trim().replace(/\*/g, '');
     } catch (error) {
         console.error('Error generating caption:', error);
         return null;

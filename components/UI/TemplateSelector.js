@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 
 // Template sets configuration with S3 folder paths
 const TEMPLATE_SETS = [
@@ -64,16 +65,31 @@ const FALLBACK_PREVIEWS = {
 };
 
 export default function TemplateSelector({ selectedTemplate, onSelect }) {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [previewsVisible, setPreviewsVisible] = useState(null);
+  const [isExpanded, setIsExpanded] = useState(true);
   const [templatePreviews, setTemplatePreviews] = useState({});
   const [isLoading, setIsLoading] = useState({});
   const [previewImage, setPreviewImage] = useState(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [currentTemplateId, setCurrentTemplateId] = useState(null);
+  const [startIndex, setStartIndex] = useState(0);
   
-  // Get S3 images for a specific template set using the API
-  const fetchS3Previews = async (templateId) => {
+  // Add cache initialization for template previews
+  useEffect(() => {
+    // Try to load cached template previews from localStorage on initial render
+    try {
+      const cachedPreviews = localStorage.getItem('templatePreviews');
+      if (cachedPreviews) {
+        const parsed = JSON.parse(cachedPreviews);
+        console.log('Loaded cached template previews from localStorage:', parsed);
+        setTemplatePreviews(parsed);
+      }
+    } catch (error) {
+      console.error('Error loading cached template previews:', error);
+    }
+  }, []);
+
+  // Update the fetchS3Previews function to store results in localStorage
+  const fetchS3Previews = useCallback(async (templateId) => {
     if (templatePreviews[templateId]?.length > 0) {
       console.log('Already have previews for', templateId, templatePreviews[templateId]);
       return;
@@ -122,6 +138,15 @@ export default function TemplateSelector({ selectedTemplate, onSelect }) {
             ...prev,
             [templateId]: previews
           };
+          
+          // Save the updated template previews to localStorage
+          try {
+            localStorage.setItem('templatePreviews', JSON.stringify(newState));
+            console.log('Cached template previews to localStorage');
+          } catch (error) {
+            console.error('Error caching template previews:', error);
+          }
+          
           console.log('New template previews state:', newState);
           return newState;
         });
@@ -141,16 +166,25 @@ export default function TemplateSelector({ selectedTemplate, onSelect }) {
           filename: `fallback_${index + 1}.png`
         })) || [];
         
-        console.log('Using fallback previews:', fallbacks);
-        return {
+        const newState = {
           ...prev,
           [templateId]: fallbacks
         };
+        
+        // Also cache fallbacks in localStorage
+        try {
+          localStorage.setItem('templatePreviews', JSON.stringify(newState));
+        } catch (error) {
+          console.error('Error caching fallback previews:', error);
+        }
+        
+        console.log('Using fallback previews:', fallbacks);
+        return newState;
       });
     } finally {
       setIsLoading(prev => ({ ...prev, [templateId]: false }));
     }
-  };
+  }, [templatePreviews]);
 
   // Update keyboard navigation to work with dynamically loaded images
   useEffect(() => {
@@ -185,164 +219,273 @@ export default function TemplateSelector({ selectedTemplate, onSelect }) {
     };
   }, [previewImage, currentImageIndex, currentTemplateId, templatePreviews]);
   
+  // Update useEffect dependencies
+  useEffect(() => {
+    if (isExpanded) {
+      // Load previews for all template sets when expanded
+      TEMPLATE_SETS.forEach(template => {
+        if (!templatePreviews[template.id] || templatePreviews[template.id].length === 0) {
+          fetchS3Previews(template.id);
+        }
+      });
+    }
+  }, [isExpanded, templatePreviews, fetchS3Previews]);
+  
   const getSelectedTemplateName = () => {
     const selected = TEMPLATE_SETS.find(t => t.id === selectedTemplate);
     return selected ? selected.name : 'Template Set 1';
   };
-  
-  const togglePreviews = (templateId, e) => {
-    e.stopPropagation(); // Prevent the card click handler from firing
+
+  const PreviewModal = () => {
+    if (!previewImage) return null;
     
-    // Toggle visibility
-    if (previewsVisible === templateId) {
-      setPreviewsVisible(null);
-    } else {
-      setPreviewsVisible(templateId);
-      // Fetch S3 previews when showing
-      fetchS3Previews(templateId);
-    }
+    return createPortal(
+      <div 
+        className="preview-modal-overlay"
+        onClick={() => setPreviewImage(null)}
+      >
+        <div 
+          className="preview-modal"
+          onClick={e => e.stopPropagation()}
+        >
+          <button className="close-preview" onClick={() => setPreviewImage(null)}>×</button>
+          
+          {templatePreviews[currentTemplateId]?.length > 1 && (
+            <>
+              <button 
+                className="nav-button prev" 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const currentPreviews = templatePreviews[currentTemplateId] || [];
+                  const prevIndex = (currentImageIndex - 1 + currentPreviews.length) % currentPreviews.length;
+                  setCurrentImageIndex(prevIndex);
+                  setPreviewImage(currentPreviews[prevIndex].url);
+                }}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="15 18 9 12 15 6"></polyline>
+                </svg>
+              </button>
+              
+              <button 
+                className="nav-button next" 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const currentPreviews = templatePreviews[currentTemplateId] || [];
+                  const nextIndex = (currentImageIndex + 1) % currentPreviews.length;
+                  setCurrentImageIndex(nextIndex);
+                  setPreviewImage(currentPreviews[nextIndex].url);
+                }}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="9 18 15 12 9 6"></polyline>
+                </svg>
+              </button>
+            </>
+          )}
+          
+          <img 
+            src={previewImage} 
+            alt="Template Preview (Full Size)" 
+            className="preview-modal-image"
+          />
+        </div>
+
+        <style jsx global>{`
+          .preview-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.75);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 999999;
+          }
+          
+          .preview-modal {
+            position: relative;
+            padding: 20px;
+            max-width: 80vw;
+            max-height: 80vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+          
+          .preview-modal-image {
+            max-width: 100%;
+            max-height: calc(80vh - 40px);
+            object-fit: contain;
+            border-radius: 8px;
+          }
+          
+          .close-preview {
+            position: absolute;
+            top: -40px;
+            right: -40px;
+            width: 32px;
+            height: 32px;
+            background: white;
+            border: none;
+            border-radius: 50%;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 1000000;
+            transition: all 0.2s ease;
+          }
+          
+          .close-preview:hover {
+            background: #f5f5f5;
+            transform: scale(1.1);
+          }
+          
+          .preview-modal .nav-button {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            background: white;
+            border: none;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            z-index: 1000000;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            transition: all 0.2s ease;
+          }
+          
+          .preview-modal .nav-button:hover {
+            background: #f5f5f5;
+            transform: translateY(-50%) scale(1.1);
+          }
+          
+          .preview-modal .nav-button.prev {
+            left: -50px;
+          }
+          
+          .preview-modal .nav-button.next {
+            right: -50px;
+          }
+
+          @media (max-width: 768px) {
+            .preview-modal {
+              max-width: 95vw;
+              padding: 15px;
+            }
+            
+            .preview-modal .nav-button.prev {
+              left: 10px;
+            }
+            
+            .preview-modal .nav-button.next {
+              right: 10px;
+            }
+
+            .close-preview {
+              top: -45px;
+              right: 0;
+            }
+          }
+        `}</style>
+      </div>,
+      document.body
+    );
   };
-  
+
   return (
     <div className="template-selector">
-      <div className="selector-header" onClick={() => setIsExpanded(!isExpanded)}>
+      <div className="selector-header">
         <h3 className="selector-title">
           Template: <span className="selected-template">{getSelectedTemplateName()}</span>
         </h3>
-        <button className="toggle-button">{isExpanded ? '▲' : '▼'}</button>
+        <div className="navigation-controls">
+          <button 
+            className="nav-button prev" 
+            onClick={() => setStartIndex(Math.max(0, startIndex - 1))}
+            disabled={startIndex === 0}
+          >
+            ←
+          </button>
+          <button 
+            className="nav-button next" 
+            onClick={() => setStartIndex(Math.min(TEMPLATE_SETS.length - 4, startIndex + 1))}
+            disabled={startIndex >= TEMPLATE_SETS.length - 4}
+          >
+            →
+          </button>
+        </div>
       </div>
       
-      {isExpanded && (
-        <div className="templates-grid">
-          {TEMPLATE_SETS.map((template) => (
-            <div 
-              key={template.id}
-              className={`template-card ${selectedTemplate === template.id ? 'selected' : ''}`}
-              onClick={() => {
-                onSelect(template.id);
-                setIsExpanded(false);
-              }}
-            >
-              <div className="template-header">
-                <h4 className="template-name">{template.name}</h4>
-                {selectedTemplate === template.id && (
-                  <div className="selected-indicator">✓</div>
-                )}
-              </div>
-              <p className="template-description">{template.description}</p>
-              
-              <div className="template-actions">
-                <button 
-                  className="preview-button"
-                  onClick={(e) => togglePreviews(template.id, e)}
-                >
-                  {previewsVisible === template.id ? 'Hide Designs' : 'View Designs'}
-                </button>
-              </div>
-              
-              {previewsVisible === template.id && (
-                <div className="template-previews-container">
-                  {isLoading[template.id] ? (
-                    <div className="preview-loading">Loading designs...</div>
-                  ) : (
-                    <div className="template-previews">
-                      {templatePreviews[template.id]?.length > 0 ? (
-                        templatePreviews[template.id].map((preview, index) => (
-                          <div key={index} className="preview-item">
-                            <div 
-                              className="preview-thumbnail"
-                              onClick={() => {
-                                setPreviewImage(preview.url);
-                                setCurrentImageIndex(index);
-                                setCurrentTemplateId(template.id);
-                              }}
-                            >
-                              <img 
-                                src={preview.url} 
-                                alt={`${template.name} ${preview.name}`} 
-                                style={{ maxWidth: '100%', height: 'auto', border: '1px solid #eee' }}
-                                onLoad={() => console.log(`Preview ${index + 1} loaded successfully!`)}
-                                onError={(e) => {
-                                  console.error(`Preview ${index + 1} failed to load`);
-                                  e.target.style.display = 'none';
-                                }}
-                              />
-                              <div className="zoom-indicator">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                  <circle cx="11" cy="11" r="8"></circle>
-                                  <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                                  <line x1="11" y1="8" x2="11" y2="14"></line>
-                                  <line x1="8" y1="11" x2="14" y2="11"></line>
-                                </svg>
-                              </div>
-                            </div>
+      <div className="templates-grid">
+        {TEMPLATE_SETS.slice(startIndex, startIndex + 4).map((template) => (
+          <div 
+            key={template.id}
+            className={`template-card ${selectedTemplate === template.id ? 'selected' : ''}`}
+            onClick={() => onSelect(template.id)}
+          >
+            <div className="template-header">
+              <h4 className="template-name">{template.name}</h4>
+              {selectedTemplate === template.id && (
+                <div className="selected-indicator">✓</div>
+              )}
+            </div>
+            <p className="template-description">{template.description}</p>
+            
+            <div className="template-previews-container">
+              {isLoading[template.id] ? (
+                <div className="preview-loading">Loading designs...</div>
+              ) : (
+                <div className="template-previews">
+                  {templatePreviews[template.id]?.length > 0 ? (
+                    templatePreviews[template.id].map((preview, index) => (
+                      <div key={index} className="preview-item">
+                        <div 
+                          className="preview-thumbnail"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPreviewImage(preview.url);
+                            setCurrentImageIndex(index);
+                            setCurrentTemplateId(template.id);
+                          }}
+                        >
+                          <img 
+                            src={preview.url} 
+                            alt={`${template.name} ${preview.name}`} 
+                            style={{ maxWidth: '100%', height: 'auto', border: '1px solid #eee' }}
+                          />
+                          <div className="zoom-indicator">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <circle cx="11" cy="11" r="8"></circle>
+                              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                              <line x1="11" y1="8" x2="11" y2="14"></line>
+                              <line x1="8" y1="11" x2="14" y2="11"></line>
+                            </svg>
                           </div>
-                        ))
-                      ) : (
-                        <div className="no-designs-message">
-                          No designs available yet for this template set.
-                          <br />
-                          <span className="subdued">Create the {template.s3Folder} folder in S3 and add design images to see them here.</span>
                         </div>
-                      )}
+                      </div>
+                    ))
+                  ) : (
+                    <div className="no-designs-message">
+                      No designs available yet for this template set.
                     </div>
                   )}
                 </div>
               )}
             </div>
-          ))}
-        </div>
-      )}
-
-      {previewImage && (
-        <div className="preview-modal-overlay" onClick={() => setPreviewImage(null)}>
-          <div className="preview-modal" onClick={(e) => e.stopPropagation()}>
-            <button className="close-preview" onClick={() => setPreviewImage(null)}>×</button>
-            
-            {templatePreviews[currentTemplateId]?.length > 1 && (
-              <>
-                <button 
-                  className="nav-button prev" 
-                  onClick={() => {
-                    const currentPreviews = templatePreviews[currentTemplateId] || [];
-                    const prevIndex = (currentImageIndex - 1 + currentPreviews.length) % currentPreviews.length;
-                    setCurrentImageIndex(prevIndex);
-                    setPreviewImage(currentPreviews[prevIndex].url);
-                  }}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="15 18 9 12 15 6"></polyline>
-                  </svg>
-                </button>
-                
-                <button 
-                  className="nav-button next" 
-                  onClick={() => {
-                    const currentPreviews = templatePreviews[currentTemplateId] || [];
-                    const nextIndex = (currentImageIndex + 1) % currentPreviews.length;
-                    setCurrentImageIndex(nextIndex);
-                    setPreviewImage(currentPreviews[nextIndex].url);
-                  }}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="9 18 15 12 9 6"></polyline>
-                  </svg>
-                </button>
-                
-                <div className="preview-counter">
-                  {currentImageIndex + 1} / {templatePreviews[currentTemplateId]?.length || 0}
-                </div>
-              </>
-            )}
-            
-            <img 
-              src={previewImage} 
-              alt="Template Preview (Full Size)" 
-              className="preview-modal-image"
-            />
           </div>
-        </div>
-      )}
+        ))}
+      </div>
+
+      <PreviewModal />
 
       <style jsx>{`
         .template-selector {
@@ -357,9 +500,7 @@ export default function TemplateSelector({ selectedTemplate, onSelect }) {
           justify-content: space-between;
           align-items: center;
           padding: 0.8rem 1rem;
-          background: ${isExpanded ? '#f9f9f9' : 'white'};
-          cursor: pointer;
-          border-bottom: ${isExpanded ? '1px solid #eaeaea' : 'none'};
+          border-bottom: 1px solid #eaeaea;
         }
         
         .selector-title {
@@ -374,47 +515,33 @@ export default function TemplateSelector({ selectedTemplate, onSelect }) {
           font-weight: 700;
         }
         
-        .toggle-button {
-          background: none;
-          border: none;
-          color: #666;
-          font-size: 0.8rem;
-          cursor: pointer;
-          padding: 4px 8px;
-          border-radius: 4px;
-        }
-        
-        .toggle-button:hover {
-          background: #f0f0f0;
-        }
-        
         .templates-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-          gap: 0.5rem;
+          display: flex;
+          align-items: stretch;
+          gap: 1rem;
           padding: 1rem;
-          background: #f9f9f9;
+          position: relative;
         }
         
         .template-card {
-          border: 2px solid #eaeaea;
+          flex: 1;
+          min-width: 0;
+          padding: 1rem;
+          border: 1px solid #eaeaea;
           border-radius: 6px;
-          padding: 0.8rem;
           cursor: pointer;
           transition: all 0.2s ease;
-          background: white;
         }
         
         .template-card:hover {
+          border-color: #62d76b;
           transform: translateY(-2px);
           box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-          border-color: #ccc;
         }
         
         .template-card.selected {
           border-color: #62d76b;
-          box-shadow: 0 4px 12px rgba(98, 215, 107, 0.2);
-          background: #f9fff9;
+          background: rgba(98, 215, 107, 0.1);
         }
         
         .template-header {
@@ -449,27 +576,6 @@ export default function TemplateSelector({ selectedTemplate, onSelect }) {
           color: #666;
           line-height: 1.4;
           margin-bottom: 0.8rem;
-        }
-        
-        .template-actions {
-          display: flex;
-          justify-content: flex-end;
-          margin-top: 0.5rem;
-        }
-        
-        .preview-button {
-          background: none;
-          border: 1px solid #62d76b;
-          color: #62d76b;
-          font-size: 0.75rem;
-          padding: 0.3rem 0.6rem;
-          border-radius: 4px;
-          cursor: pointer;
-          transition: all 0.2s;
-        }
-        
-        .preview-button:hover {
-          background: #f0fff0;
         }
         
         .template-previews-container {
@@ -567,65 +673,6 @@ export default function TemplateSelector({ selectedTemplate, onSelect }) {
           font-size: 0.7rem;
         }
         
-        .preview-modal-overlay {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background-color: rgba(0, 0, 0, 0.8);
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          z-index: 2000;
-          padding: 1rem;
-          animation: fadeIn 0.2s ease;
-        }
-        
-        .preview-modal {
-          position: relative;
-          max-width: 95%;
-          max-height: 95%;
-          background: white;
-          border-radius: 8px;
-          padding: 1rem;
-          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-          animation: zoomIn 0.3s ease;
-          overflow: hidden;
-        }
-        
-        .preview-modal-image {
-          display: block;
-          max-width: 100%;
-          max-height: 80vh;
-          object-fit: contain;
-        }
-        
-        .close-preview {
-          position: absolute;
-          top: 10px;
-          right: 10px;
-          background: rgba(0, 0, 0, 0.7);
-          border: none;
-          color: white;
-          width: 30px;
-          height: 30px;
-          border-radius: 50%;
-          font-size: 1.5rem;
-          line-height: 1;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-          transition: all 0.2s;
-          z-index: 10;
-        }
-        
-        .close-preview:hover {
-          background: rgba(0, 0, 0, 0.9);
-          transform: scale(1.1);
-        }
-        
         .zoom-indicator {
           position: absolute;
           bottom: 5px;
@@ -640,68 +687,43 @@ export default function TemplateSelector({ selectedTemplate, onSelect }) {
           color: #333;
           opacity: 0;
           transition: opacity 0.2s ease;
+          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
         
         .preview-thumbnail:hover .zoom-indicator {
           opacity: 1;
         }
         
+        .navigation-controls {
+          display: flex;
+          gap: 0.5rem;
+        }
+        
         .nav-button {
-          position: absolute;
-          top: 50%;
-          transform: translateY(-50%);
-          background: rgba(0, 0, 0, 0.7);
-          border: none;
-          color: white;
-          width: 40px;
-          height: 40px;
+          position: static;
+          transform: none;
+          background: white;
+          border: 1px solid #eaeaea;
           border-radius: 50%;
+          width: 32px;
+          height: 32px;
           display: flex;
           align-items: center;
           justify-content: center;
           cursor: pointer;
-          transition: all 0.2s;
-          z-index: 10;
+          transition: all 0.2s ease;
         }
         
-        .nav-button:hover {
-          background: rgba(0, 0, 0, 0.9);
-          transform: translateY(-50%) scale(1.1);
+        .nav-button:hover:not(:disabled) {
+          background: #f5f5f5;
+          border-color: #d1d1d1;
         }
         
-        .nav-button.prev {
-          left: 10px;
+        .nav-button:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
         }
         
-        .nav-button.next {
-          right: 10px;
-        }
-        
-        .preview-counter {
-          position: absolute;
-          bottom: 15px;
-          left: 0;
-          right: 0;
-          text-align: center;
-          color: #333;
-          font-size: 0.9rem;
-          background: rgba(255, 255, 255, 0.8);
-          padding: 5px;
-          border-radius: 20px;
-          width: 80px;
-          margin: 0 auto;
-        }
-        
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        
-        @keyframes zoomIn {
-          from { transform: scale(0.95); opacity: 0; }
-          to { transform: scale(1); opacity: 1; }
-        }
-
         @media (max-width: 768px) {
           .templates-grid {
             grid-template-columns: 1fr;

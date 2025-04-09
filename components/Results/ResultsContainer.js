@@ -4,7 +4,7 @@ import CaptionDisplay from './CaptionDisplay';
 export default function ResultsContainer({ results }) {
   if (!results) return null;
   
-  const { bannerbear = null, caption = "No caption available" } = results;
+  const { bannerbear = null, caption = "No caption available", propertyId = null } = results;
   const isCollection = bannerbear?.type === 'collection';
   
   return (
@@ -16,6 +16,7 @@ export default function ResultsContainer({ results }) {
           <ImageDisplay 
             bannerbear={bannerbear}
             isCollection={isCollection}
+            propertyId={propertyId}
           />
         </div>
         <CaptionDisplay caption={caption} />

@@ -1,129 +1,153 @@
-# Trofai Property Image Generator
+# Trofai - Real Estate Content Generator
 
-A Node.js application that generates social media images for property listings using Rightmove data and Bannerbear templates.
+A powerful application for generating professional property listings, designs, and social media captions for real estate agents.
 
 ## Features
 
-- Scrapes property data from Rightmove listings
-- Generates Instagram-ready captions
-- Creates custom property images using Bannerbear templates
-- Supports both sales and rental properties
-- Webhook integration for image generation status updates
+- **Property Data Scraping:** Automatically extract property details from listing URLs
+- **Image Generation:** Create professional property marketing images
+- **Caption Generation:** Generate engaging captions for social media posts
+- **User Authentication:** Secure user authentication and authorization
+- **Property Management:** Save and manage your property listings
+- **Design Storage:** Store and access your generated designs
+
+## Technology Stack
+
+- **Frontend:** Next.js, React
+- **Backend:** Node.js, Next.js API routes
+- **Authentication:** AWS Cognito
+- **Database:** AWS DynamoDB
+- **Storage:** AWS S3
+- **Infrastructure:** AWS CloudFormation
 
 ## Prerequisites
 
-- Node.js 18 or higher
-- AWS Account (for DynamoDB)
-- Bannerbear API Key
-- Roborabbit API Key
+- Node.js 16+
+- AWS Account
+- AWS CLI installed and configured
 
-## Environment Variables
+## Getting Started
 
-Create a `.env` file in the root directory with the following variables:
+### 1. Clone the repository
 
-```env
-# API Keys
-ROBORABBIT_API_KEY=your_roborabbit_key
-TASK_UID=your_task_uid
-BANNERBEAR_API_KEY=your_bannerbear_key
-BANNERBEAR_TEMPLATE_UID=your_template_uid
-BANNERBEAR_TEMPLATE_SET_UID=your_template_set_uid
-BANNERBEAR_WEBHOOK_SECRET=your_webhook_secret
-
-# AWS Configuration (Do not prefix with AWS_)
-REGION=your_aws_region
-ACCESS_KEY_ID=your_aws_access_key
-SECRET_ACCESS_KEY=your_aws_secret_key
-```
-
-For AWS Amplify deployment, add these environment variables in the Amplify Console without the "AWS_" prefix to avoid conflicts with reserved names.
-
-## Installation
-
-1. Clone the repository:
 ```bash
-git clone https://github.com/footyamigo/trofai.git
+git clone https://github.com/yourusername/trofai.git
 cd trofai
 ```
 
-2. Install dependencies:
+### 2. Install dependencies
+
 ```bash
 npm install
 ```
 
-3. Run the development server:
+### 3. Set up AWS infrastructure
+
+#### Option 1: Using AWS CloudFormation Console
+
+1. Log in to the AWS Management Console
+2. Navigate to CloudFormation
+3. Click "Create stack" > "With new resources"
+4. Upload the `aws-infrastructure.yml` file
+5. Fill in the parameters:
+   - Environment: dev (or staging/prod)
+   - AppName: trofai
+   - AdminEmail: your-email@example.com
+   - S3BucketName: a globally unique bucket name (e.g., trofai-assets-yourname)
+6. Follow the prompts to create the stack
+7. Wait for the stack creation to complete
+
+#### Option 2: Using AWS CLI
+
+```bash
+aws cloudformation create-stack \
+  --stack-name trofai-infrastructure \
+  --template-body file://aws-infrastructure.yml \
+  --parameters \
+    ParameterKey=Environment,ParameterValue=dev \
+    ParameterKey=AppName,ParameterValue=trofai \
+    ParameterKey=AdminEmail,ParameterValue=your-email@example.com \
+    ParameterKey=S3BucketName,ParameterValue=trofai-assets-yourname \
+  --capabilities CAPABILITY_IAM
+```
+
+### 4. Configure environment variables
+
+Create a `.env.local` file in the root directory with the following variables:
+
+```
+# AWS Configuration
+NEXT_PUBLIC_AWS_REGION=us-east-1  # Or your chosen region
+NEXT_PUBLIC_USER_POOL_ID=<your-cognito-user-pool-id>
+NEXT_PUBLIC_USER_POOL_WEB_CLIENT_ID=<your-cognito-client-id>
+NEXT_PUBLIC_S3_BUCKET=<your-s3-bucket-name>
+NEXT_PUBLIC_API_ENDPOINT=<your-api-gateway-endpoint>
+
+# AWS Credentials (Only needed for server-side operations)
+AWS_ACCESS_KEY_ID=<your-access-key-id>
+AWS_SECRET_ACCESS_KEY=<your-secret-access-key>
+
+# DynamoDB Tables
+DYNAMODB_USERS_TABLE=trofai-users-dev
+DYNAMODB_PROPERTIES_TABLE=trofai-properties-dev
+DYNAMODB_DESIGNS_TABLE=trofai-designs-dev
+DYNAMODB_CAPTIONS_TABLE=trofai-captions-dev
+
+# Other API Keys
+OPENAI_API_KEY=<your-openai-api-key>
+ROBORABBIT_API_KEY=<your-roborabbit-api-key>
+TASK_UID=<your-task-uid>
+BANNERBEAR_API_KEY=<your-bannerbear-api-key>
+BANNERBEAR_TEMPLATE_UID=<your-bannerbear-template-uid>
+BANNERBEAR_TEMPLATE_SET_UID=<your-bannerbear-template-set-uid>
+```
+
+You can get the Cognito User Pool ID and Client ID from the AWS CloudFormation outputs.
+
+### 5. Run the development server
+
 ```bash
 npm run dev
 ```
 
-4. Open [http://localhost:3000](http://localhost:3000) in your browser.
+The application will be available at [http://localhost:3000](http://localhost:3000).
 
-## AWS Setup
+### 6. Setting up a user account
 
-1. Create a DynamoDB table:
-   - Table name: `trofai-image-status`
-   - Partition key: `uid` (String)
-   - Enable TTL on `ttl` attribute
+After setting up the infrastructure, you'll need to:
 
-2. Create an IAM user with DynamoDB permissions:
-```json
-{
-    "Version": "2012-10-17",
-    "Statement": [
-        {
-            "Effect": "Allow",
-            "Action": [
-                "dynamodb:PutItem",
-                "dynamodb:GetItem",
-                "dynamodb:UpdateItem",
-                "dynamodb:DeleteItem"
-            ],
-            "Resource": "arn:aws:dynamodb:*:*:table/trofai-image-status"
-        }
-    ]
-}
-```
+1. Visit the application at http://localhost:3000
+2. Click "Sign Up" to create a new account
+3. Verify your email with the verification code sent to your inbox
+4. Sign in with your credentials
 
 ## Deployment
 
-The project is configured for deployment with AWS Amplify. Follow these steps:
+### Deploy to AWS Amplify
 
-1. Push your code to GitHub
-2. Create a new Amplify app
-3. Connect your repository
-4. Add environment variables in Amplify Console
-5. Deploy
-
-## License
-
-MIT License - see LICENSE file for details
+1. Create a new Amplify app in the AWS Management Console
+2. Connect to your repository
+3. Configure the build settings
+4. Add the environment variables from your `.env.local` file
+5. Deploy the application
 
 ## Project Structure
 
-- `test-rightmove.js` - Main script for testing property scraping and image generation
-- `webhook-handler.js` - Express server for handling Bannerbear webhooks
-- `caption-generator.js` - Generates social media captions for properties
-- `.env` - Environment variables configuration
-- `.gitignore` - Specifies which files Git should ignore
+- `/components` - React components
+- `/pages` - Next.js pages and API routes
+- `/public` - Static files
+- `/src` - Source code
+  - `/aws` - AWS integrations
+  - `/context` - React Context providers
+  - `/hooks` - Custom React hooks
+  - `/utils` - Utility functions
 
-## Development
+## License
 
-The project uses several key technologies:
-- Node.js for the runtime environment
-- Express for the webhook server
-- Bannerbear API for image generation
-- Roborabbit for web scraping
+This project is licensed under the MIT License - see the LICENSE file for details.
 
-## Contributing
+## Acknowledgements
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## Acknowledgments
-
-- Bannerbear for image generation
-- Roborabbit for web scraping capabilities
-- Rightmove for property data 
+- OpenAI for the GPT models
+- AWS for the cloud infrastructure
+- Next.js and React for the frontend framework 

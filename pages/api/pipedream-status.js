@@ -15,22 +15,24 @@ export default async function handler(req, res) {
   }
 
   try {
-    // First check Pipedream for webhook events
-    console.log('Checking Pipedream for webhook data with UID:', uid);
+    console.log('Checking status for UID:', uid);
     
-    // If we don't have webhook data yet, check Bannerbear directly
+    // Try getting status from Bannerbear directly first
     const status = await getStatusFromBannerbear(uid, req.query.type === 'collection');
     
-    if (!status) {
-      return res.status(404).json({ 
-        message: 'Status not found',
-        uid,
-        status: 'unknown',
-        type: req.query.type || 'unknown'
-      });
+    if (status) {
+      console.log('Got status from Bannerbear API:', status.status);
+      return res.status(200).json(status);
     }
 
-    return res.status(200).json(status);
+    // If we can't get status from Bannerbear, return not found
+    console.log('Status not found in Bannerbear API');
+    return res.status(404).json({ 
+      message: 'Status not found',
+      uid,
+      status: 'unknown',
+      type: req.query.type || 'unknown'
+    });
   } catch (error) {
     console.error('Error getting status:', error);
     return res.status(500).json({ 
@@ -52,16 +54,22 @@ async function getStatusFromBannerbear(uid, isCollection = false) {
     
     console.log(`Checking Bannerbear status directly for ${isCollection ? 'collection' : 'image'} ${uid}`);
     
+    // Use the API key from the environment
+    const apiKey = BANNERBEAR_API_KEY;
+    console.log('Using API key:', apiKey ? `${apiKey.substring(0, 6)}...` : 'Not set');
+    
     const response = await fetch(apiUrl, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${BANNERBEAR_API_KEY}`,
+        'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json'
       }
     });
 
     if (!response.ok) {
       console.error('Bannerbear API Error:', response.status, response.statusText);
+      const text = await response.text();
+      console.error('Error response:', text);
       return null;
     }
 
