@@ -5,27 +5,50 @@ export default function ImageDisplay({ bannerbear, isCollection }) {
   const [collectionImages, setCollectionImages] = useState([]);
 
   useEffect(() => {
-    if (bannerbear?.status === 'completed' && bannerbear?.type === 'collection') {
+    if (bannerbear?.status === 'completed') {
       // Process collection images
       let images = [];
       
       // Check for image_urls (direct URLs to each template variation)
       if (bannerbear.image_urls && Object.keys(bannerbear.image_urls).length > 0) {
-        images = Object.entries(bannerbear.image_urls).map(([key, url]) => ({
-          template: key,
-          image_url: url,
-          image_url_jpg: url.replace(/\.png$/, '.jpg')
-        }));
+        console.log('Found image_urls:', Object.keys(bannerbear.image_urls).length);
+        
+        images = Object.entries(bannerbear.image_urls)
+          .filter(([key, url]) => !key.endsWith('_jpg')) // Exclude JPG entries as we'll handle them separately
+          .map(([key, url]) => {
+            // Extract template name from the key (remove the _image_url suffix)
+            const templateName = key.replace('_image_url', '');
+            
+            // Find matching JPG URL if available
+            const jpgKey = `${key}_jpg`;
+            const jpgUrl = bannerbear.image_urls[jpgKey];
+            
+            return {
+              template: templateName,
+              template_key: key,
+              image_url: url,
+              image_url_jpg: jpgUrl || url.replace(/\.png$/, '.jpg')
+            };
+          });
       } 
       // Check for images array (from webhook data)
       else if (bannerbear.images && bannerbear.images.length > 0) {
-        images = bannerbear.images.map((img, index) => ({
-          template: `image_${index + 1}`,
-          image_url: img.image_url,
-          image_url_jpg: img.image_url_jpg || img.image_url.replace(/\.png$/, '.jpg')
-        }));
+        console.log('Found images array:', bannerbear.images.length);
+        
+        images = bannerbear.images.map((img, index) => {
+          // Try to extract template name if available, otherwise use index
+          const templateName = img.template || `Design ${index + 1}`;
+          
+          return {
+            template: templateName,
+            image_url: img.image_url,
+            image_url_jpg: img.image_url_jpg || img.image_url.replace(/\.png$/, '.jpg'),
+            image_url_png: img.image_url_png || img.image_url
+          };
+        });
       }
       
+      console.log('Processed images:', images.length);
       setCollectionImages(images);
     }
   }, [bannerbear]);
@@ -67,6 +90,18 @@ export default function ImageDisplay({ bannerbear, isCollection }) {
     );
   }
 
+  // Helper to format template name for display
+  const formatTemplateName = (templateKey) => {
+    const name = templateKey.replace(/^template_/, '').replace(/_image_url$/, '');
+    // Convert camelCase or snake_case to readable format
+    return name
+      .replace(/([A-Z])/g, ' $1') // Add space before capital letters
+      .replace(/_/g, ' ')         // Replace underscores with spaces
+      .split(' ')                 // Split into words
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1)) // Capitalize first letter
+      .join(' ');                 // Join back
+  };
+
   return (
     <div className="collection-container">
       <p className="status">
@@ -79,14 +114,14 @@ export default function ImageDisplay({ bannerbear, isCollection }) {
       {bannerbear?.status === 'completed' && collectionImages.length > 0 && (
         <div className="images-grid">
           {collectionImages.map((image, index) => (
-            <div key={image.template} className="image-card">
-              <h4>Design {index + 1}</h4>
+            <div key={image.template_key || image.template || index} className="image-card">
+              <h4>{formatTemplateName(image.template)}</h4>
               <div className="image-wrapper">
                 <img src={image.image_url} alt={`Design ${index + 1}`} />
               </div>
               <button 
                 className="download-button"
-                onClick={() => downloadImage(image.image_url, `property-design-${index + 1}.png`)}
+                onClick={() => downloadImage(image.image_url_png || image.image_url, `property-${formatTemplateName(image.template)}.png`)}
                 disabled={isDownloading}
               >
                 Download PNG
@@ -94,7 +129,7 @@ export default function ImageDisplay({ bannerbear, isCollection }) {
               {image.image_url_jpg && (
                 <button 
                   className="download-button secondary"
-                  onClick={() => downloadImage(image.image_url_jpg, `property-design-${index + 1}.jpg`)}
+                  onClick={() => downloadImage(image.image_url_jpg, `property-${formatTemplateName(image.template)}.jpg`)}
                   disabled={isDownloading}
                 >
                   Download JPG
@@ -102,6 +137,12 @@ export default function ImageDisplay({ bannerbear, isCollection }) {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {bannerbear?.status === 'completed' && collectionImages.length === 0 && (
+        <div className="no-images">
+          <p>No individual images found in the collection. You can still download the ZIP file with all images.</p>
         </div>
       )}
 
@@ -196,6 +237,14 @@ export default function ImageDisplay({ bannerbear, isCollection }) {
         .download-all .download-button {
           max-width: 300px;
           background: #28a745;
+        }
+        
+        .no-images {
+          background: #f9f9f9;
+          padding: 2rem;
+          border-radius: 8px;
+          text-align: center;
+          margin-bottom: 2rem;
         }
 
         @keyframes pulse {

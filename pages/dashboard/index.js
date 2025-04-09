@@ -45,11 +45,12 @@ export default function Dashboard() {
 
       console.log(`Polling status for UID: ${currentUid}, Type: ${currentType}`);
       try {
-        const response = await fetch(`/api/pipedream-status?uid=${currentUid}&type=${currentType}`);
+        // Simple direct API call with project API key - no more complexity
+        const response = await fetch(`/api/direct-collection?uid=${currentUid}`);
         const data = await response.json();
 
         if (!response.ok) {
-          throw new Error(data.message || `Failed to fetch status (${response.status})`);
+          throw new Error(data.error || `Failed to fetch status (${response.status})`);
         }
 
         console.log('Poll Response:', data);
@@ -66,20 +67,19 @@ export default function Dashboard() {
           clearInterval(pollIntervalRef.current);
           pollIntervalRef.current = null;
           
-          if (data.status === 'completed') {
-            const newHistoryItem = {
-              id: Date.now().toString(),
-              date: new Date().toISOString().split('T')[0],
-              status: 'completed',
-              title: results?.metadata?.property_title || 'Property',
-              price: results?.metadata?.property_price || '',
-              uid: data.uid,
-              bannerbear: data,
-              caption: results?.caption || ''
-            };
-            
-            setHistory(prev => [newHistoryItem, ...prev.slice(0, 4)]);
-          }
+          // Update history with new item
+          const newHistoryItem = {
+            id: Date.now().toString(),
+            date: new Date().toISOString().split('T')[0],
+            status: 'completed',
+            title: results?.metadata?.property_title || 'Property',
+            price: results?.metadata?.property_price || '',
+            uid: data.uid,
+            bannerbear: data,
+            caption: results?.caption || ''
+          };
+          
+          setHistory(prev => [newHistoryItem, ...prev.slice(0, 4)]);
         } else if (data.status === 'failed') {
           console.error('Processing failed:', data);
           setError({ message: 'Image/Collection generation failed.', details: JSON.stringify(data) });
