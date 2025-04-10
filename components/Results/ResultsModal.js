@@ -60,10 +60,56 @@ export default function ResultsModal({ isOpen, onClose, results }) {
   const processImages = () => {
     let images = [];
     
-    if (bannerbear.image_urls && Object.keys(bannerbear.image_urls).length > 0) {
-      images = Object.entries(bannerbear.image_urls)
+    // Debug output for checking what data is available
+    console.log('Processing images from bannerbear:', bannerbear);
+    
+    // Create separate arrays for standard images and large images
+    const standardImages = [];
+    const largeImages = [];
+    
+    if (bannerbear.images && bannerbear.images.length > 0) {
+      console.log('Using bannerbear.images array with length:', bannerbear.images.length);
+      
+      // First pass - categorize images
+      bannerbear.images.forEach((img) => {
+        const templateName = img.template || '';
+        const height = parseInt(img.height) || 0;
+        
+        const imageData = {
+          template: templateName,
+          name: formatTemplateName(templateName),
+          url: img.image_url,
+          jpgUrl: img.image_url_jpg || img.image_url.replace(/\.png$/, '.jpg'),
+          height: height
+        };
+        
+        // Determine if this is a large image (story format)
+        const isLargeImage = 
+          height >= 1900 || 
+          templateName.includes('1920') || 
+          templateName.includes('large') || 
+          templateName.includes('horizontal') ||
+          img.image_url.includes('1920');
+        
+        if (isLargeImage) {
+          imageData.isStory = true;
+          largeImages.push(imageData);
+        } else {
+          imageData.isStory = false;
+          standardImages.push(imageData);
+        }
+      });
+      
+      // Combine the arrays with standard images first, then large images
+      images = [...standardImages, ...largeImages];
+    } 
+    else if (bannerbear.image_urls && Object.keys(bannerbear.image_urls).length > 0) {
+      console.log('Using bannerbear.image_urls object with keys:', Object.keys(bannerbear.image_urls));
+      
+      // First get all the images
+      const tempImages = Object.entries(bannerbear.image_urls)
         .filter(([key]) => !key.endsWith('_jpg'))
-        .map(([key, url], index, array) => {
+        .map(([key, url]) => {
           const templateName = key.replace('_image_url', '');
           const jpgKey = `${key}_jpg`;
           const jpgUrl = bannerbear.image_urls[jpgKey];
@@ -72,25 +118,33 @@ export default function ResultsModal({ isOpen, onClose, results }) {
             template: templateName,
             name: formatTemplateName(templateName),
             url: url,
-            jpgUrl: jpgUrl || url.replace(/\.png$/, '.jpg'),
-            isStory: array.length - index <= 3  // Last 3 images are stories
+            jpgUrl: jpgUrl || url.replace(/\.png$/, '.jpg')
           };
         });
-    } 
-    else if (bannerbear.images && bannerbear.images.length > 0) {
-      images = bannerbear.images.map((img, index, array) => {
-        const templateName = img.template || `Design ${index + 1}`;
+      
+      // Then categorize them
+      tempImages.forEach(img => {
+        // Determine if this is a large image based on template name
+        const isLargeImage = 
+          img.template.includes('1920') || 
+          img.template.includes('large') || 
+          img.template.includes('horizontal') ||
+          img.url.includes('1920');
         
-        return {
-          template: templateName,
-          name: formatTemplateName(templateName),
-          url: img.image_url,
-          jpgUrl: img.image_url_jpg || img.image_url.replace(/\.png$/, '.jpg'),
-          isStory: array.length - index <= 3  // Last 3 images are stories
-        };
+        img.isStory = isLargeImage;
+        
+        if (isLargeImage) {
+          largeImages.push(img);
+        } else {
+          standardImages.push(img);
+        }
       });
+      
+      // Combine the arrays with standard images first, then large images
+      images = [...standardImages, ...largeImages];
     }
     
+    console.log('Final processed images:', images.map(img => `${img.name}: isStory=${img.isStory}`));
     return images;
   };
   

@@ -52,46 +52,95 @@ export default function ImageDisplay({ bannerbear, isCollection, propertyId }) {
       // Process collection images
       let images = [];
       
-      // Check for image_urls (direct URLs to each template variation)
-      if (bannerbear.image_urls && Object.keys(bannerbear.image_urls).length > 0) {
-        console.log('Found image_urls:', Object.keys(bannerbear.image_urls).length);
+      // Debug output the raw data
+      console.log('Raw bannerbear data:', bannerbear);
+      
+      // Force the specific display order we want:
+      // 1. Extract template names/IDs to identify specific images by their content
+      // 2. Hard-code the ordering rules
+      
+      // Manually organize images based on their type/content
+      const imagesByCategory = {
+        standard: [], // 1000px height - display first
+        large: []     // 1920px height - display last
+      };
+      
+      // First pass - collect and categorize all images
+      if (bannerbear.images && Array.isArray(bannerbear.images)) {
+        console.log('Raw images array:', bannerbear.images);
         
-        images = Object.entries(bannerbear.image_urls)
-          .filter(([key, url]) => !key.endsWith('_jpg')) // Exclude JPG entries as we'll handle them separately
-          .map(([key, url]) => {
-            // Extract template name from the key (remove the _image_url suffix)
+        bannerbear.images.forEach((img, index) => {
+          console.log(`Image ${index} height:`, img.height);
+          
+          const imageData = {
+            template: img.template || `Image ${index + 1}`,
+            image_url: img.image_url,
+            image_url_jpg: img.image_url_jpg || img.image_url.replace(/\.png$/, '.jpg'),
+            image_url_png: img.image_url_png || img.image_url,
+            height: parseInt(img.height) || 0
+          };
+          
+          // Determine if this is a large image (height 1920 or template containing specific keywords)
+          const isLargeImage = 
+            imageData.height >= 1900 || 
+            (img.template && (
+              img.template.includes('1920') || 
+              img.template.includes('large') || 
+              img.template.includes('horizontal')
+            )) ||
+            // If image URL contains keywords indicating large format
+            img.image_url.includes('1920');
+          
+          if (isLargeImage) {
+            imagesByCategory.large.push(imageData);
+          } else {
+            imagesByCategory.standard.push(imageData);
+          }
+        });
+      } 
+      // Fallback if no images array
+      else if (bannerbear.image_urls && Object.keys(bannerbear.image_urls).length > 0) {
+        console.log('Using image_urls fallback');
+        
+        Object.entries(bannerbear.image_urls)
+          .filter(([key, url]) => !key.endsWith('_jpg'))
+          .forEach(([key, url]) => {
             const templateName = key.replace('_image_url', '');
-            
-            // Find matching JPG URL if available
             const jpgKey = `${key}_jpg`;
             const jpgUrl = bannerbear.image_urls[jpgKey];
             
-            return {
+            const imageData = {
               template: templateName,
               template_key: key,
               image_url: url,
-              image_url_jpg: jpgUrl || url.replace(/\.png$/, '.jpg')
+              image_url_jpg: jpgUrl || url.replace(/\.png$/, '.jpg'),
+              height: 0 // Will set based on template
             };
+            
+            // Determine if this is a large image based on template name
+            const isLargeImage = 
+              templateName.includes('1920') || 
+              templateName.includes('large') || 
+              templateName.includes('horizontal') ||
+              url.includes('1920');
+            
+            if (isLargeImage) {
+              imageData.height = 1920;
+              imagesByCategory.large.push(imageData);
+            } else {
+              imageData.height = 1000;
+              imagesByCategory.standard.push(imageData);
+            }
           });
-      } 
-      // Check for images array (from webhook data)
-      else if (bannerbear.images && bannerbear.images.length > 0) {
-        console.log('Found images array:', bannerbear.images.length);
-        
-        images = bannerbear.images.map((img, index) => {
-          // Try to extract template name if available, otherwise use index
-          const templateName = img.template || `Design ${index + 1}`;
-          
-          return {
-            template: templateName,
-            image_url: img.image_url,
-            image_url_jpg: img.image_url_jpg || img.image_url.replace(/\.png$/, '.jpg'),
-            image_url_png: img.image_url_png || img.image_url
-          };
-        });
       }
       
-      console.log('Processed images:', images.length);
+      // Now combine the categories in the desired order
+      images = [
+        ...imagesByCategory.standard,
+        ...imagesByCategory.large
+      ];
+      
+      console.log('Final organized image order:', images.map(img => `${img.template} (${img.height}px)`));
       setCollectionImages(images);
     }
   }, [bannerbear]);

@@ -36,36 +36,10 @@ export default function Dashboard() {
   const [initializeAttempts, setInitializeAttempts] = useState(0);
   const [properties, setProperties] = useState([]);
   const [isLoadingProperties, setIsLoadingProperties] = useState(true);
-  const [viewingProperty, setViewingProperty] = useState(null);
-  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   
   const pollIntervalRef = useRef(null);
 
   const [history, setHistory] = useState([]);
-
-  // Add a state to track which dropdown menu is open
-  const [activeDropdown, setActiveDropdown] = useState(null);
-
-  // Toggle dropdown menu
-  const toggleDropdown = (propertyId) => {
-    if (activeDropdown === propertyId) {
-      setActiveDropdown(null);
-    } else {
-      setActiveDropdown(propertyId);
-    }
-  };
-
-  // Close dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = () => {
-      setActiveDropdown(null);
-    };
-    
-    document.addEventListener('click', handleClickOutside);
-    return () => {
-      document.removeEventListener('click', handleClickOutside);
-    };
-  }, []);
 
   // Safety timeout to recover from initialization issues
   useEffect(() => {
@@ -302,48 +276,37 @@ export default function Dashboard() {
         throw new Error('No session found');
       }
 
-      console.log('Viewing property:', property.id);
-
-      // Fetch the property content
-      const response = await fetch(`/api/properties/content?propertyId=${property.id}`, {
+      // Fetch the property content using propertyId instead of id
+      const response = await fetch(`/api/properties/content?propertyId=${property.propertyId}`, {
         headers: {
           'Authorization': `Bearer ${session}`
         }
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to fetch property content');
+        throw new Error('Failed to fetch property content');
       }
 
       const { data } = await response.json();
-      console.log('Property content response:', data);
       
-      // Extract caption from all possible locations
-      const captionFromPropertyData = data.propertyData && data.propertyData.caption;
-      const mainCaption = data.caption || captionFromPropertyData || '';
-      const altCaption = data.altCaption || data.alternativeCaption || '';
-      
-      // Format the data to match ResultsModal expected structure
-      const resultsData = {
+      // Set the results in the format expected by the ResultsModal
+      setResults({
+        propertyId: property.propertyId,
         bannerbear: {
           status: data.status || 'completed',
           images: data.images || [],
-          image_urls: data.bannerbear?.image_urls || {},
-          zip_url: data.bannerbear?.zip_url,
-          ...data.bannerbear
+          image_urls: data.image_urls || {},
+          zip_url: data.zip_url,
+          uid: data.bannerbear?.uid
         },
-        caption: mainCaption,
-        captionOptions: data.captionOptions || { 
-          main: mainCaption,
-          alternative: altCaption
-        },
-        propertyData: data.propertyData || {}
-      };
+        caption: data.caption || '',
+        captionOptions: data.captionOptions || {},
+        propertyData: {
+          property: data.propertyData?.property || {}
+        }
+      });
       
-      // Set the formatted data to viewingProperty and open ResultsModal
-      setViewingProperty(resultsData);
-      setIsViewModalOpen(true);
+      setIsModalOpen(true);
     } catch (error) {
       console.error('Error viewing property:', error);
       setError({
@@ -404,47 +367,7 @@ export default function Dashboard() {
     fetchProperties();
   }, []);
 
-  // First, let's add a new function to handle property deletion
-  const handleDeleteProperty = async (propertyId) => {
-    if (!confirm("Are you sure you want to delete this property? This action cannot be undone.")) {
-      return;
-    }
-    
-    try {
-      const session = localStorage.getItem('session');
-      if (!session) {
-        throw new Error('No session found');
-      }
-
-      const response = await fetch(`/api/properties/delete`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session}`
-        },
-        body: JSON.stringify({ propertyId })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to delete property');
-      }
-
-      // Remove the deleted property from the local state
-      setProperties(prevProperties => prevProperties.filter(prop => prop.id !== propertyId));
-      
-      // Show success message
-      alert('Property deleted successfully');
-    } catch (error) {
-      console.error('Error deleting property:', error);
-      setError({
-        message: 'Failed to delete property',
-        details: error.message
-      });
-    }
-  };
-
-  // Now, let's update the renderHistory function to include a delete button
+  // Update the renderHistory function with horizontal scrolling
   const renderHistory = () => {
     if (isLoadingProperties) {
       return <div className="text-center py-4">Loading property history...</div>;
@@ -460,33 +383,7 @@ export default function Dashboard() {
         <div className="history-list">
           {properties.map((property) => (
             <div key={property.id} className="history-item">
-              <div className="item-header">
-                <h3 className="property-title">{property.address}</h3>
-                <div className="menu-container">
-                  <button 
-                    className="menu-button"
-                    onClick={(e) => {
-                      e.stopPropagation(); // Prevent event from bubbling up
-                      toggleDropdown(property.id);
-                    }}
-                  >
-                    ⋮
-                  </button>
-                  {activeDropdown === property.id && (
-                    <div className="dropdown-menu">
-                      <button 
-                        className="dropdown-item delete-item"
-                        onClick={(e) => {
-                          e.stopPropagation(); // Prevent event from bubbling up
-                          handleDeleteProperty(property.id);
-                        }}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
+              <h3 className="property-title">{property.address}</h3>
               <p className="property-price">{property.price}</p>
               <p className="property-date">
                 Generated on {new Date(property.createdAt).toLocaleDateString()}
@@ -538,84 +435,17 @@ export default function Dashboard() {
             border: 1px solid #e9ecef;
             border-radius: 8px;
             transition: transform 0.2s ease;
-            position: relative;
           }
 
           .history-item:hover {
             transform: translateY(-2px);
           }
 
-          .item-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 0.5rem;
-          }
-
           .property-title {
             font-size: 1.125rem;
             font-weight: 600;
             color: #1a1a1a;
-            margin: 0;
-            flex: 1;
-            padding-right: 10px;
-          }
-
-          .menu-container {
-            position: relative;
-          }
-
-          .menu-button {
-            background: none;
-            border: none;
-            cursor: pointer;
-            font-size: 1.25rem;
-            font-weight: bold;
-            color: #6b7280;
-            padding: 0.25rem;
-            line-height: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 28px;
-            height: 28px;
-            border-radius: 4px;
-          }
-
-          .menu-button:hover {
-            background: #edf2f7;
-            color: #4a5568;
-          }
-
-          .dropdown-menu {
-            position: absolute;
-            right: 0;
-            top: 100%;
-            background: white;
-            border-radius: 6px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-            z-index: 10;
-            width: 120px;
-            overflow: hidden;
-          }
-
-          .dropdown-item {
-            padding: 0.75rem 1rem;
-            text-align: left;
-            width: 100%;
-            background: none;
-            border: none;
-            cursor: pointer;
-            font-size: 0.875rem;
-            transition: background 0.2s;
-          }
-
-          .delete-item {
-            color: #e53e3e;
-          }
-
-          .delete-item:hover {
-            background: #fee2e2;
+            margin: 0 0 0.5rem 0;
           }
 
           .property-price {
@@ -635,11 +465,11 @@ export default function Dashboard() {
             padding: 0.75rem;
             background: #62d76b;
             color: #1a1a1a;
+            border: 2px solid #1a1a1a;
+            border-radius: 6px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.2s ease;
-            border-radius: 6px;
-            border: 2px solid #1a1a1a;
             box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.8);
           }
 
@@ -665,11 +495,6 @@ export default function Dashboard() {
         `}</style>
       </div>
     );
-  };
-
-  const closeViewModal = () => {
-    setIsViewModalOpen(false);
-    setViewingProperty(null);
   };
 
   // Check for errors at render time
@@ -771,13 +596,6 @@ export default function Dashboard() {
                 isOpen={isModalOpen} 
                 onClose={closeModal} 
                 results={results} 
-              />
-
-              {/* Use ResultsModal for viewing saved properties */}
-              <ResultsModal
-                isOpen={isViewModalOpen}
-                onClose={closeViewModal}
-                results={viewingProperty}
               />
               
               {/* Keep the traditional results display but make it less prominent */}

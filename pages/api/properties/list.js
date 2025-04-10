@@ -62,7 +62,7 @@ export default async function handler(req, res) {
 
     // Format the response
     const properties = propertiesResponse.Items.map(item => ({
-      id: item.propertyId,
+      propertyId: item.propertyId,
       url: item.url,
       address: item.data?.property?.address || 'Unknown Address',
       price: item.data?.property?.price || 'Price not available',
