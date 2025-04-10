@@ -1,25 +1,24 @@
 version: 1
-backend:
-  phases:
-    build:
-      commands:
-        - echo "Nothing to do in the build phase..."
-frontend:
-  phases:
-    preBuild:
-      commands:
-        - npm ci
-    build:
-      commands:
-        - echo "NEXT_PUBLIC_AWS_REGION=$NEXT_PUBLIC_AWS_REGION" >> .env.production
-        - echo "NEXT_PUBLIC_USER_POOL_ID=$NEXT_PUBLIC_USER_POOL_ID" >> .env.production
-        - echo "NEXT_PUBLIC_USER_POOL_WEB_CLIENT_ID=$NEXT_PUBLIC_USER_POOL_WEB_CLIENT_ID" >> .env.production
-        - echo "NEXT_PUBLIC_S3_BUCKET=$NEXT_PUBLIC_S3_BUCKET" >> .env.production
-        - npm run build
-  artifacts:
-    baseDirectory: .next
-    files:
-      - '**/*'
-  cache:
-    paths:
-      - node_modules/**/* 
+applications:
+  - frontend:
+      phases:
+        preBuild:
+          commands:
+            - npm ci
+            # Run environment check before build
+            - node scripts/check-env.js
+        build:
+          commands:
+            - echo "NEXT_PUBLIC_AWS_REGION=$NEXT_PUBLIC_AWS_REGION" >> .env.production
+            - echo "NEXT_PUBLIC_USER_POOL_ID=$NEXT_PUBLIC_USER_POOL_ID" >> .env.production
+            - echo "NEXT_PUBLIC_USER_POOL_WEB_CLIENT_ID=$NEXT_PUBLIC_USER_POOL_WEB_CLIENT_ID" >> .env.production
+            - echo "NEXT_PUBLIC_S3_BUCKET=$NEXT_PUBLIC_S3_BUCKET" >> .env.production
+            - npm run build
+      artifacts:
+        baseDirectory: .next
+        files:
+          - '**/*'
+      cache:
+        paths:
+          - node_modules/**/*
+    appRoot: . 
