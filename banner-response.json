@@ -1,0 +1,623 @@
+{
+  "created_at": "2025-04-10T08:20:12.061Z",
+  "uid": "EajX6oANgpPR7w30nv",
+  "self": "https://api.bannerbear.com/v2/collections/EajX6oANgpPR7w30nv",
+  "status": "completed",
+  "modifications": [
+    {
+      "name": "property_price",
+      "text": "£5,100 pcm"
+    },
+    {
+      "name": "property_location",
+      "text": "2 Bridgewater Avenue, London"
+    },
+    {
+      "name": "bedrooms",
+      "text": "2"
+    },
+    {
+      "name": "bathrooms",
+      "text": "2"
+    },
+    {
+      "name": "estate_agent_address",
+      "text": "51 Kinnerton Street, London, SW1X 8ED"
+    }
+  ],
+  "webhook_url": null,
+  "webhook_response_code": 200,
+  "transparent": false,
+  "metadata": null,
+  "zip_url": "https://images.bannerbear.com/image_sets/zips/001/125/270/original/EajX6oANgpPR7w30nv.zip?1744273221",
+  "image_urls": {
+    "template_agXkA3Dw17XqZW2VBY_image_url": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/246/APW1bDp49YK1PApE6jmVoORax/3fe035370a5ad7e78dbb7602e0f6dba9db6ff69f.png",
+    "template_7wpnPQZzKyXB5dOgxo_image_url": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/245/9e2VGL0qn6Vp3mRdYEAv5mxr1/1cf1d9a49f692428113c83f1059433d23313895f.png",
+    "template_p8YXW3b1P1q2DVgkw2_image_url": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/244/NgL30amMOYeZVPg3zprJxBoye/2da688a7fa17371a428ff157763ac209cdb4d5cb.png",
+    "template_nxOjMA5gNo78ZprE63_image_url": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/243/VJqEKwxkyzGLVb906NP8dj4vL/01bc662d1518580522925fda9b29e10d3a19aa36.png",
+    "template_Powdyxbd0Xw8blYBAg_image_url": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/242/nE38ekNX9Qn5kLam6MamprWxZ/dae47d45599a3df8447d124d21c2843f179f962e.png",
+    "template_0MkzgpZ4PAwBZyVrml_image_url": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/241/KPbegp4noQka5WVMzlVkN03vE/573142070d78549cf482b9425519643ad64f1795.png",
+    "template_8BK3vWZJPJA6DJzk1a_image_url": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/240/5R7NlW8nEzjEp7eXYmvbxgLyP/8eb2d31deab8447d8f58e4455ccf228ddd500be5.png",
+    "template_6jq8BX57x42dDnlwWa_image_url": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/239/on98ymlOAQy1VD5JQvM5pkw3R/fd081ea469ec53a33a8189ae71a94485e96d0211.png",
+    "template_n1MJGd52o2LrD7LaPV_image_url": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/238/Klp7yZbnLzXb3DlMQ3jOX9rmG/33799c01683ffd422fad99ea4127dc80dacf00e7.png",
+    "template_4KnlWBbKvwXVDOQGgm_image_url": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/237/ZwVbKlDe9Y8XoGagY8moa3jPM/dec9f8bde66d3803d448042d3c94778dd5fb13c7.png",
+    "template_RnxGpW5lvrWKbEXrJ1_image_url": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/236/PwAV5rMNq6Olq35jQkBm274Op/49e7ed410e22042dda7446116b83a3f80ea44a50.png",
+    "template_Kp21rAZjYN9eb6eLnd_image_url": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/234/JWBKNELpyQ2JA4W8QPvbX5R93/20b9589cd310f0dd7b388f71652e207019b2d81e.png",
+    "template_E9YaWrZMxGEobnRd74_image_url": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/233/Lvpkalx2D6Bq0GWGzWE7rB3Xq/be009d6cdd5cb5a07be30b7e2db08c5c1e3c2840.png",
+    "template_agXkA3Dw17XqZW2VBY_image_url_jpg": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/246/APW1bDp49YK1PApE6jmVoORax/3fe035370a5ad7e78dbb7602e0f6dba9db6ff69f.jpg",
+    "template_7wpnPQZzKyXB5dOgxo_image_url_jpg": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/245/9e2VGL0qn6Vp3mRdYEAv5mxr1/1cf1d9a49f692428113c83f1059433d23313895f.jpg",
+    "template_p8YXW3b1P1q2DVgkw2_image_url_jpg": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/244/NgL30amMOYeZVPg3zprJxBoye/2da688a7fa17371a428ff157763ac209cdb4d5cb.jpg",
+    "template_nxOjMA5gNo78ZprE63_image_url_jpg": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/243/VJqEKwxkyzGLVb906NP8dj4vL/01bc662d1518580522925fda9b29e10d3a19aa36.jpg",
+    "template_Powdyxbd0Xw8blYBAg_image_url_jpg": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/242/nE38ekNX9Qn5kLam6MamprWxZ/dae47d45599a3df8447d124d21c2843f179f962e.jpg",
+    "template_0MkzgpZ4PAwBZyVrml_image_url_jpg": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/241/KPbegp4noQka5WVMzlVkN03vE/573142070d78549cf482b9425519643ad64f1795.jpg",
+    "template_8BK3vWZJPJA6DJzk1a_image_url_jpg": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/240/5R7NlW8nEzjEp7eXYmvbxgLyP/8eb2d31deab8447d8f58e4455ccf228ddd500be5.jpg",
+    "template_6jq8BX57x42dDnlwWa_image_url_jpg": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/239/on98ymlOAQy1VD5JQvM5pkw3R/fd081ea469ec53a33a8189ae71a94485e96d0211.jpg",
+    "template_n1MJGd52o2LrD7LaPV_image_url_jpg": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/238/Klp7yZbnLzXb3DlMQ3jOX9rmG/33799c01683ffd422fad99ea4127dc80dacf00e7.jpg",
+    "template_4KnlWBbKvwXVDOQGgm_image_url_jpg": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/237/ZwVbKlDe9Y8XoGagY8moa3jPM/dec9f8bde66d3803d448042d3c94778dd5fb13c7.jpg",
+    "template_RnxGpW5lvrWKbEXrJ1_image_url_jpg": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/236/PwAV5rMNq6Olq35jQkBm274Op/49e7ed410e22042dda7446116b83a3f80ea44a50.jpg",
+    "template_Kp21rAZjYN9eb6eLnd_image_url_jpg": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/234/JWBKNELpyQ2JA4W8QPvbX5R93/20b9589cd310f0dd7b388f71652e207019b2d81e.jpg",
+    "template_E9YaWrZMxGEobnRd74_image_url_jpg": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/233/Lvpkalx2D6Bq0GWGzWE7rB3Xq/be009d6cdd5cb5a07be30b7e2db08c5c1e3c2840.jpg"
+  },
+  "images": [
+    {
+      "created_at": "2025-04-10T08:20:12.354Z",
+      "status": "completed",
+      "self": "https://api.bannerbear.com/v2/images/APW1bDp49YK1PApE6jmVoORax",
+      "uid": "APW1bDp49YK1PApE6jmVoORax",
+      "image_url": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/246/APW1bDp49YK1PApE6jmVoORax/3fe035370a5ad7e78dbb7602e0f6dba9db6ff69f.png",
+      "image_url_png": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/246/APW1bDp49YK1PApE6jmVoORax/3fe035370a5ad7e78dbb7602e0f6dba9db6ff69f.png",
+      "image_url_jpg": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/246/APW1bDp49YK1PApE6jmVoORax/3fe035370a5ad7e78dbb7602e0f6dba9db6ff69f.jpg",
+      "template": "agXkA3Dw17XqZW2VBY",
+      "template_version": null,
+      "modifications": [
+        {
+          "name": "property_price",
+          "text": "£5,100 pcm"
+        },
+        {
+          "name": "property_location",
+          "text": "2 Bridgewater Avenue, London"
+        },
+        {
+          "name": "bedrooms",
+          "text": "2"
+        },
+        {
+          "name": "bathrooms",
+          "text": "2"
+        },
+        {
+          "name": "estate_agent_address",
+          "text": "51 Kinnerton Street, London, SW1X 8ED"
+        }
+      ],
+      "webhook_url": null,
+      "webhook_response_code": null,
+      "transparent": false,
+      "metadata": null,
+      "template_name": "Template3_design1",
+      "width": 1000,
+      "height": 1000,
+      "render_pdf": false,
+      "pdf_url": null,
+      "pdf_url_compressed": null
+    },
+    {
+      "created_at": "2025-04-10T08:20:12.331Z",
+      "status": "completed",
+      "self": "https://api.bannerbear.com/v2/images/9e2VGL0qn6Vp3mRdYEAv5mxr1",
+      "uid": "9e2VGL0qn6Vp3mRdYEAv5mxr1",
+      "image_url": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/245/9e2VGL0qn6Vp3mRdYEAv5mxr1/1cf1d9a49f692428113c83f1059433d23313895f.png",
+      "image_url_png": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/245/9e2VGL0qn6Vp3mRdYEAv5mxr1/1cf1d9a49f692428113c83f1059433d23313895f.png",
+      "image_url_jpg": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/245/9e2VGL0qn6Vp3mRdYEAv5mxr1/1cf1d9a49f692428113c83f1059433d23313895f.jpg",
+      "template": "7wpnPQZzKyXB5dOgxo",
+      "template_version": null,
+      "modifications": [
+        {
+          "name": "property_price",
+          "text": "£5,100 pcm"
+        },
+        {
+          "name": "property_location",
+          "text": "2 Bridgewater Avenue, London"
+        },
+        {
+          "name": "bedrooms",
+          "text": "2"
+        },
+        {
+          "name": "bathrooms",
+          "text": "2"
+        },
+        {
+          "name": "estate_agent_address",
+          "text": "51 Kinnerton Street, London, SW1X 8ED"
+        }
+      ],
+      "webhook_url": null,
+      "webhook_response_code": null,
+      "transparent": false,
+      "metadata": null,
+      "template_name": "Template3_design2",
+      "width": 1000,
+      "height": 1000,
+      "render_pdf": false,
+      "pdf_url": null,
+      "pdf_url_compressed": null
+    },
+    {
+      "created_at": "2025-04-10T08:20:12.308Z",
+      "status": "completed",
+      "self": "https://api.bannerbear.com/v2/images/NgL30amMOYeZVPg3zprJxBoye",
+      "uid": "NgL30amMOYeZVPg3zprJxBoye",
+      "image_url": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/244/NgL30amMOYeZVPg3zprJxBoye/2da688a7fa17371a428ff157763ac209cdb4d5cb.png",
+      "image_url_png": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/244/NgL30amMOYeZVPg3zprJxBoye/2da688a7fa17371a428ff157763ac209cdb4d5cb.png",
+      "image_url_jpg": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/244/NgL30amMOYeZVPg3zprJxBoye/2da688a7fa17371a428ff157763ac209cdb4d5cb.jpg",
+      "template": "p8YXW3b1P1q2DVgkw2",
+      "template_version": null,
+      "modifications": [
+        {
+          "name": "property_price",
+          "text": "£5,100 pcm"
+        },
+        {
+          "name": "property_location",
+          "text": "2 Bridgewater Avenue, London"
+        },
+        {
+          "name": "bedrooms",
+          "text": "2"
+        },
+        {
+          "name": "bathrooms",
+          "text": "2"
+        },
+        {
+          "name": "estate_agent_address",
+          "text": "51 Kinnerton Street, London, SW1X 8ED"
+        }
+      ],
+      "webhook_url": null,
+      "webhook_response_code": null,
+      "transparent": false,
+      "metadata": null,
+      "template_name": "Template3_design3",
+      "width": 1000,
+      "height": 1000,
+      "render_pdf": false,
+      "pdf_url": null,
+      "pdf_url_compressed": null
+    },
+    {
+      "created_at": "2025-04-10T08:20:12.287Z",
+      "status": "completed",
+      "self": "https://api.bannerbear.com/v2/images/VJqEKwxkyzGLVb906NP8dj4vL",
+      "uid": "VJqEKwxkyzGLVb906NP8dj4vL",
+      "image_url": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/243/VJqEKwxkyzGLVb906NP8dj4vL/01bc662d1518580522925fda9b29e10d3a19aa36.png",
+      "image_url_png": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/243/VJqEKwxkyzGLVb906NP8dj4vL/01bc662d1518580522925fda9b29e10d3a19aa36.png",
+      "image_url_jpg": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/243/VJqEKwxkyzGLVb906NP8dj4vL/01bc662d1518580522925fda9b29e10d3a19aa36.jpg",
+      "template": "nxOjMA5gNo78ZprE63",
+      "template_version": null,
+      "modifications": [
+        {
+          "name": "property_price",
+          "text": "£5,100 pcm"
+        },
+        {
+          "name": "property_location",
+          "text": "2 Bridgewater Avenue, London"
+        },
+        {
+          "name": "bedrooms",
+          "text": "2"
+        },
+        {
+          "name": "bathrooms",
+          "text": "2"
+        },
+        {
+          "name": "estate_agent_address",
+          "text": "51 Kinnerton Street, London, SW1X 8ED"
+        }
+      ],
+      "webhook_url": null,
+      "webhook_response_code": null,
+      "transparent": false,
+      "metadata": null,
+      "template_name": "Template3_design4",
+      "width": 1000,
+      "height": 1000,
+      "render_pdf": false,
+      "pdf_url": null,
+      "pdf_url_compressed": null
+    },
+    {
+      "created_at": "2025-04-10T08:20:12.266Z",
+      "status": "completed",
+      "self": "https://api.bannerbear.com/v2/images/nE38ekNX9Qn5kLam6MamprWxZ",
+      "uid": "nE38ekNX9Qn5kLam6MamprWxZ",
+      "image_url": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/242/nE38ekNX9Qn5kLam6MamprWxZ/dae47d45599a3df8447d124d21c2843f179f962e.png",
+      "image_url_png": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/242/nE38ekNX9Qn5kLam6MamprWxZ/dae47d45599a3df8447d124d21c2843f179f962e.png",
+      "image_url_jpg": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/242/nE38ekNX9Qn5kLam6MamprWxZ/dae47d45599a3df8447d124d21c2843f179f962e.jpg",
+      "template": "Powdyxbd0Xw8blYBAg",
+      "template_version": null,
+      "modifications": [
+        {
+          "name": "property_price",
+          "text": "£5,100 pcm"
+        },
+        {
+          "name": "property_location",
+          "text": "2 Bridgewater Avenue, London"
+        },
+        {
+          "name": "bedrooms",
+          "text": "2"
+        },
+        {
+          "name": "bathrooms",
+          "text": "2"
+        },
+        {
+          "name": "estate_agent_address",
+          "text": "51 Kinnerton Street, London, SW1X 8ED"
+        }
+      ],
+      "webhook_url": null,
+      "webhook_response_code": null,
+      "transparent": false,
+      "metadata": null,
+      "template_name": "Template3_design5",
+      "width": 1000,
+      "height": 1000,
+      "render_pdf": false,
+      "pdf_url": null,
+      "pdf_url_compressed": null
+    },
+    {
+      "created_at": "2025-04-10T08:20:12.246Z",
+      "status": "completed",
+      "self": "https://api.bannerbear.com/v2/images/KPbegp4noQka5WVMzlVkN03vE",
+      "uid": "KPbegp4noQka5WVMzlVkN03vE",
+      "image_url": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/241/KPbegp4noQka5WVMzlVkN03vE/573142070d78549cf482b9425519643ad64f1795.png",
+      "image_url_png": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/241/KPbegp4noQka5WVMzlVkN03vE/573142070d78549cf482b9425519643ad64f1795.png",
+      "image_url_jpg": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/241/KPbegp4noQka5WVMzlVkN03vE/573142070d78549cf482b9425519643ad64f1795.jpg",
+      "template": "0MkzgpZ4PAwBZyVrml",
+      "template_version": null,
+      "modifications": [
+        {
+          "name": "property_price",
+          "text": "£5,100 pcm"
+        },
+        {
+          "name": "property_location",
+          "text": "2 Bridgewater Avenue, London"
+        },
+        {
+          "name": "bedrooms",
+          "text": "2"
+        },
+        {
+          "name": "bathrooms",
+          "text": "2"
+        },
+        {
+          "name": "estate_agent_address",
+          "text": "51 Kinnerton Street, London, SW1X 8ED"
+        }
+      ],
+      "webhook_url": null,
+      "webhook_response_code": null,
+      "transparent": false,
+      "metadata": null,
+      "template_name": "Template3_design6",
+      "width": 1000,
+      "height": 1000,
+      "render_pdf": false,
+      "pdf_url": null,
+      "pdf_url_compressed": null
+    },
+    {
+      "created_at": "2025-04-10T08:20:12.225Z",
+      "status": "completed",
+      "self": "https://api.bannerbear.com/v2/images/5R7NlW8nEzjEp7eXYmvbxgLyP",
+      "uid": "5R7NlW8nEzjEp7eXYmvbxgLyP",
+      "image_url": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/240/5R7NlW8nEzjEp7eXYmvbxgLyP/8eb2d31deab8447d8f58e4455ccf228ddd500be5.png",
+      "image_url_png": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/240/5R7NlW8nEzjEp7eXYmvbxgLyP/8eb2d31deab8447d8f58e4455ccf228ddd500be5.png",
+      "image_url_jpg": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/240/5R7NlW8nEzjEp7eXYmvbxgLyP/8eb2d31deab8447d8f58e4455ccf228ddd500be5.jpg",
+      "template": "8BK3vWZJPJA6DJzk1a",
+      "template_version": null,
+      "modifications": [
+        {
+          "name": "property_price",
+          "text": "£5,100 pcm"
+        },
+        {
+          "name": "property_location",
+          "text": "2 Bridgewater Avenue, London"
+        },
+        {
+          "name": "bedrooms",
+          "text": "2"
+        },
+        {
+          "name": "bathrooms",
+          "text": "2"
+        },
+        {
+          "name": "estate_agent_address",
+          "text": "51 Kinnerton Street, London, SW1X 8ED"
+        }
+      ],
+      "webhook_url": null,
+      "webhook_response_code": null,
+      "transparent": false,
+      "metadata": null,
+      "template_name": "Template3_design7",
+      "width": 1000,
+      "height": 1000,
+      "render_pdf": false,
+      "pdf_url": null,
+      "pdf_url_compressed": null
+    },
+    {
+      "created_at": "2025-04-10T08:20:12.205Z",
+      "status": "completed",
+      "self": "https://api.bannerbear.com/v2/images/on98ymlOAQy1VD5JQvM5pkw3R",
+      "uid": "on98ymlOAQy1VD5JQvM5pkw3R",
+      "image_url": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/239/on98ymlOAQy1VD5JQvM5pkw3R/fd081ea469ec53a33a8189ae71a94485e96d0211.png",
+      "image_url_png": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/239/on98ymlOAQy1VD5JQvM5pkw3R/fd081ea469ec53a33a8189ae71a94485e96d0211.png",
+      "image_url_jpg": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/239/on98ymlOAQy1VD5JQvM5pkw3R/fd081ea469ec53a33a8189ae71a94485e96d0211.jpg",
+      "template": "6jq8BX57x42dDnlwWa",
+      "template_version": null,
+      "modifications": [
+        {
+          "name": "property_price",
+          "text": "£5,100 pcm"
+        },
+        {
+          "name": "property_location",
+          "text": "2 Bridgewater Avenue, London"
+        },
+        {
+          "name": "bedrooms",
+          "text": "2"
+        },
+        {
+          "name": "bathrooms",
+          "text": "2"
+        },
+        {
+          "name": "estate_agent_address",
+          "text": "51 Kinnerton Street, London, SW1X 8ED"
+        }
+      ],
+      "webhook_url": null,
+      "webhook_response_code": null,
+      "transparent": false,
+      "metadata": null,
+      "template_name": "Template3_design8",
+      "width": 1000,
+      "height": 1000,
+      "render_pdf": false,
+      "pdf_url": null,
+      "pdf_url_compressed": null
+    },
+    {
+      "created_at": "2025-04-10T08:20:12.183Z",
+      "status": "completed",
+      "self": "https://api.bannerbear.com/v2/images/Klp7yZbnLzXb3DlMQ3jOX9rmG",
+      "uid": "Klp7yZbnLzXb3DlMQ3jOX9rmG",
+      "image_url": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/238/Klp7yZbnLzXb3DlMQ3jOX9rmG/33799c01683ffd422fad99ea4127dc80dacf00e7.png",
+      "image_url_png": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/238/Klp7yZbnLzXb3DlMQ3jOX9rmG/33799c01683ffd422fad99ea4127dc80dacf00e7.png",
+      "image_url_jpg": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/238/Klp7yZbnLzXb3DlMQ3jOX9rmG/33799c01683ffd422fad99ea4127dc80dacf00e7.jpg",
+      "template": "n1MJGd52o2LrD7LaPV",
+      "template_version": null,
+      "modifications": [
+        {
+          "name": "property_price",
+          "text": "£5,100 pcm"
+        },
+        {
+          "name": "property_location",
+          "text": "2 Bridgewater Avenue, London"
+        },
+        {
+          "name": "bedrooms",
+          "text": "2"
+        },
+        {
+          "name": "bathrooms",
+          "text": "2"
+        },
+        {
+          "name": "estate_agent_address",
+          "text": "51 Kinnerton Street, London, SW1X 8ED"
+        }
+      ],
+      "webhook_url": null,
+      "webhook_response_code": null,
+      "transparent": false,
+      "metadata": null,
+      "template_name": "Template3_design9",
+      "width": 1000,
+      "height": 1000,
+      "render_pdf": false,
+      "pdf_url": null,
+      "pdf_url_compressed": null
+    },
+    {
+      "created_at": "2025-04-10T08:20:12.160Z",
+      "status": "completed",
+      "self": "https://api.bannerbear.com/v2/images/ZwVbKlDe9Y8XoGagY8moa3jPM",
+      "uid": "ZwVbKlDe9Y8XoGagY8moa3jPM",
+      "image_url": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/237/ZwVbKlDe9Y8XoGagY8moa3jPM/dec9f8bde66d3803d448042d3c94778dd5fb13c7.png",
+      "image_url_png": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/237/ZwVbKlDe9Y8XoGagY8moa3jPM/dec9f8bde66d3803d448042d3c94778dd5fb13c7.png",
+      "image_url_jpg": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/237/ZwVbKlDe9Y8XoGagY8moa3jPM/dec9f8bde66d3803d448042d3c94778dd5fb13c7.jpg",
+      "template": "4KnlWBbKvwXVDOQGgm",
+      "template_version": null,
+      "modifications": [
+        {
+          "name": "property_price",
+          "text": "£5,100 pcm"
+        },
+        {
+          "name": "property_location",
+          "text": "2 Bridgewater Avenue, London"
+        },
+        {
+          "name": "bedrooms",
+          "text": "2"
+        },
+        {
+          "name": "bathrooms",
+          "text": "2"
+        },
+        {
+          "name": "estate_agent_address",
+          "text": "51 Kinnerton Street, London, SW1X 8ED"
+        }
+      ],
+      "webhook_url": null,
+      "webhook_response_code": null,
+      "transparent": false,
+      "metadata": null,
+      "template_name": "Template3_design10",
+      "width": 1000,
+      "height": 1000,
+      "render_pdf": false,
+      "pdf_url": null,
+      "pdf_url_compressed": null
+    },
+    {
+      "created_at": "2025-04-10T08:20:12.135Z",
+      "status": "completed",
+      "self": "https://api.bannerbear.com/v2/images/PwAV5rMNq6Olq35jQkBm274Op",
+      "uid": "PwAV5rMNq6Olq35jQkBm274Op",
+      "image_url": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/236/PwAV5rMNq6Olq35jQkBm274Op/49e7ed410e22042dda7446116b83a3f80ea44a50.png",
+      "image_url_png": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/236/PwAV5rMNq6Olq35jQkBm274Op/49e7ed410e22042dda7446116b83a3f80ea44a50.png",
+      "image_url_jpg": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/236/PwAV5rMNq6Olq35jQkBm274Op/49e7ed410e22042dda7446116b83a3f80ea44a50.jpg",
+      "template": "RnxGpW5lvrWKbEXrJ1",
+      "template_version": null,
+      "modifications": [
+        {
+          "name": "property_price",
+          "text": "£5,100 pcm"
+        },
+        {
+          "name": "property_location",
+          "text": "2 Bridgewater Avenue, London"
+        },
+        {
+          "name": "bedrooms",
+          "text": "2"
+        },
+        {
+          "name": "bathrooms",
+          "text": "2"
+        },
+        {
+          "name": "estate_agent_address",
+          "text": "51 Kinnerton Street, London, SW1X 8ED"
+        }
+      ],
+      "webhook_url": null,
+      "webhook_response_code": null,
+      "transparent": false,
+      "metadata": null,
+      "template_name": "Template3_Story1",
+      "width": 1080,
+      "height": 1920,
+      "render_pdf": false,
+      "pdf_url": null,
+      "pdf_url_compressed": null
+    },
+    {
+      "created_at": "2025-04-10T08:20:12.112Z",
+      "status": "completed",
+      "self": "https://api.bannerbear.com/v2/images/JWBKNELpyQ2JA4W8QPvbX5R93",
+      "uid": "JWBKNELpyQ2JA4W8QPvbX5R93",
+      "image_url": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/234/JWBKNELpyQ2JA4W8QPvbX5R93/20b9589cd310f0dd7b388f71652e207019b2d81e.png",
+      "image_url_png": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/234/JWBKNELpyQ2JA4W8QPvbX5R93/20b9589cd310f0dd7b388f71652e207019b2d81e.png",
+      "image_url_jpg": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/234/JWBKNELpyQ2JA4W8QPvbX5R93/20b9589cd310f0dd7b388f71652e207019b2d81e.jpg",
+      "template": "Kp21rAZjYN9eb6eLnd",
+      "template_version": null,
+      "modifications": [
+        {
+          "name": "property_price",
+          "text": "£5,100 pcm"
+        },
+        {
+          "name": "property_location",
+          "text": "2 Bridgewater Avenue, London"
+        },
+        {
+          "name": "bedrooms",
+          "text": "2"
+        },
+        {
+          "name": "bathrooms",
+          "text": "2"
+        },
+        {
+          "name": "estate_agent_address",
+          "text": "51 Kinnerton Street, London, SW1X 8ED"
+        }
+      ],
+      "webhook_url": null,
+      "webhook_response_code": null,
+      "transparent": false,
+      "metadata": null,
+      "template_name": "Template3_Story2",
+      "width": 1080,
+      "height": 1920,
+      "render_pdf": false,
+      "pdf_url": null,
+      "pdf_url_compressed": null
+    },
+    {
+      "created_at": "2025-04-10T08:20:12.088Z",
+      "status": "completed",
+      "self": "https://api.bannerbear.com/v2/images/Lvpkalx2D6Bq0GWGzWE7rB3Xq",
+      "uid": "Lvpkalx2D6Bq0GWGzWE7rB3Xq",
+      "image_url": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/233/Lvpkalx2D6Bq0GWGzWE7rB3Xq/be009d6cdd5cb5a07be30b7e2db08c5c1e3c2840.png",
+      "image_url_png": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/233/Lvpkalx2D6Bq0GWGzWE7rB3Xq/be009d6cdd5cb5a07be30b7e2db08c5c1e3c2840.png",
+      "image_url_jpg": "https://images.bannerbear.com/direct/E56OLrMKYWnzwl3oQj/requests/000/087/122/233/Lvpkalx2D6Bq0GWGzWE7rB3Xq/be009d6cdd5cb5a07be30b7e2db08c5c1e3c2840.jpg",
+      "template": "E9YaWrZMxGEobnRd74",
+      "template_version": null,
+      "modifications": [
+        {
+          "name": "property_price",
+          "text": "£5,100 pcm"
+        },
+        {
+          "name": "property_location",
+          "text": "2 Bridgewater Avenue, London"
+        },
+        {
+          "name": "bedrooms",
+          "text": "2"
+        },
+        {
+          "name": "bathrooms",
+          "text": "2"
+        },
+        {
+          "name": "estate_agent_address",
+          "text": "51 Kinnerton Street, London, SW1X 8ED"
+        }
+      ],
+      "webhook_url": null,
+      "webhook_response_code": null,
+      "transparent": false,
+      "metadata": null,
+      "template_name": "Template3_Story3",
+      "width": 1080,
+      "height": 1920,
+      "render_pdf": false,
+      "pdf_url": null,
+      "pdf_url_compressed": null
+    }
+  ],
+  "template_set": "Rwonb0W3MAyzKOEeD7"
+}

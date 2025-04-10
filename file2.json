@@ -1,0 +1,96 @@
+{
+ "id": "659c33ea-59c6-4246-ad49-50705d34897b",
+ "createdAt": "2025-04-10T09:58:30.095Z",
+ "images": [
+ ],
+ "image_urls": {},
+ "metadata": {
+  "propertyId": "659c33ea-59c6-4246-ad49-50705d34897b"
+ },
+ "modifications": [
+ ],
+ "propertyData": {
+  "bannerbear": {
+   "metadata": {
+    "scraped_at": "2025-04-10T09:58:29.661Z",
+    "source": "rightmove"
+   },
+   "modifications": [
+    {
+     "image_url": "https://media.rightmove.co.uk/107k/106225/160202138/106225_BEP250060_L_IMG_00_0000.jpeg",
+     "name": "property_image"
+    },
+    {
+     "name": "property_price",
+     "text": "£4,442 pcm"
+    },
+    {
+     "name": "property_location",
+     "text": "Palace Wharf, Rainville Road, London, W6"
+    },
+    {
+     "name": "bedrooms",
+     "text": 2
+    },
+    {
+     "name": "bathrooms",
+     "text": 2
+    },
+    {
+     "image_url": "https://media.rightmove.co.uk/company/clogo_19244_0005.jpeg",
+     "name": "logo"
+    },
+    {
+     "name": "estate_agent_address",
+     "text": "5 Adelaide Road, London, NW3 3QE"
+    }
+   ],
+   "render_pdf": false,
+   "template": "E9YaWrZMxGp7bnRd74",
+   "transparent": false,
+   "webhook_url": "https://fe75580bcc3b99cd4e2b3e17187df9f1.m.pipedream.net"
+  },
+  "caption": "Welcome to your new sanctuary at Palace Wharf, where luxury meets the serene embrace of riverside living. This exquisite two-bedroom, two-bathroom loft apartment is nestled within a thoughtfully converted warehouse, exuding character and charm while offering modern elegance. As you step inside, the high ceilings and stylish open-plan kitchen/reception room invite you to envision a life filled with laughter and cherished moments. Imagine hosting intimate gatherings or enjoying quiet evenings, all while being enveloped by the warmth of this beautifully designed space. 🍷✨\n\nThe heart of this home is undoubtedly its fully fitted Metris kitchen, boasting top-of-the-line Miele appliances that make culinary adventures a delight. Picture yourself unwinding in the master bedroom, complete with an en-suite shower room and picturesque views of the River Thames—each day beginning and ending with the soothing sight of water glistening under the London sun. With ample storage throughout and bathrooms featuring luxurious underfloor heating, every detail has been curated for your comfort and convenience. 🌊🏙️\n\nBeyond the apartment's elegant interiors lies a vibrant community enriched by its prime location. Just moments away from Hammersmith Overground and Underground Stations, as well as various bus routes, you're perfectly positioned to explore all that London has to offer. Whether it's a leisurely stroll along the riverside or indulging in local cafes and boutiques, your new lifestyle awaits. Don’t miss this opportunity to create lasting memories in a home that truly reflects your aspirations. For more information or to schedule a viewing, please contact Stones Residential in Belsize Park today! 🏡❤️ #PalaceWharf #LuxuryLiving #RiversideRetreat #LondonLifestyle #StonesResidential",
+  "raw": {
+   "agent": {
+    "about": "",
+    "address": "5 Adelaide Road, London, NW3 3QE",
+    "logo": "https://media.rightmove.co.uk/company/clogo_19244_0005.jpeg",
+    "name": "Stones Residential, Belsize Park"
+   },
+   "property": {
+    "address": "Palace Wharf, Rainville Road, London, W6",
+    "allImages": [
+     "https://media.rightmove.co.uk/107k/106225/160202138/106225_BEP250060_L_IMG_00_0000.jpeg",
+     "https://media.rightmove.co.uk/107k/106225/160202138/106225_BEP250060_L_IMG_01_0000.jpeg",
+     "https://media.rightmove.co.uk/107k/106225/160202138/106225_BEP250060_L_IMG_02_0000.jpeg",
+     "https://media.rightmove.co.uk/107k/106225/160202138/106225_BEP250060_L_IMG_03_0000.jpeg",
+     "https://media.rightmove.co.uk/107k/106225/160202138/106225_BEP250060_L_IMG_12_0000.jpeg"
+    ],
+    "bathrooms": 2,
+    "bedrooms": 2,
+    "description": "Situated on the first floor of a converted warehouse this stunning two bedroom, two bathroom loft apartment facing the courtyard has been interior designed to accommodate luxury living. The apartment comprises an open plan kitchen/ reception room, two double bedrooms with the master benefiting from an en-suite shower room and views to the River Thames, guest bathroom and ample storage.\n\nThe fully fitted Metris Kitchen is complete with Miele appliances including an integrated dishwasher, washer/dryer, fridge freezer, and a Caple wine cooler. The bathrooms comprise of full bathroom suites with underfloor heating.\n\nFurther benefits of the apartment include a Smart Home audiovisual system, a digital video door entry system, CCTV and high ceilings.\n\nWith its riverside location, Palace Wharf is also conveniently close to a number of transport links including Hammersmith Overground and Underground Station, Barons Court, Putney Bridge, and Fulham Broadway Underground Stations, along with several regular and varied bus services which further improve accessibility.",
+    "keyFeatures": [
+     "Available Immediately",
+     "2 Bedrooms",
+     "2 Bathroom",
+     "New Build Gated Development",
+     "Secure Parking Available",
+     "Available Furnished or Unfurnished",
+     "Council Tax Band: F"
+    ],
+    "mainImage": "https://media.rightmove.co.uk/107k/106225/160202138/106225_BEP250060_L_IMG_00_0000.jpeg",
+    "price": "£4,442 pcm",
+    "square_ft": 669
+   }
+  }
+ },
+ "status": "pending",
+ "template_set": "Rwonb0W3MAyzKOEeD7",
+ "transparent": false,
+ "uid": "9Zl2azA61K1lWE0P3K",
+ "updatedAt": "2025-04-10T09:58:30.095Z",
+ "url": "https://www.rightmove.co.uk/properties/160202138#/?channel=RES_LET",
+ "userId": "thepresidentialhustle@gmail.com",
+ "webhook_url": "https://fe75580bcc3b99cd4e2b3e17187df9f1.m.pipedream.net"
+}
