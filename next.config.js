@@ -1,4 +1,15 @@
 /** @type {import('next').NextConfig} */
+
+// Debug log at config load time
+console.log('Loading next.config.js - Environment Variables Check:');
+Object.keys(process.env).forEach(key => {
+  if (!key.includes('SECRET') && !key.includes('KEY')) {
+    console.log(`${key}: ${process.env[key]}`);
+  } else {
+    console.log(`${key}: [HIDDEN]`);
+  }
+});
+
 const nextConfig = {
   reactStrictMode: true,
   images: {
@@ -11,13 +22,13 @@ const nextConfig = {
       'www.zillowstatic.com',
     ],
   },
-  // Log environment variables during build
-  onBuildStart: () => {
-    console.log('Build-time environment variables:');
+  webpack: (config, { buildId, dev, isServer, defaultLoaders, webpack }) => {
+    console.log('Webpack build - Environment check:');
     console.log('ACCESS_KEY_ID:', process.env.ACCESS_KEY_ID ? 'Set' : 'Not set');
     console.log('BANNERBEAR_API_KEY:', process.env.BANNERBEAR_API_KEY ? 'Set' : 'Not set');
     console.log('FIRECRAWL_API_KEY:', process.env.FIRECRAWL_API_KEY ? 'Set' : 'Not set');
     console.log('REGION:', process.env.REGION ? 'Set' : 'Not set');
+    return config;
   },
   env: {
     FIRECRAWL_API_KEY: process.env.NEXT_PUBLIC_FIRECRAWL_API_KEY || process.env.FIRECRAWL_API_KEY,
@@ -52,15 +63,5 @@ const nextConfig = {
     USE_FIRECRAWL: process.env.NEXT_PUBLIC_USE_FIRECRAWL || process.env.USE_FIRECRAWL || 'true',
   },
 }
-
-// Log all available environment variables at build time
-console.log('Available environment variables at config time:');
-Object.keys(process.env).forEach(key => {
-  if (!key.includes('SECRET') && !key.includes('KEY')) {
-    console.log(`${key}: ${process.env[key]}`);
-  } else {
-    console.log(`${key}: [HIDDEN]`);
-  }
-});
 
 module.exports = nextConfig 
