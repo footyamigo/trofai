@@ -42,6 +42,7 @@ const nextConfig = {
     S3_REGION: process.env.AWS_REGION || 'us-east-1',
     S3_BUCKET_NAME: process.env.S3_BUCKET_NAME || 'trofai',
     USE_FIRECRAWL: process.env.USE_FIRECRAWL || 'true',
+    FIRECRAWL_API_KEY: process.env.FIRECRAWL_API_KEY,
   },
 }
 

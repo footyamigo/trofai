@@ -15,15 +15,32 @@ try {
 }
 
 const { serverRuntimeConfig } = getConfig() || {
-  serverRuntimeConfig: {
-    FIRECRAWL_API_KEY: process.env.FIRECRAWL_API_KEY,
-    BANNERBEAR_API_KEY: process.env.BANNERBEAR_API_KEY,
-    BANNERBEAR_TEMPLATE_UID: process.env.BANNERBEAR_TEMPLATE_UID,
-    BANNERBEAR_TEMPLATE_SET_UID: process.env.BANNERBEAR_TEMPLATE_SET_UID,
-    BANNERBEAR_WEBHOOK_URL: process.env.BANNERBEAR_WEBHOOK_URL,
-    BANNERBEAR_WEBHOOK_SECRET: process.env.BANNERBEAR_WEBHOOK_SECRET,
-  }
+    serverRuntimeConfig: {
+        FIRECRAWL_API_KEY: process.env.FIRECRAWL_API_KEY,
+        BANNERBEAR_API_KEY: process.env.BANNERBEAR_API_KEY,
+        BANNERBEAR_TEMPLATE_UID: process.env.BANNERBEAR_TEMPLATE_UID,
+        BANNERBEAR_TEMPLATE_SET_UID: process.env.BANNERBEAR_TEMPLATE_SET_UID,
+        BANNERBEAR_WEBHOOK_URL: process.env.BANNERBEAR_WEBHOOK_URL,
+        BANNERBEAR_WEBHOOK_SECRET: process.env.BANNERBEAR_WEBHOOK_SECRET,
+    }
 };
+
+// Debug logging for configuration
+console.log('Configuration sources:');
+console.log('process.env.FIRECRAWL_API_KEY:', process.env.FIRECRAWL_API_KEY ? 'Present' : 'Missing');
+console.log('serverRuntimeConfig:', serverRuntimeConfig ? 'Present' : 'Missing');
+console.log('serverRuntimeConfig.FIRECRAWL_API_KEY:', serverRuntimeConfig?.FIRECRAWL_API_KEY ? 'Present' : 'Missing');
+
+// Try multiple sources for the API key
+const FIRECRAWL_API_KEY = serverRuntimeConfig?.FIRECRAWL_API_KEY || process.env.FIRECRAWL_API_KEY || process.env.NEXT_PUBLIC_FIRECRAWL_API_KEY;
+
+// Log the final API key status
+console.log('Final FIRECRAWL_API_KEY status:', FIRECRAWL_API_KEY ? 'Found' : 'Missing');
+
+if (!FIRECRAWL_API_KEY) {
+    console.error('FIRECRAWL_API_KEY is missing. Please ensure it is properly configured in environment variables.');
+    throw new Error('FIRECRAWL_API_KEY is not configured. Please add it to your environment variables.');
+}
 
 // Constants
 const MAX_RETRY_ATTEMPTS = 6;
@@ -185,7 +202,7 @@ async function scrapeRightmoveProperty(propertyUrl) {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${serverRuntimeConfig.FIRECRAWL_API_KEY}`
+                            'Authorization': `Bearer ${FIRECRAWL_API_KEY}`
                         },
                         body: JSON.stringify({
                             urls: [cleanUrl],
@@ -298,7 +315,7 @@ async function scrapeWithFirecrawlPackage(propertyUrl) {
     try {
         // Initialize the Firecrawl client
         const app = new FirecrawlApp({
-            apiKey: serverRuntimeConfig.FIRECRAWL_API_KEY
+            apiKey: FIRECRAWL_API_KEY
         });
 
         // Define the extraction prompt
@@ -342,7 +359,7 @@ async function pollFirecrawlResults(extractId) {
                 const response = await fetch(`https://api.firecrawl.dev/v1/extract/${extractId}`, {
                     method: 'GET',
                     headers: {
-                        'Authorization': `Bearer ${serverRuntimeConfig.FIRECRAWL_API_KEY}`
+                        'Authorization': `Bearer ${FIRECRAWL_API_KEY}`
                     }
                 });
 
