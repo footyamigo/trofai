@@ -193,12 +193,24 @@ async function scrapeRightmoveProperty(propertyUrl) {
                         })
                     });
 
-                    if (!response.ok) {
-                        const errorData = await response.json().catch(() => ({}));
-                        throw new ScrapingError(`Firecrawl API error: ${response.status} - ${JSON.stringify(errorData)}`);
+                    // First get the response as text
+                    const responseText = await response.text();
+                    console.log('Raw API Response:', responseText);
+
+                    // Try to parse as JSON
+                    let jsonData;
+                    try {
+                        jsonData = JSON.parse(responseText);
+                    } catch (parseError) {
+                        console.error('Failed to parse response as JSON:', parseError);
+                        throw new ScrapingError(`Invalid JSON response: ${responseText.substring(0, 200)}...`);
                     }
 
-                    return response.json();
+                    if (!response.ok) {
+                        throw new ScrapingError(`Firecrawl API error: ${response.status} - ${JSON.stringify(jsonData || {})}`);
+                    }
+
+                    return jsonData;
                 });
 
                 console.log('Firecrawl API Response:', JSON.stringify(extractData, null, 2));
@@ -334,12 +346,22 @@ async function pollFirecrawlResults(extractId) {
                     }
                 });
 
-                if (!response.ok) {
-                    const errorText = await response.text().catch(() => 'Unknown error');
-                    throw new Error(`Failed to poll Firecrawl results: ${response.status} - ${errorText}`);
+                // First get the response as text
+                const responseText = await response.text();
+                console.log(`Poll attempt ${attempts} raw response:`, responseText);
+
+                // Try to parse as JSON
+                let data;
+                try {
+                    data = JSON.parse(responseText);
+                } catch (parseError) {
+                    console.error('Failed to parse polling response as JSON:', parseError);
+                    throw new Error(`Invalid JSON response from polling: ${responseText.substring(0, 200)}...`);
                 }
 
-                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(`Failed to poll Firecrawl results: ${response.status} - ${JSON.stringify(data)}`);
+                }
 
                 if (data.status === 'completed' && data.data) {
                     console.log('Firecrawl extraction completed!');
