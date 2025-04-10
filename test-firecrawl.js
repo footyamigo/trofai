@@ -2,7 +2,7 @@
 require('dotenv').config();
 
 // Import the Rightmove scraper directly
-const rightmoveScraper = require('./firecrawl-rightmove-scraper');
+const rightmoveScraper = require('./utils/firecrawl-rightmove-scraper');
 
 async function testFirecrawl() {
   const url = process.argv[2];

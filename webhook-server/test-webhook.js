@@ -3,7 +3,10 @@ const crypto = require('crypto');
 
 // Configuration
 const webhookUrl = 'http://localhost:3000/webhook';
-const webhookSecret = 'bb_wh_b8925dda9f9bcdd3988515e8a85d69';
+const webhookSecret = process.env.BANNERBEAR_WEBHOOK_SECRET;
+if (!webhookSecret) {
+    throw new Error('BANNERBEAR_WEBHOOK_SECRET environment variable is required');
+}
 
 // Function to sign the payload with the secret
 function generateSignature(payload, secret) {

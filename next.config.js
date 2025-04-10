@@ -23,7 +23,7 @@ const nextConfig = {
   serverRuntimeConfig: {
     // Will only be available on the server side
     FIRECRAWL_API_KEY: process.env.FIRECRAWL_API_KEY,
-    USE_FIRECRAWL: process.env.USE_FIRECRAWL || 'true',
+    USE_FIRECRAWL: process.env.USE_FIRECRAWL === 'true',
     BANNERBEAR_API_KEY: process.env.BANNERBEAR_API_KEY,
     BANNERBEAR_TEMPLATE_UID: process.env.BANNERBEAR_TEMPLATE_UID,
     BANNERBEAR_TEMPLATE_SET_UID: process.env.BANNERBEAR_TEMPLATE_SET_UID,
@@ -38,11 +38,14 @@ const nextConfig = {
   },
   publicRuntimeConfig: {
     // Will be available on both server and client
+    NEXT_PUBLIC_USE_FIRECRAWL: process.env.NEXT_PUBLIC_USE_FIRECRAWL === 'true',
+    NEXT_PUBLIC_BANNERBEAR_API_KEY: process.env.NEXT_PUBLIC_BANNERBEAR_API_KEY,
+    NEXT_PUBLIC_BANNERBEAR_TEMPLATE_UID: process.env.NEXT_PUBLIC_BANNERBEAR_TEMPLATE_UID,
+    NEXT_PUBLIC_BANNERBEAR_TEMPLATE_SET_UID: process.env.NEXT_PUBLIC_BANNERBEAR_TEMPLATE_SET_UID,
     BANNERBEAR_TEMPLATE_UID: process.env.BANNERBEAR_TEMPLATE_UID,
     BANNERBEAR_TEMPLATE_SET_UID: process.env.BANNERBEAR_TEMPLATE_SET_UID,
     S3_REGION: process.env.AWS_REGION || 'us-east-1',
     S3_BUCKET_NAME: process.env.S3_BUCKET_NAME || 'trofai',
-    USE_FIRECRAWL: process.env.USE_FIRECRAWL || 'true',
     FIRECRAWL_API_KEY: process.env.FIRECRAWL_API_KEY,
   },
 }
