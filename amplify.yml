@@ -5,14 +5,40 @@ applications:
         preBuild:
           commands:
             - npm ci
-            # Run environment check before build
-            - node scripts/check-env.js
+            # Create production environment file
+            - |
+              cat << EOF > .env.production
+              USE_FIRECRAWL=${USE_FIRECRAWL}
+              NODE_ENV=${NODE_ENV}
+              USE_FALLBACK=${USE_FALLBACK}
+              FIRECRAWL_API_KEY=${FIRECRAWL_API_KEY}
+              ROBORABBIT_API_KEY=${ROBORABBIT_API_KEY}
+              TASK_UID=${TASK_UID}
+              BANNERBEAR_API_KEY=${BANNERBEAR_API_KEY}
+              BANNERBEAR_TEMPLATE_UID=${BANNERBEAR_TEMPLATE_UID}
+              BANNERBEAR_WEBHOOK_URL=${BANNERBEAR_WEBHOOK_URL}
+              BANNERBEAR_WEBHOOK_SECRET=${BANNERBEAR_WEBHOOK_SECRET}
+              BANNERBEAR_TEMPLATE_SET_UID=${BANNERBEAR_TEMPLATE_SET_UID}
+              BANNERBEAR_PROJECT_ID=${BANNERBEAR_PROJECT_ID}
+              ACCESS_KEY_ID=${ACCESS_KEY_ID}
+              SECRET_ACCESS_KEY=${SECRET_ACCESS_KEY}
+              REGION=${REGION}
+              NEXT_PUBLIC_AWS_REGION=${NEXT_PUBLIC_AWS_REGION}
+              NEXT_PUBLIC_USER_POOL_ID=${NEXT_PUBLIC_USER_POOL_ID}
+              NEXT_PUBLIC_USER_POOL_WEB_CLIENT_ID=${NEXT_PUBLIC_USER_POOL_WEB_CLIENT_ID}
+              NEXT_PUBLIC_S3_BUCKET=${NEXT_PUBLIC_S3_BUCKET}
+              NEXT_PUBLIC_API_ENDPOINT=${NEXT_PUBLIC_API_ENDPOINT}
+              DYNAMODB_USERS_TABLE=${DYNAMODB_USERS_TABLE}
+              DYNAMODB_PROPERTIES_TABLE=${DYNAMODB_PROPERTIES_TABLE}
+              DYNAMODB_DESIGNS_TABLE=${DYNAMODB_DESIGNS_TABLE}
+              DYNAMODB_CAPTIONS_TABLE=${DYNAMODB_CAPTIONS_TABLE}
+              OPENAI_API_KEY=${OPENAI_API_KEY}
+              OPENAI_MODEL=${OPENAI_MODEL}
+              S3_BUCKET_NAME=${S3_BUCKET_NAME}
+              EOF
+            - cat .env.production
         build:
           commands:
-            - echo "NEXT_PUBLIC_AWS_REGION=$NEXT_PUBLIC_AWS_REGION" >> .env.production
-            - echo "NEXT_PUBLIC_USER_POOL_ID=$NEXT_PUBLIC_USER_POOL_ID" >> .env.production
-            - echo "NEXT_PUBLIC_USER_POOL_WEB_CLIENT_ID=$NEXT_PUBLIC_USER_POOL_WEB_CLIENT_ID" >> .env.production
-            - echo "NEXT_PUBLIC_S3_BUCKET=$NEXT_PUBLIC_S3_BUCKET" >> .env.production
             - npm run build
       artifacts:
         baseDirectory: .next
@@ -21,4 +47,5 @@ applications:
       cache:
         paths:
           - node_modules/**/*
+          - .next/cache/**/*
     appRoot: . 
