@@ -32,10 +32,17 @@ console.log('serverRuntimeConfig:', serverRuntimeConfig ? 'Present' : 'Missing')
 console.log('serverRuntimeConfig.FIRECRAWL_API_KEY:', serverRuntimeConfig?.FIRECRAWL_API_KEY ? 'Present' : 'Missing');
 
 // Try multiple sources for the API key
-const FIRECRAWL_API_KEY = serverRuntimeConfig?.FIRECRAWL_API_KEY || process.env.FIRECRAWL_API_KEY || process.env.NEXT_PUBLIC_FIRECRAWL_API_KEY;
+const FIRECRAWL_API_KEY = serverRuntimeConfig?.FIRECRAWL_API_KEY || 
+                         process.env.FIRECRAWL_API_KEY || 
+                         process.env.NEXT_PUBLIC_FIRECRAWL_API_KEY;
 
-// Log the final API key status
+// Log more detailed API key information
+console.log('API Key sources:');
+console.log('- serverRuntimeConfig?.FIRECRAWL_API_KEY:', serverRuntimeConfig?.FIRECRAWL_API_KEY ? 'Present' : 'Missing');
+console.log('- process.env.FIRECRAWL_API_KEY:', process.env.FIRECRAWL_API_KEY ? 'Present' : 'Missing');
+console.log('- process.env.NEXT_PUBLIC_FIRECRAWL_API_KEY:', process.env.NEXT_PUBLIC_FIRECRAWL_API_KEY ? 'Present' : 'Missing');
 console.log('Final FIRECRAWL_API_KEY status:', FIRECRAWL_API_KEY ? 'Found' : 'Missing');
+console.log('API Key prefix:', FIRECRAWL_API_KEY ? FIRECRAWL_API_KEY.substring(0, 5) : 'N/A');
 
 if (!FIRECRAWL_API_KEY) {
     console.error('FIRECRAWL_API_KEY is missing. Please ensure it is properly configured in environment variables.');
@@ -196,56 +203,68 @@ async function scrapeRightmoveProperty(propertyUrl) {
             try {
                 console.log(`Main extraction attempt ${mainAttempt}/3`);
                 console.log('Sending request to Firecrawl with prompt-only extraction');
+                console.log('Using API Key:', FIRECRAWL_API_KEY ? `${FIRECRAWL_API_KEY.substring(0, 5)}...` : 'Missing');
                 
-                const extractData = await retryWithBackoff(async () => {
-                    const response = await fetch('https://api.firecrawl.dev/v1/extract', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${FIRECRAWL_API_KEY}`
-                        },
-                        body: JSON.stringify({
-                            urls: [cleanUrl],
-                            prompt: prompt
-                        })
-                    });
+                const requestBody = {
+                    urls: [cleanUrl],
+                    prompt: prompt
+                };
+                console.log('Request body:', JSON.stringify(requestBody, null, 2));
+                
+                const requestOptions = {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${FIRECRAWL_API_KEY}`,
+                        'Accept': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody)
+                };
+                console.log('Request headers:', JSON.stringify(requestOptions.headers, null, 2));
 
-                    // First get the response as text
-                    const responseText = await response.text();
-                    console.log('Raw API Response:', responseText);
+                const response = await fetch('https://api.firecrawl.dev/v1/extract', requestOptions);
+                console.log('Response status:', response.status);
+                console.log('Response headers:', JSON.stringify(Object.fromEntries([...response.headers]), null, 2));
 
-                    // Try to parse as JSON
-                    let jsonData;
-                    try {
-                        jsonData = JSON.parse(responseText);
-                    } catch (parseError) {
-                        console.error('Failed to parse response as JSON:', parseError);
-                        throw new ScrapingError(`Invalid JSON response: ${responseText.substring(0, 200)}...`);
-                    }
+                // First get the response as text
+                const responseText = await response.text();
+                console.log('Raw API Response:', responseText);
 
-                    if (!response.ok) {
-                        throw new ScrapingError(`Firecrawl API error: ${response.status} - ${JSON.stringify(jsonData || {})}`);
-                    }
+                // If response starts with <!DOCTYPE> or <html>, it's an HTML response
+                if (responseText.trim().toLowerCase().startsWith('<!doctype') || 
+                    responseText.trim().toLowerCase().startsWith('<html')) {
+                    console.error('Received HTML response instead of JSON. This usually indicates an authentication error.');
+                    throw new Error('Authentication error: API returned HTML instead of JSON. Please check your API key.');
+                }
 
-                    return jsonData;
-                });
+                // Try to parse as JSON
+                let jsonData;
+                try {
+                    jsonData = JSON.parse(responseText);
+                } catch (parseError) {
+                    console.error('Failed to parse response as JSON:', parseError);
+                    throw new Error(`Invalid JSON response. Raw response: ${responseText.substring(0, 200)}...`);
+                }
 
-                console.log('Firecrawl API Response:', JSON.stringify(extractData, null, 2));
+                if (!response.ok) {
+                    const errorMessage = jsonData.error || jsonData.message || 'Unknown error';
+                    throw new Error(`Firecrawl API error (${response.status}): ${errorMessage}`);
+                }
 
                 // Check if the extraction was successful
-                if (!extractData.success) {
-                    throw new ScrapingError(`Error from Firecrawl: ${extractData.message || 'Unknown error'}`);
+                if (!jsonData.success) {
+                    throw new ScrapingError(`Error from Firecrawl: ${jsonData.message || 'Unknown error'}`);
                 }
 
                 // Check if we got an immediate response or need to poll
-                if (extractData.data && extractData.data.length > 0) {
+                if (jsonData.data && jsonData.data.length > 0) {
                     // Process immediate data response
                     console.log('Got immediate data response');
-                    return await processFirecrawlResults(extractData.data[0]);
-                } else if (extractData.id) {
+                    return await processFirecrawlResults(jsonData.data[0]);
+                } else if (jsonData.id) {
                     // If it's an async job, poll for results
-                    console.log(`Firecrawl extraction initiated with ID: ${extractData.id}`);
-                    const pollResult = await pollFirecrawlResults(extractData.id);
+                    console.log(`Firecrawl extraction initiated with ID: ${jsonData.id}`);
+                    const pollResult = await pollFirecrawlResults(jsonData.id);
                     
                     console.log('Poll result received:', JSON.stringify(pollResult, null, 2));
                     
@@ -356,16 +375,30 @@ async function pollFirecrawlResults(extractId) {
         let pollError = null;
         for (let retryAttempt = 0; retryAttempt < 3; retryAttempt++) {
             try {
-                const response = await fetch(`https://api.firecrawl.dev/v1/extract/${extractId}`, {
+                console.log(`Poll retry attempt ${retryAttempt + 1}/3`);
+                const requestOptions = {
                     method: 'GET',
                     headers: {
-                        'Authorization': `Bearer ${FIRECRAWL_API_KEY}`
+                        'Authorization': `Bearer ${FIRECRAWL_API_KEY}`,
+                        'Accept': 'application/json'
                     }
-                });
+                };
+                console.log('Poll request headers:', JSON.stringify(requestOptions.headers, null, 2));
+
+                const response = await fetch(`https://api.firecrawl.dev/v1/extract/${extractId}`, requestOptions);
+                console.log('Poll response status:', response.status);
+                console.log('Poll response headers:', JSON.stringify(Object.fromEntries([...response.headers]), null, 2));
 
                 // First get the response as text
                 const responseText = await response.text();
                 console.log(`Poll attempt ${attempts} raw response:`, responseText);
+
+                // Check for HTML response
+                if (responseText.trim().toLowerCase().startsWith('<!doctype') || 
+                    responseText.trim().toLowerCase().startsWith('<html')) {
+                    console.error('Received HTML response instead of JSON during polling. This usually indicates an authentication error.');
+                    throw new Error('Authentication error: API returned HTML instead of JSON during polling. Please check your API key.');
+                }
 
                 // Try to parse as JSON
                 let data;
@@ -373,11 +406,12 @@ async function pollFirecrawlResults(extractId) {
                     data = JSON.parse(responseText);
                 } catch (parseError) {
                     console.error('Failed to parse polling response as JSON:', parseError);
-                    throw new Error(`Invalid JSON response from polling: ${responseText.substring(0, 200)}...`);
+                    throw new Error(`Invalid JSON response from polling. Raw response: ${responseText.substring(0, 200)}...`);
                 }
 
                 if (!response.ok) {
-                    throw new Error(`Failed to poll Firecrawl results: ${response.status} - ${JSON.stringify(data)}`);
+                    const errorMessage = data.error || data.message || 'Unknown error';
+                    throw new Error(`Failed to poll Firecrawl results (${response.status}): ${errorMessage}`);
                 }
 
                 if (data.status === 'completed' && data.data) {
@@ -385,10 +419,11 @@ async function pollFirecrawlResults(extractId) {
                     console.log('Extracted data:', JSON.stringify(data.data, null, 2));
                     return data.data;
                 } else if (data.status === 'failed') {
-                    throw new ScrapingError('Firecrawl extraction failed: ' + JSON.stringify(data));
+                    throw new Error('Firecrawl extraction failed: ' + JSON.stringify(data));
                 }
 
                 // If still processing, continue to next poll attempt
+                console.log(`Status: ${data.status}, continuing polling...`);
                 break;
             } catch (error) {
                 pollError = error;

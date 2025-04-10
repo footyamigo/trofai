@@ -12,6 +12,7 @@ const nextConfig = {
     ],
   },
   env: {
+    NEXT_PUBLIC_FIRECRAWL_API_KEY: process.env.FIRECRAWL_API_KEY,
     FIRECRAWL_API_KEY: process.env.FIRECRAWL_API_KEY,
     USE_FIRECRAWL: process.env.USE_FIRECRAWL || 'true',
     BANNERBEAR_API_KEY: process.env.BANNERBEAR_API_KEY,
