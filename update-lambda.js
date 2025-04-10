@@ -6,8 +6,8 @@ const path = require('path');
 AWS.config.update({
   region: 'us-east-1',
   credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+    accessKeyId: 'AKIA5WUI3VMW4XKJCJOU',
+    secretAccessKey: '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'
   }
 });
 

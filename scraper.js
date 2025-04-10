@@ -5,23 +5,6 @@
 require('dotenv').config();
 const getConfig = require('next/config').default;
 
-// Create a detailed environment report to log
-const envReport = {
-  timestamp: new Date().toISOString(),
-  nodeEnv: process.env.NODE_ENV,
-  nodeVersion: process.version,
-  platform: process.platform,
-  arch: process.arch,
-  envVars: {
-    USE_FIRECRAWL: process.env.USE_FIRECRAWL || 'not set',
-    FIRECRAWL_API_KEY: process.env.FIRECRAWL_API_KEY ? 'Present (prefix: ' + process.env.FIRECRAWL_API_KEY.substring(0, 5) + '...)' : 'Missing',
-    NEXT_PUBLIC_FIRECRAWL_API_KEY: process.env.NEXT_PUBLIC_FIRECRAWL_API_KEY ? 'Present (prefix: ' + process.env.NEXT_PUBLIC_FIRECRAWL_API_KEY.substring(0, 5) + '...)' : 'Missing',
-    ROBORABBIT_API_KEY: process.env.ROBORABBIT_API_KEY ? 'Present' : 'Missing',
-  }
-};
-
-console.log('SCRAPER.JS ENVIRONMENT REPORT:', JSON.stringify(envReport, null, 2));
-
 // Import specialized scrapers
 const rightmoveScraper = require('./firecrawl-rightmove-scraper');
 const zillowScraper = require('./firecrawl-zillow-scraper');
@@ -32,40 +15,17 @@ console.log('Scraper modules loaded:', {
   zillow: typeof zillowScraper === 'object' ? `Found with ${Object.keys(zillowScraper).length} exports` : 'Not found'
 });
 
-// Log the exported functions from the rightmove scraper
-if (typeof rightmoveScraper === 'object') {
-  console.log('Rightmove scraper exports:', Object.keys(rightmoveScraper));
-  if (typeof rightmoveScraper.scrapeRightmoveProperty === 'function') {
-    console.log('scrapeRightmoveProperty is a function');
-  } else {
-    console.error('WARNING: scrapeRightmoveProperty is NOT a function!');
-  }
-}
-
 const { serverRuntimeConfig } = getConfig() || {
   serverRuntimeConfig: {
     USE_FIRECRAWL: process.env.USE_FIRECRAWL === 'true',
-    FIRECRAWL_API_KEY: process.env.FIRECRAWL_API_KEY || process.env.NEXT_PUBLIC_FIRECRAWL_API_KEY,
+    FIRECRAWL_API_KEY: process.env.FIRECRAWL_API_KEY,
     ROBORABBIT_API_KEY: process.env.ROBORABBIT_API_KEY
   }
 };
 
-// Log the serverRuntimeConfig for debugging
-console.log('serverRuntimeConfig from scraper.js:', 
-  serverRuntimeConfig ? {
-    USE_FIRECRAWL: serverRuntimeConfig.USE_FIRECRAWL,
-    FIRECRAWL_API_KEY: serverRuntimeConfig.FIRECRAWL_API_KEY ? 'Present (prefix: ' + serverRuntimeConfig.FIRECRAWL_API_KEY.substring(0, 5) + '...)' : 'Missing',
-    ROBORABBIT_API_KEY: serverRuntimeConfig.ROBORABBIT_API_KEY ? 'Present' : 'Missing'
-  } : 'Not available'
-);
-
 // Determine if we should use Firecrawl
 const useFirecrawl = serverRuntimeConfig.USE_FIRECRAWL === true 
                    || process.env.USE_FIRECRAWL === 'true';
-
-console.log('useFirecrawl decision:', useFirecrawl, 
-  '(serverRuntimeConfig.USE_FIRECRAWL =', serverRuntimeConfig.USE_FIRECRAWL, 
-  ', process.env.USE_FIRECRAWL =', process.env.USE_FIRECRAWL, ')');
 
 // URL pattern detection
 const RIGHTMOVE_URL_PATTERN = /^https:\/\/(?:www\.)?rightmove\.co\.uk\/properties\/\d+(?:#.*)?$/;
@@ -97,8 +57,6 @@ async function scrapeProperty(propertyUrl) {
   console.log(`Scraping property data from: ${propertyUrl}`);
   
   try {
-    console.log('SCRAPER.JS: Starting scrape of URL:', propertyUrl);
-    
     // Get the appropriate scraper for this URL
     const scraper = getScraper(propertyUrl);
     
