@@ -487,6 +487,8 @@ export default async function handler(req, res) {
           status: 'completed',
           address: propertyData.raw?.property?.address || '',
           price: propertyData.raw?.property?.price || '',
+          bedrooms: propertyData.raw?.property?.bedrooms || '',
+          bathrooms: propertyData.raw?.property?.bathrooms || '',
           templateId: templateSetToUse,
           // Store the complete Bannerbear response exactly as received
           bannerbear: bannerbearResponse
@@ -501,6 +503,10 @@ export default async function handler(req, res) {
           userId: userId,
           url: propertyUrl,
           data: propertyData.raw,
+          address: propertyData.raw?.property?.address || '',
+          price: propertyData.raw?.property?.price || '',
+          bedrooms: propertyData.raw?.property?.bedrooms || '',
+          bathrooms: propertyData.raw?.property?.bathrooms || '',
           createdAt: timestamp,
           updatedAt: timestamp
         }

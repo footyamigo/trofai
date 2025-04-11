@@ -47,7 +47,7 @@ export default function Home() {
 
       <main className="main">
         <div className="hero">
-          <h1 className="title">Make Your Listings Shine Online</h1>
+          <h1 className="title">Listing Designs That Get Results</h1>
           <p className="subtitle">
             Turn your property listings into scroll-stopping social media content in seconds.
           </p>

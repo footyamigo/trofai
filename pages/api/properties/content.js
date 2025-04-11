@@ -10,7 +10,8 @@ const dynamoDb = new DynamoDB.DocumentClient({
 
 const TABLES = {
   PROPERTY_CONTENT: 'trofai-property-content',
-  USERS: 'trofai-users'
+  USERS: 'trofai-users',
+  PROPERTIES: 'trofai-properties'
 };
 
 export default async function handler(req, res) {
@@ -22,8 +23,14 @@ export default async function handler(req, res) {
     // Get the property ID from the query
     const { propertyId } = req.query;
     if (!propertyId) {
-      return res.status(400).json({ error: 'Property ID is required' });
+      console.error('Property ID is missing in request query');
+      return res.status(400).json({ 
+        error: 'Property ID is required',
+        details: 'The propertyId parameter was not provided in the request'
+      });
     }
+
+    console.log('Fetching property content for ID:', propertyId);
 
     // Get the user from the session token
     const session = req.headers.authorization?.replace('Bearer ', '');
@@ -49,6 +56,7 @@ export default async function handler(req, res) {
     }
 
     const userId = userResponse.Items[0].userId;
+    console.log('Validated user ID:', userId);
 
     // Fetch the property content from DynamoDB
     const result = await dynamoDb.get({
@@ -59,8 +67,67 @@ export default async function handler(req, res) {
     }).promise();
 
     if (!result.Item) {
-      return res.status(404).json({ error: 'Property content not found' });
+      console.error('Property not found in PROPERTY_CONTENT table with ID:', propertyId);
+      
+      // Try to find it in the PROPERTIES table as fallback
+      const propertiesResult = await dynamoDb.query({
+        TableName: TABLES.PROPERTIES,
+        KeyConditionExpression: 'propertyId = :propertyId',
+        ExpressionAttributeValues: {
+          ':propertyId': propertyId
+        }
+      }).promise();
+      
+      if (!propertiesResult.Items || propertiesResult.Items.length === 0) {
+        return res.status(404).json({ 
+          error: 'Property content not found',
+          details: `No property found with ID: ${propertyId}`
+        });
+      }
+      
+      // We found it in the PROPERTIES table, use that data
+      const propertyItem = propertiesResult.Items[0];
+      
+      // Try to extract caption from the property data
+      let captionFromProperty = '';
+      if (propertyItem.caption) {
+        captionFromProperty = propertyItem.caption;
+      } else if (propertyItem.data && propertyItem.data.caption) {
+        captionFromProperty = propertyItem.data.caption;
+      } else if (propertyItem.data && propertyItem.data.raw && propertyItem.data.raw.caption) {
+        captionFromProperty = propertyItem.data.raw.caption;
+      }
+      
+      console.log('Found property in PROPERTIES table, caption available:', !!captionFromProperty);
+      
+      return res.status(200).json({
+        data: {
+          status: 'completed',
+          images: [],
+          bannerbear: {
+            uid: null,
+            status: 'completed',
+            template_set: null
+          },
+          caption: captionFromProperty,
+          captionOptions: {},
+          zip_url: null,
+          image_urls: {},
+          propertyData: {
+            property: {
+              ...propertyItem.data,
+              id: propertyItem.propertyId,
+              address: propertyItem.address || propertyItem.data?.property?.address || '',
+              price: propertyItem.price || propertyItem.data?.property?.price || '',
+              bedrooms: propertyItem.bedrooms || propertyItem.data?.property?.bedrooms || '',
+              bathrooms: propertyItem.bathrooms || propertyItem.data?.property?.bathrooms || ''
+            }
+          }
+        }
+      });
     }
+
+    console.log('Found property in database with keys:', Object.keys(result.Item));
 
     // Verify the user owns this property
     if (result.Item.userId !== userId) {
@@ -78,24 +145,50 @@ export default async function handler(req, res) {
       }
     }
 
-    // Return the property content
+    // Safely extract data with fallbacks for each field
+    const propertyData = result.Item.propertyData || {};
+    const bannerbear = result.Item.bannerbear || {};
+    const images = result.Item.images || [];
+    const status = result.Item.status || 'completed';
+    
+    // Get caption from all possible sources in the database
+    const caption = result.Item.caption || 
+                   propertyData.caption || 
+                   (propertyData.raw && propertyData.raw.caption) || 
+                   '';
+    
+    console.log('Caption sources available:', {
+      directCaption: !!result.Item.caption,
+      propertyDataCaption: !!propertyData.caption,
+      rawCaption: !!(propertyData.raw && propertyData.raw.caption)
+    });
+    
+    const captionOptions = result.Item.captionOptions || {};
+    const zipUrl = result.Item.zip_url || null;
+    const imageUrls = result.Item.image_urls || {};
+
+    // Return the property content with better structure and fallbacks
     return res.status(200).json({
       data: {
-        status: result.Item.status || 'completed',
-        images: result.Item.images || [],
+        status: status,
+        images: images,
         bannerbear: {
-          uid: result.Item.bannerbear?.uid || null,
-          status: result.Item.bannerbear?.status || 'completed',
-          template_set: result.Item.bannerbear?.template_set || null
+          uid: bannerbear.uid || null,
+          status: bannerbear.status || 'completed',
+          template_set: bannerbear.template_set || null
         },
-        caption: result.Item.caption || '',
-        captionOptions: result.Item.captionOptions || {},
-        zip_url: result.Item.zip_url || null,
-        image_urls: result.Item.image_urls || {},
+        caption: caption,
+        captionOptions: captionOptions,
+        zip_url: zipUrl,
+        image_urls: imageUrls,
         propertyData: {
           property: {
-            ...result.Item.propertyData,
-            id: result.Item.id
+            ...propertyData,
+            id: result.Item.id,
+            address: propertyData.property?.address || result.Item.address || '',
+            price: propertyData.property?.price || result.Item.price || '',
+            bedrooms: propertyData.property?.bedrooms || '',
+            bathrooms: propertyData.property?.bathrooms || ''
           }
         }
       }

@@ -5,9 +5,27 @@ import { BiChevronDown } from 'react-icons/bi';
 import { RiTeamLine } from 'react-icons/ri';
 import { useAuth } from '../../src/context/AuthContext';
 import Link from 'next/link';
+import React from 'react';
 
 export default function DashboardHeader() {
   const { user, loading, signOut } = useAuth();
+
+  // Add console logging to debug user object structure
+  React.useEffect(() => {
+    if (user) {
+      console.log('User object in header:', user);
+    }
+  }, [user]);
+
+  // Helper function to get the best display name for the user
+  const getUserDisplayName = () => {
+    if (!user) return 'User';
+    
+    return user.email || 
+           user.username || 
+           user.attributes?.email || 
+           (typeof user === 'string' ? user : 'User');
+  };
 
   const handleSignOut = async () => {
     try {
@@ -28,29 +46,13 @@ export default function DashboardHeader() {
       </div>
 
       <div className="right-section">
-        <button className="header-button">
-          <IoNotificationsOutline />
-        </button>
-
-        <button className="header-button credits">
-          <span>Get Free Credits</span>
-        </button>
-
-        <button className="header-button">
-          <FiHelpCircle />
-          <span>Help</span>
-        </button>
-
-        <button className="header-button">
-          <HiOutlineDocumentText />
-          <span>Docs</span>
-        </button>
-
         {loading ? (
           <div className="loading-auth">Loading...</div>
         ) : user ? (
           <div className="auth-container">
-            <span className="welcome-text">Welcome, {user.username}</span>
+            <span className="welcome-text">
+              Welcome, {getUserDisplayName()}
+            </span>
             <Link href="/profile">
               <button className="header-button profile">
                 <span>Profile</span>
@@ -62,10 +64,6 @@ export default function DashboardHeader() {
             </button>
           </div>
         ) : null}
-
-        <button className="header-button upgrade">
-          <span>Upgrade Plan</span>
-        </button>
       </div>
 
       <style jsx>{`

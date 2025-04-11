@@ -27,9 +27,12 @@ export default async function handler(req, res) {
     // Get the user from the session token
     const session = req.headers.authorization?.replace('Bearer ', '');
     if (!session) {
+      console.log('No session token provided');
       return res.status(401).json({ message: 'Unauthorized - No session provided' });
     }
 
+    console.log('Validating session token');
+    
     // Validate session with DynamoDB
     const userResponse = await dynamoDb.query({
       TableName: TABLES.USERS,
@@ -44,10 +47,14 @@ export default async function handler(req, res) {
     }).promise();
 
     if (!userResponse.Items || userResponse.Items.length === 0) {
+      console.log('Invalid session token - no user found');
       return res.status(401).json({ message: 'Unauthorized - Invalid session' });
     }
 
     const userId = userResponse.Items[0].userId;
+    const userEmail = userResponse.Items[0].email || userResponse.Items[0].username || 'Unknown';
+    
+    console.log(`Fetching properties for user: ${userEmail} (${userId})`);
 
     // Query properties by user ID
     const propertiesResponse = await dynamoDb.query({
@@ -60,27 +67,40 @@ export default async function handler(req, res) {
       ScanIndexForward: false // Get newest first
     }).promise();
 
+    // Check if properties were found and log the count
+    const propertyCount = propertiesResponse.Items ? propertiesResponse.Items.length : 0;
+    console.log(`Found ${propertyCount} properties for user ${userId}`);
+
     // Format the response
     const properties = propertiesResponse.Items.map(item => ({
       propertyId: item.propertyId,
       url: item.url,
-      address: item.data?.property?.address || 'Unknown Address',
-      price: item.data?.property?.price || 'Price not available',
+      address: item.address || item.data?.property?.address || 'Unknown Address',
+      price: item.price || item.data?.property?.price || 'Price not available',
+      bedrooms: item.bedrooms || item.data?.property?.bedrooms || '',
+      bathrooms: item.bathrooms || item.data?.property?.bathrooms || '',
       createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
       images: item.data?.property?.images || [],
       status: item.status || 'completed'
     }));
 
     return res.status(200).json({
       success: true,
-      properties
+      properties,
+      count: properties.length,
+      user: {
+        id: userId,
+        email: userEmail
+      }
     });
 
   } catch (error) {
     console.error('Error fetching properties:', error);
     return res.status(500).json({
       success: false,
-      message: error.message || 'Error fetching properties'
+      message: error.message || 'Error fetching properties',
+      error: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 } 

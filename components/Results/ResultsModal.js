@@ -26,9 +26,18 @@ export default function ResultsModal({ isOpen, onClose, results }) {
   // Initialize captions when results change
   useEffect(() => {
     if (results) {
+      console.log('Results in modal:', results);
+      console.log('Caption from results:', results.caption);
+      
+      // Make sure we check for empty strings too, not just null/undefined
+      const mainCaption = results.caption || '';
+      const altCaption = results.captionOptions?.alternative || '';
+      
+      console.log('Setting edited captions:', { main: mainCaption, alternative: altCaption });
+      
       setEditedCaptions({
-        main: results.caption || '',
-        alternative: results.captionOptions?.alternative || ''
+        main: mainCaption,
+        alternative: altCaption
       });
       setIsSaved(false);
     }
@@ -41,6 +50,9 @@ export default function ResultsModal({ isOpen, onClose, results }) {
   
   // Get the current caption based on selection or fallback
   const currentCaption = editedCaptions[selectedCaptionOption] || '';
+  
+  // Add debug log for current caption
+  console.log('Current rendered caption:', currentCaption);
   
   // Format template name
   const formatTemplateName = (templateName) => {

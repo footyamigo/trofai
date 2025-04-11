@@ -9,8 +9,13 @@ AWS.config.update({
   }
 });
 
-// Create Cognito Identity Service Provider client
-const cognitoISP = new AWS.CognitoIdentityServiceProvider();
+// Initialize DynamoDB
+const dynamoDb = new AWS.DynamoDB.DocumentClient();
+
+// Define tables
+const TABLES = {
+  USERS: 'trofai-users'
+};
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -27,17 +32,40 @@ export default async function handler(req, res) {
       });
     }
 
-    // For now, we'll just validate that the session exists
-    // In a production environment, you would want to store sessions in a database
-    // and validate them properly
+    console.log('Validating session token');
     
-    // Return a mock user for now
-    // In production, you would look up the user associated with this session
+    // Look up the user associated with this session in DynamoDB
+    const userResponse = await dynamoDb.query({
+      TableName: TABLES.USERS,
+      IndexName: 'SessionIndex',
+      KeyConditionExpression: '#sess = :session',
+      ExpressionAttributeNames: {
+        '#sess': 'session'
+      },
+      ExpressionAttributeValues: {
+        ':session': session
+      }
+    }).promise();
+
+    if (!userResponse.Items || userResponse.Items.length === 0) {
+      console.log('Invalid session - no matching user found');
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Invalid session token' 
+      });
+    }
+
+    const user = userResponse.Items[0];
+    console.log(`Session validated for user: ${user.email || user.username}`);
+    
+    // Return the actual user data
     return res.status(200).json({
-      username: 'user@example.com',
+      userId: user.userId,
+      username: user.username || user.email,
+      email: user.email || user.username,
       attributes: {
-        email: 'user@example.com',
-        name: 'Test User'
+        email: user.email || user.username,
+        name: user.fullName || user.name || 'User'
       }
     });
 

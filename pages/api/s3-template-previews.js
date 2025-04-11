@@ -74,11 +74,12 @@ export default async function handler(req, res) {
       });
     }
     
-    // Format response with complete URLs
+    // Format response with URLs that use our proxy API instead of direct S3 URLs
     const timestamp = Date.now(); // Add timestamp to prevent caching
     const templates = imageFiles.map((filename, index) => {
-      const url = `https://${S3_BUCKET_NAME}.s3.${S3_REGION}.amazonaws.com/${folderName}/${filename}?t=${timestamp}`;
-      console.log(`Generated URL for ${filename}: ${url}`);
+      // Use our proxy API for S3 images
+      const url = `/api/s3-image-proxy?folder=${folderName}&file=${filename}&t=${timestamp}`;
+      console.log(`Generated proxied URL for ${filename}: ${url}`);
       return {
         filename,
         name: `Design ${index + 1}`,
@@ -101,11 +102,11 @@ export default async function handler(req, res) {
     if (error.message.includes('AWS credentials') || error.code === 'CredentialsProviderError') {
       console.warn('Using fallback template previews due to missing AWS credentials');
       
-      // Fallback data for template sets
+      // Fallback data for template sets using our proxy for better error handling
       const fallbackTemplates = [
-        { filename: 'design_1.png', name: 'Design 1', url: `https://via.placeholder.com/300x200/FF5722/FFFFFF?text=${folderName}+Design+1` },
-        { filename: 'design_2.png', name: 'Design 2', url: `https://via.placeholder.com/300x200/FF5722/FFFFFF?text=${folderName}+Design+2` },
-        { filename: 'design_3.png', name: 'Design 3', url: `https://via.placeholder.com/300x200/FF5722/FFFFFF?text=${folderName}+Design+3` }
+        { filename: 'design_1.png', name: 'Design 1', url: `/api/s3-image-proxy?folder=${folderName}&file=design_1.png` },
+        { filename: 'design_2.png', name: 'Design 2', url: `/api/s3-image-proxy?folder=${folderName}&file=design_2.png` },
+        { filename: 'design_3.png', name: 'Design 3', url: `/api/s3-image-proxy?folder=${folderName}&file=design_3.png` }
       ];
       
       return res.status(200).json({
