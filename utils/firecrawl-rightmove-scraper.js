@@ -880,11 +880,11 @@ async function generateBannerbearImage(propertyData) {
 
 async function generateBannerbearCollection(propertyData, templateSetUid) {
     try {
-        // Get Bannerbear credentials from Parameter Store
+        // Get Bannerbear credentials from all possible sources
         const apiKey = await configService.getBannerbearApiKey();
-        const webhookUrl = await configService.getParameter('BANNERBEAR_WEBHOOK_URL');
-        const webhookSecret = await configService.getParameter('BANNERBEAR_WEBHOOK_SECRET');
-        const projectId = await configService.getParameter('BANNERBEAR_PROJECT_ID');
+        const webhookUrl = await configService.getBannerbearWebhookUrl();
+        const webhookSecret = await configService.getBannerbearWebhookSecret();
+        const projectId = await configService.getBannerbearProjectId();
 
         // Get all available property images
         const propertyImages = propertyData.raw.property.allImages;
@@ -919,11 +919,11 @@ async function generateBannerbearCollection(propertyData, templateSetUid) {
         ];
 
         // Add image modifications for each template
-        // We'll cycle through available images if we have more templates than images
         const imageModifications = [];
         for (let i = 0; i <= 23; i++) {
             const layerName = i === 0 ? "property_image" : `property_image${i}`;
-            const imageIndex = i % propertyImages.length; // Cycle through images if we run out
+            // Use modulo to cycle through available images
+            const imageIndex = i % propertyImages.length;
             
             imageModifications.push({
                 name: layerName,
@@ -935,11 +935,10 @@ async function generateBannerbearCollection(propertyData, templateSetUid) {
         const collectionPayload = {
             template_set: templateSetUid,
             modifications: [...baseModifications, ...imageModifications],
-            project_id: projectId || 'E56OLrMKYWnzwl3oQj',
+            project_id: projectId,
             metadata: {
                 source: "rightmove",
                 scraped_at: new Date().toISOString(),
-                propertyId: propertyData.raw.property.id,
                 total_images: propertyImages.length
             }
         };

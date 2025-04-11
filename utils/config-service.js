@@ -96,7 +96,159 @@ class ConfigService {
     }
 
     async getBannerbearApiKey() {
-        return await this.getParameter('BANNERBEAR_API_KEY');
+        try {
+            // Try multiple sources in order of preference
+            const sources = [
+                // 1. Try AWS Parameter Store
+                async () => await this.getParameter('BANNERBEAR_API_KEY'),
+                // 2. Try Next.js Runtime Config
+                async () => {
+                    const { serverRuntimeConfig } = getConfig() || {};
+                    return serverRuntimeConfig?.BANNERBEAR_API_KEY;
+                },
+                // 3. Try Environment Variables
+                async () => process.env.BANNERBEAR_API_KEY,
+                // 4. Try Public Environment Variables (not recommended for sensitive data)
+                async () => process.env.NEXT_PUBLIC_BANNERBEAR_API_KEY
+            ];
+
+            for (const getSource of sources) {
+                try {
+                    const value = await getSource();
+                    if (value) {
+                        console.log('Found Bannerbear API key from source');
+                        return value;
+                    }
+                } catch (error) {
+                    console.warn('Failed to get Bannerbear API key from source:', error.message);
+                }
+            }
+
+            throw new Error('BANNERBEAR_API_KEY not found in any configuration source');
+        } catch (error) {
+            console.error('Failed to retrieve Bannerbear API key:', error);
+            throw error;
+        }
+    }
+
+    async getBannerbearProjectId() {
+        try {
+            const sources = [
+                async () => await this.getParameter('BANNERBEAR_PROJECT_ID'),
+                async () => {
+                    const { serverRuntimeConfig } = getConfig() || {};
+                    return serverRuntimeConfig?.BANNERBEAR_PROJECT_ID;
+                },
+                async () => process.env.BANNERBEAR_PROJECT_ID
+            ];
+
+            for (const getSource of sources) {
+                try {
+                    const value = await getSource();
+                    if (value) {
+                        console.log('Found Bannerbear Project ID from source');
+                        return value;
+                    }
+                } catch (error) {
+                    console.warn('Failed to get Bannerbear Project ID from source:', error.message);
+                }
+            }
+
+            throw new Error('BANNERBEAR_PROJECT_ID not found in any configuration source');
+        } catch (error) {
+            console.error('Failed to retrieve Bannerbear Project ID:', error);
+            throw error;
+        }
+    }
+
+    async getBannerbearTemplateSetUid() {
+        try {
+            const sources = [
+                async () => await this.getParameter('BANNERBEAR_TEMPLATE_SET_UID'),
+                async () => {
+                    const { serverRuntimeConfig } = getConfig() || {};
+                    return serverRuntimeConfig?.BANNERBEAR_TEMPLATE_SET_UID;
+                },
+                async () => process.env.BANNERBEAR_TEMPLATE_SET_UID
+            ];
+
+            for (const getSource of sources) {
+                try {
+                    const value = await getSource();
+                    if (value) {
+                        console.log('Found Bannerbear Template Set UID from source');
+                        return value;
+                    }
+                } catch (error) {
+                    console.warn('Failed to get Bannerbear Template Set UID from source:', error.message);
+                }
+            }
+
+            throw new Error('BANNERBEAR_TEMPLATE_SET_UID not found in any configuration source');
+        } catch (error) {
+            console.error('Failed to retrieve Bannerbear Template Set UID:', error);
+            throw error;
+        }
+    }
+
+    async getBannerbearWebhookUrl() {
+        try {
+            const sources = [
+                async () => await this.getParameter('BANNERBEAR_WEBHOOK_URL'),
+                async () => {
+                    const { serverRuntimeConfig } = getConfig() || {};
+                    return serverRuntimeConfig?.BANNERBEAR_WEBHOOK_URL;
+                },
+                async () => process.env.BANNERBEAR_WEBHOOK_URL
+            ];
+
+            for (const getSource of sources) {
+                try {
+                    const value = await getSource();
+                    if (value) {
+                        console.log('Found Bannerbear Webhook URL from source');
+                        return value;
+                    }
+                } catch (error) {
+                    console.warn('Failed to get Bannerbear Webhook URL from source:', error.message);
+                }
+            }
+
+            throw new Error('BANNERBEAR_WEBHOOK_URL not found in any configuration source');
+        } catch (error) {
+            console.error('Failed to retrieve Bannerbear Webhook URL:', error);
+            throw error;
+        }
+    }
+
+    async getBannerbearWebhookSecret() {
+        try {
+            const sources = [
+                async () => await this.getParameter('BANNERBEAR_WEBHOOK_SECRET'),
+                async () => {
+                    const { serverRuntimeConfig } = getConfig() || {};
+                    return serverRuntimeConfig?.BANNERBEAR_WEBHOOK_SECRET;
+                },
+                async () => process.env.BANNERBEAR_WEBHOOK_SECRET
+            ];
+
+            for (const getSource of sources) {
+                try {
+                    const value = await getSource();
+                    if (value) {
+                        console.log('Found Bannerbear Webhook Secret from source');
+                        return value;
+                    }
+                } catch (error) {
+                    console.warn('Failed to get Bannerbear Webhook Secret from source:', error.message);
+                }
+            }
+
+            throw new Error('BANNERBEAR_WEBHOOK_SECRET not found in any configuration source');
+        } catch (error) {
+            console.error('Failed to retrieve Bannerbear Webhook Secret:', error);
+            throw error;
+        }
     }
 
     async getAwsCredentials() {
