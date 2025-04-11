@@ -5,38 +5,74 @@ applications:
         preBuild:
           commands:
             - npm ci
+            # Debug environment variables (excluding sensitive ones)
+            - |
+              echo "Checking environment variables..."
+              env | grep -v -e KEY -e SECRET | sort
             # Create production environment file
             - |
               cat << EOF > .env.production
-              USE_FIRECRAWL=${USE_FIRECRAWL}
-              NODE_ENV=${NODE_ENV}
-              USE_FALLBACK=${USE_FALLBACK}
+              # Build Environment
+              NODE_ENV=production
+              USE_FIRECRAWL=true
+              USE_FALLBACK=false
+
+              # API Keys
               FIRECRAWL_API_KEY=${FIRECRAWL_API_KEY}
               ROBORABBIT_API_KEY=${ROBORABBIT_API_KEY}
               TASK_UID=${TASK_UID}
+
+              # Bannerbear Configuration
               BANNERBEAR_API_KEY=${BANNERBEAR_API_KEY}
               BANNERBEAR_TEMPLATE_UID=${BANNERBEAR_TEMPLATE_UID}
               BANNERBEAR_WEBHOOK_URL=${BANNERBEAR_WEBHOOK_URL}
               BANNERBEAR_WEBHOOK_SECRET=${BANNERBEAR_WEBHOOK_SECRET}
               BANNERBEAR_TEMPLATE_SET_UID=${BANNERBEAR_TEMPLATE_SET_UID}
               BANNERBEAR_PROJECT_ID=${BANNERBEAR_PROJECT_ID}
+
+              # AWS Configuration
               ACCESS_KEY_ID=${ACCESS_KEY_ID}
               SECRET_ACCESS_KEY=${SECRET_ACCESS_KEY}
               REGION=${REGION}
-              NEXT_PUBLIC_AWS_REGION=${NEXT_PUBLIC_AWS_REGION}
+              NEXT_PUBLIC_AWS_REGION=${REGION}
               NEXT_PUBLIC_USER_POOL_ID=${NEXT_PUBLIC_USER_POOL_ID}
               NEXT_PUBLIC_USER_POOL_WEB_CLIENT_ID=${NEXT_PUBLIC_USER_POOL_WEB_CLIENT_ID}
               NEXT_PUBLIC_S3_BUCKET=${NEXT_PUBLIC_S3_BUCKET}
-              NEXT_PUBLIC_API_ENDPOINT=${NEXT_PUBLIC_API_ENDPOINT}
-              DYNAMODB_USERS_TABLE=${DYNAMODB_USERS_TABLE}
-              DYNAMODB_PROPERTIES_TABLE=${DYNAMODB_PROPERTIES_TABLE}
-              DYNAMODB_DESIGNS_TABLE=${DYNAMODB_DESIGNS_TABLE}
-              DYNAMODB_CAPTIONS_TABLE=${DYNAMODB_CAPTIONS_TABLE}
+              S3_BUCKET_NAME=${NEXT_PUBLIC_S3_BUCKET}
+
+              # DynamoDB Tables
+              DYNAMODB_USERS_TABLE=${DYNAMODB_USERS_TABLE:-trofai-users}
+              DYNAMODB_PROPERTIES_TABLE=${DYNAMODB_PROPERTIES_TABLE:-trofai-properties}
+              DYNAMODB_DESIGNS_TABLE=${DYNAMODB_DESIGNS_TABLE:-trofai-designs}
+              DYNAMODB_CAPTIONS_TABLE=${DYNAMODB_CAPTIONS_TABLE:-trofai-captions}
+
+              # OpenAI Configuration
               OPENAI_API_KEY=${OPENAI_API_KEY}
-              OPENAI_MODEL=${OPENAI_MODEL}
-              S3_BUCKET_NAME=${S3_BUCKET_NAME}
+              OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o-mini}
+
+              # API Configuration - Using relative path in production
+              NEXT_PUBLIC_API_ENDPOINT=/api
               EOF
-            - cat .env.production
+            # Debug .env.production (excluding sensitive data)
+            - cat .env.production | grep -v -e KEY -e SECRET
+            # Verify key environment variables are set
+            - |
+              echo "Verifying required environment variables..."
+              required_vars=(
+                "FIRECRAWL_API_KEY"
+                "ACCESS_KEY_ID"
+                "SECRET_ACCESS_KEY"
+                "REGION"
+                "NEXT_PUBLIC_S3_BUCKET"
+              )
+              for var in "${required_vars[@]}"; do
+                if [ -z "${!var}" ]; then
+                  echo "Error: Required environment variable $var is not set"
+                  exit 1
+                else
+                  echo "$var is set"
+                fi
+              done
         build:
           commands:
             - npm run build
