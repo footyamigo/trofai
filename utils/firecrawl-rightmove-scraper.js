@@ -880,17 +880,57 @@ async function generateBannerbearImage(propertyData) {
 
 async function generateBannerbearCollection(propertyData, templateSetUid) {
     try {
-        // Get Bannerbear credentials from all possible sources
-        const apiKey = await configService.getBannerbearApiKey();
-        const webhookUrl = await configService.getBannerbearWebhookUrl();
-        const webhookSecret = await configService.getBannerbearWebhookSecret();
-        const projectId = await configService.getBannerbearProjectId();
+        console.log('Starting Bannerbear collection generation with template set:', templateSetUid);
+        console.log('Environment check:', {
+            USE_FIRECRAWL: process.env.USE_FIRECRAWL,
+            BANNERBEAR_TEMPLATE_SET_UID: process.env.BANNERBEAR_TEMPLATE_SET_UID ? 'Set' : 'Not set',
+            BANNERBEAR_PROJECT_ID: process.env.BANNERBEAR_PROJECT_ID ? 'Set' : 'Not set'
+        });
 
-        // Get all available property images
-        const propertyImages = propertyData.raw.property.allImages;
-        console.log('Available property images:', propertyImages.length);
+        // Get Bannerbear credentials with more detailed logging
+        let apiKey;
+        try {
+            apiKey = await configService.getBannerbearApiKey();
+            console.log('Successfully retrieved Bannerbear API key');
+        } catch (error) {
+            console.error('Failed to get Bannerbear API key:', error.message);
+            throw new Error(`Bannerbear API key retrieval failed: ${error.message}`);
+        }
 
-        // Create base modifications for common fields
+        // Get webhook configuration with more detailed logging
+        let webhookUrl, webhookSecret, projectId;
+        try {
+            webhookUrl = await configService.getParameter('BANNERBEAR_WEBHOOK_URL');
+            console.log('Webhook URL:', webhookUrl ? 'Retrieved' : 'Not found');
+        } catch (error) {
+            console.warn('Failed to get Bannerbear webhook URL:', error.message);
+        }
+
+        try {
+            webhookSecret = await configService.getParameter('BANNERBEAR_WEBHOOK_SECRET');
+            console.log('Webhook secret:', webhookSecret ? 'Retrieved' : 'Not found');
+        } catch (error) {
+            console.warn('Failed to get Bannerbear webhook secret:', error.message);
+        }
+
+        try {
+            projectId = await configService.getParameter('BANNERBEAR_PROJECT_ID');
+            console.log('Project ID:', projectId ? 'Retrieved' : 'Not found');
+        } catch (error) {
+            console.warn('Failed to get Bannerbear project ID:', error.message);
+            // Fallback to hardcoded value if not found
+            projectId = 'E56OLrMKYWnzwl3oQj';
+            console.log('Using fallback project ID:', projectId);
+        }
+
+        // Verify we have the required property images
+        const propertyImages = propertyData.raw.property.images || [];
+        if (!propertyImages.length) {
+            throw new Error('No property images found in the data');
+        }
+        console.log(`Found ${propertyImages.length} property images for Bannerbear collection`);
+
+        // Build the common base modifications
         const baseModifications = [
             {
                 name: "property_price",
@@ -935,10 +975,12 @@ async function generateBannerbearCollection(propertyData, templateSetUid) {
         const collectionPayload = {
             template_set: templateSetUid,
             modifications: [...baseModifications, ...imageModifications],
-            project_id: projectId,
+            project_id: projectId || 'E56OLrMKYWnzwl3oQj',
             metadata: {
                 source: "rightmove",
                 scraped_at: new Date().toISOString(),
+                property_id: propertyData.raw.property.id,
+                propertyId: propertyData.raw.property.id,
                 total_images: propertyImages.length
             }
         };
@@ -946,12 +988,20 @@ async function generateBannerbearCollection(propertyData, templateSetUid) {
         // Add webhook configuration if available
         if (webhookUrl) {
             collectionPayload.webhook_url = webhookUrl;
-            collectionPayload.webhook_headers = {
-                'Authorization': `Bearer ${webhookSecret}`
-            };
+            if (webhookSecret) {
+                collectionPayload.webhook_headers = {
+                    'Authorization': `Bearer ${webhookSecret}`
+                };
+            }
         }
 
-        console.log('Sending Bannerbear collection request with payload:', JSON.stringify(collectionPayload, null, 2));
+        console.log('Sending Bannerbear collection request with payload:', JSON.stringify({
+            ...collectionPayload,
+            modifications: `[${collectionPayload.modifications.length} modifications]` // Truncate for logging
+        }, null, 2));
+
+        console.log('Bannerbear API URL:', 'https://api.bannerbear.com/v2/collections');
+        console.log('Using API key starting with:', apiKey ? apiKey.substring(0, 6) + '...' : 'undefined');
 
         const response = await fetch('https://api.bannerbear.com/v2/collections', {
             method: 'POST',
@@ -962,14 +1012,43 @@ async function generateBannerbearCollection(propertyData, templateSetUid) {
             body: JSON.stringify(collectionPayload)
         });
 
+        // Full response logging
+        const responseStatus = response.status;
+        const responseHeaders = Object.fromEntries(response.headers.entries());
+        console.log('Bannerbear API response status:', responseStatus);
+        console.log('Bannerbear API response headers:', responseHeaders);
+
+        // Handle unsuccessful response
         if (!response.ok) {
-            const error = await response.json();
-            console.error('Bannerbear Collection API Error:', error);
-            throw new Error(`Bannerbear Collection API error: ${response.status} - ${response.statusText}`);
+            let errorText;
+            try {
+                errorText = await response.text();
+                console.error('Bannerbear API Error Response:', errorText);
+            } catch (e) {
+                errorText = `Failed to read error response: ${e.message}`;
+            }
+            
+            console.error('Bannerbear Collection API Error:', {
+                status: response.status,
+                statusText: response.statusText,
+                text: errorText
+            });
+            
+            throw new Error(`Bannerbear Collection API error: ${response.status} - ${response.statusText} - ${errorText}`);
         }
 
-        const result = await response.json();
-        console.log('Bannerbear collection generation initiated:', result);
+        // Parse successful response
+        let result;
+        try {
+            result = await response.json();
+        } catch (e) {
+            const rawText = await response.text();
+            console.error('Failed to parse Bannerbear response JSON:', e.message);
+            console.error('Raw response text:', rawText);
+            throw new Error(`Invalid JSON in Bannerbear response: ${e.message}`);
+        }
+
+        console.log('Bannerbear collection generation initiated:', JSON.stringify(result, null, 2));
 
         // Return collection info for tracking
         return {
@@ -979,7 +1058,7 @@ async function generateBannerbearCollection(propertyData, templateSetUid) {
             template_set: templateSetUid
         };
     } catch (error) {
-        console.error('Error generating Bannerbear collection:', error);
+        console.error('Error in generateBannerbearCollection:', error);
         throw error;
     }
 }
