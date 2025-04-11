@@ -5,6 +5,15 @@ import { Readable } from 'stream';
 const S3_BUCKET_NAME = process.env.S3_BUCKET_NAME || "trofai";
 const S3_REGION = process.env.AWS_REGION || "us-east-1";
 
+// Log configuration on startup
+console.log('S3 Image Proxy Config:', {
+  bucketName: S3_BUCKET_NAME,
+  region: S3_REGION,
+  hasAccessKeyId: !!process.env.AWS_ACCESS_KEY_ID,
+  hasSecretAccessKey: !!process.env.AWS_SECRET_ACCESS_KEY,
+  environment: process.env.NODE_ENV
+});
+
 // Initialize S3 client
 const s3Client = new S3Client({
   region: S3_REGION,
@@ -30,6 +39,10 @@ async function streamToResponse(stream, res) {
 }
 
 export default async function handler(req, res) {
+  // Set CORS headers for all responses
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET');
+  
   // Only allow GET requests
   if (req.method !== 'GET') {
     return res.status(405).json({ message: 'Method not allowed' });
@@ -39,11 +52,23 @@ export default async function handler(req, res) {
   const { folder, file } = req.query;
 
   if (!folder || !file) {
+    console.warn('Missing parameters:', { folder, file });
     return res.status(400).json({ message: 'Both folder and file parameters are required' });
   }
 
   // Construct the S3 key (path to the file in S3)
   const key = `${folder}/${file}`;
+  
+  // Log request details
+  const requestInfo = {
+    key,
+    bucket: S3_BUCKET_NAME,
+    requestHost: req.headers.host,
+    referer: req.headers.referer || 'none',
+    userAgent: req.headers['user-agent'] || 'none',
+    timestamp: new Date().toISOString()
+  };
+  console.log('Image proxy request:', requestInfo);
   
   try {
     console.log(`Fetching S3 image: ${key} from bucket ${S3_BUCKET_NAME}`);
@@ -73,20 +98,31 @@ export default async function handler(req, res) {
     // If the object has a body that's a Readable stream, pipe it to the response
     if (response.Body instanceof Readable) {
       await streamToResponse(response.Body, res);
+      console.log(`Successfully streamed S3 image: ${key}`);
     } else {
       // For other body types (like Uint8Array), convert to a buffer and send
       const buffer = await response.Body.transformToByteArray();
       res.send(Buffer.from(buffer));
+      console.log(`Successfully sent S3 image as buffer: ${key}`);
     }
 
   } catch (error) {
-    console.error('Error fetching S3 image:', error);
+    console.error('Error fetching S3 image:', error.message);
+    console.error('Error details:', {
+      errorName: error.name,
+      errorCode: error.code,
+      errorStack: error.stack,
+      requestKey: key,
+      requestBucket: S3_BUCKET_NAME
+    });
     
     if (error.name === 'NoSuchKey' || error.name === 'NotFound') {
       // Redirect to a placeholder image if the file doesn't exist
+      console.log(`Image not found in S3: ${key} - serving placeholder`);
       res.redirect(`https://via.placeholder.com/300x200/FF5722/FFFFFF?text=Not+Found:+${folder}+${file.split('.')[0]}`);
     } else {
       // For other errors, return an error response or a placeholder
+      console.log(`Error retrieving image from S3: ${error.message} - serving error placeholder`);
       res.redirect(`https://via.placeholder.com/300x200/FF5722/FFFFFF?text=Error:+${folder}+${file.split('.')[0]}`);
     }
   }
