@@ -369,4 +369,4 @@ export default function ImageDisplay({ bannerbear, isCollection, propertyId }) {
       `}</style>
     </div>
   );
-} // TODO: Add more comments
+} 

@@ -14,35 +14,16 @@ try {
     console.log('FirecrawlApp package not available, will use fetch API approach');
 }
 
-// Load configuration with better error handling
-let serverRuntimeConfig;
-try {
-    const nextConfig = getConfig();
-    if (nextConfig && nextConfig.serverRuntimeConfig) {
-        console.log('Successfully loaded Next.js configuration');
-        serverRuntimeConfig = nextConfig.serverRuntimeConfig;
-    } else {
-        console.log('Next.js configuration not available, falling back to environment variables');
-        throw new Error('Next.js config not available');
-    }
-} catch (error) {
-    console.log('Using environment variables for configuration');
-    serverRuntimeConfig = {
-        FIRECRAWL_API_KEY: process.env.FIRECRAWL_API_KEY,
-        BANNERBEAR_API_KEY: process.env.BANNERBEAR_API_KEY,
-        BANNERBEAR_TEMPLATE_UID: process.env.BANNERBEAR_TEMPLATE_UID,
-        BANNERBEAR_TEMPLATE_SET_UID: process.env.BANNERBEAR_TEMPLATE_SET_UID,
-        BANNERBEAR_WEBHOOK_URL: process.env.BANNERBEAR_WEBHOOK_URL,
-        BANNERBEAR_WEBHOOK_SECRET: process.env.BANNERBEAR_WEBHOOK_SECRET,
-    };
-}
-
-// Validate required configuration
-if (!serverRuntimeConfig.FIRECRAWL_API_KEY) {
-    throw new Error('FIRECRAWL_API_KEY is required but not found in configuration');
-}
-
-console.log('Configuration loaded with API key:', serverRuntimeConfig.FIRECRAWL_API_KEY ? 'Present' : 'Missing');
+const { serverRuntimeConfig } = getConfig() || {
+  serverRuntimeConfig: {
+    FIRECRAWL_API_KEY: process.env.FIRECRAWL_API_KEY,
+    BANNERBEAR_API_KEY: process.env.BANNERBEAR_API_KEY,
+    BANNERBEAR_TEMPLATE_UID: process.env.BANNERBEAR_TEMPLATE_UID,
+    BANNERBEAR_TEMPLATE_SET_UID: process.env.BANNERBEAR_TEMPLATE_SET_UID,
+    BANNERBEAR_WEBHOOK_URL: process.env.BANNERBEAR_WEBHOOK_URL,
+    BANNERBEAR_WEBHOOK_SECRET: process.env.BANNERBEAR_WEBHOOK_SECRET,
+  }
+};
 
 // Constants
 const MAX_RETRY_ATTEMPTS = 6;
@@ -90,27 +71,6 @@ const BANNERBEAR_TEMPLATE_CONFIG = {
         render_pdf: false
     }
 };
-
-function getFirecrawlApiKey() {
-    // Try different ways to get the API key
-    const key = 
-        (serverRuntimeConfig && serverRuntimeConfig.FIRECRAWL_API_KEY) ||
-        process.env.FIRECRAWL_API_KEY ||
-        process.env.NEXT_PUBLIC_FIRECRAWL_API_KEY;
-    
-    console.log('API Key status:', {
-        fromServerConfig: !!serverRuntimeConfig?.FIRECRAWL_API_KEY,
-        fromEnv: !!process.env.FIRECRAWL_API_KEY,
-        fromPublicEnv: !!process.env.NEXT_PUBLIC_FIRECRAWL_API_KEY,
-        finalKeyExists: !!key
-    });
-
-    if (!key) {
-        throw new Error('FIRECRAWL_API_KEY is not available in any configuration');
-    }
-
-    return key;
-}
 
 function validateRightmoveUrl(url) {
     if (!url) {
@@ -198,14 +158,10 @@ async function scrapeRightmoveProperty(propertyUrl) {
     console.log(`Starting scrape for: ${propertyUrl}`);
 
     try {
-        // Get the API key first
-        const apiKey = getFirecrawlApiKey();
-        console.log('Successfully retrieved Firecrawl API key');
-
         // First try using the FirecrawlApp package if available
         if (FirecrawlApp) {
             try {
-                return await scrapeWithFirecrawlPackage(propertyUrl, apiKey);
+                return await scrapeWithFirecrawlPackage(propertyUrl);
             } catch (packageError) {
                 console.warn('Failed to use FirecrawlApp package, falling back to direct API:', packageError.message);
             }
@@ -225,36 +181,24 @@ async function scrapeRightmoveProperty(propertyUrl) {
                 console.log('Sending request to Firecrawl with prompt-only extraction');
                 
                 const extractData = await retryWithBackoff(async () => {
-                    console.log('Making API request to Firecrawl with URL:', cleanUrl);
-                    const requestBody = {
-                        urls: [cleanUrl],
-                        prompt: prompt
-                    };
-                    console.log('Request body:', JSON.stringify(requestBody));
-                    
                     const response = await fetch('https://api.firecrawl.dev/v1/extract', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${apiKey}`
+                            'Authorization': `Bearer ${serverRuntimeConfig.FIRECRAWL_API_KEY}`
                         },
-                        body: JSON.stringify(requestBody)
+                        body: JSON.stringify({
+                            urls: [cleanUrl],
+                            prompt: prompt
+                        })
                     });
 
                     if (!response.ok) {
-                        const responseText = await response.text();
-                        console.error('Firecrawl API error response:', responseText);
-                        try {
-                            const errorData = JSON.parse(responseText);
-                            throw new ScrapingError(`Firecrawl API error: ${response.status} - ${JSON.stringify(errorData)}`);
-                        } catch (e) {
-                            throw new ScrapingError(`Firecrawl API error: ${response.status} - Non-JSON response: ${responseText}`);
-                        }
+                        const errorData = await response.json().catch(() => ({}));
+                        throw new ScrapingError(`Firecrawl API error: ${response.status} - ${JSON.stringify(errorData)}`);
                     }
 
-                    const jsonResponse = await response.json();
-                    console.log('Firecrawl API Response:', JSON.stringify(jsonResponse, null, 2));
-                    return jsonResponse;
+                    return response.json();
                 });
 
                 console.log('Firecrawl API Response:', JSON.stringify(extractData, null, 2));
@@ -330,7 +274,7 @@ async function scrapeRightmoveProperty(propertyUrl) {
  * Scrape Rightmove property data using the FirecrawlApp package
  * This uses the approach shown in the Firecrawl documentation
  */
-async function scrapeWithFirecrawlPackage(propertyUrl, apiKey) {
+async function scrapeWithFirecrawlPackage(propertyUrl) {
     if (!FirecrawlApp) {
         throw new Error('FirecrawlApp package not available');
     }
@@ -342,7 +286,7 @@ async function scrapeWithFirecrawlPackage(propertyUrl, apiKey) {
     try {
         // Initialize the Firecrawl client
         const app = new FirecrawlApp({
-            apiKey: apiKey
+            apiKey: serverRuntimeConfig.FIRECRAWL_API_KEY
         });
 
         // Define the extraction prompt

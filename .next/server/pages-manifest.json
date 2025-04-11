@@ -1,9 +1,1 @@
-{
-  "/_app": "pages/_app.js",
-  "/_error": "pages/_error.js",
-  "/_document": "pages/_document.js",
-  "/dashboard": "pages/dashboard.js",
-  "/api/auth/validate-session": "pages/api/auth/validate-session.js",
-  "/api/properties/list": "pages/api/properties/list.js",
-  "/api/s3-template-previews": "pages/api/s3-template-previews.js"
-}
+{}

@@ -2,9 +2,8 @@
 
 require('dotenv').config();
 const fetch = require('node-fetch');
-const { generatePropertyCaptions, CAPTION_TYPES } = require('../caption-generator');
+const { generatePropertyCaptions, CAPTION_TYPES } = require('./caption-generator');
 const getConfig = require('next/config').default;
-const configService = require('./config-service');
 
 // Import FirecrawlApp from the package if it exists, otherwise continue with fetch
 let FirecrawlApp;
@@ -179,67 +178,52 @@ async function retryWithBackoff(fn, maxAttempts = MAX_RETRY_ATTEMPTS) {
     throw lastError;
 }
 
-async function getFirecrawlApiKey() {
-    try {
-        const key = await configService.getFirecrawlApiKey();
-        console.log('API Key status:', {
-            keyExists: !!key,
-            keyPrefix: key ? key.substring(0, 5) : 'N/A'
-        });
-        return key;
-    } catch (error) {
-        console.error('Failed to retrieve Firecrawl API key:', error);
-        throw error;
-    }
-}
-
 async function scrapeRightmoveProperty(propertyUrl) {
     console.log(`Starting scrape for: ${propertyUrl}`);
 
-    try {
-        // Get the API key first
-        const apiKey = await getFirecrawlApiKey();
-        console.log('Successfully retrieved Firecrawl API key');
-
-        // Create a detailed environment report
-        const envReport = {
-            timestamp: new Date().toISOString(),
-            nodeEnv: process.env.NODE_ENV,
-            nodeVersion: process.version,
-            platform: process.platform,
-            arch: process.arch,
-            memoryUsage: process.memoryUsage(),
-            apiKeyStatus: {
-                exists: !!apiKey,
-                keyPrefix: apiKey ? apiKey.substring(0, 5) : 'N/A'
-            }
-        };
-
-        // First try using the FirecrawlApp package if available
-        if (FirecrawlApp) {
-            try {
-                return await scrapeWithFirecrawlPackage(propertyUrl, apiKey);
-            } catch (packageError) {
-                console.warn('Failed to use FirecrawlApp package, falling back to direct API:', packageError.message);
-            }
+    // Create a detailed environment report to include in error messages
+    const envReport = {
+        timestamp: new Date().toISOString(),
+        nodeEnv: process.env.NODE_ENV,
+        nodeVersion: process.version,
+        platform: process.platform,
+        arch: process.arch,
+        memoryUsage: process.memoryUsage(),
+        apiKeyStatus: {
+            serverRuntime: serverRuntimeConfig?.FIRECRAWL_API_KEY ? 'Present' : 'Missing',
+            processEnv: process.env.FIRECRAWL_API_KEY ? 'Present' : 'Missing',
+            nextPublic: process.env.NEXT_PUBLIC_FIRECRAWL_API_KEY ? 'Present' : 'Missing',
+            finalStatus: FIRECRAWL_API_KEY ? 'Found' : 'Missing',
+            keyPrefix: FIRECRAWL_API_KEY ? FIRECRAWL_API_KEY.substring(0, 5) : 'N/A',
         }
-
-        // Validate and clean the URL
+    };
+    
+    console.log('Environment report:', JSON.stringify(envReport, null, 2));
+    
+    try {
+        // Validate the URL
         validateRightmoveUrl(propertyUrl);
         const cleanUrl = cleanRightmoveUrl(propertyUrl);
         
+        // Create a record of our attempt for debugging
         console.log('----- SCRAPE ATTEMPT INFO -----');
         console.log('Environment:', process.env.NODE_ENV);
         console.log('Clean URL:', cleanUrl);
-        console.log('API Key status:', envReport.apiKeyStatus);
+        console.log('API Key sources:');
+        console.log('- serverRuntimeConfig?.FIRECRAWL_API_KEY:', serverRuntimeConfig?.FIRECRAWL_API_KEY ? 'Present' : 'Missing');
+        console.log('- process.env.FIRECRAWL_API_KEY:', process.env.FIRECRAWL_API_KEY ? 'Present' : 'Missing');
+        console.log('- process.env.NEXT_PUBLIC_FIRECRAWL_API_KEY:', process.env.NEXT_PUBLIC_FIRECRAWL_API_KEY ? 'Present' : 'Missing');
+        console.log('Final FIRECRAWL_API_KEY status:', FIRECRAWL_API_KEY ? 'Found' : 'Missing');
+        console.log('API Key prefix:', FIRECRAWL_API_KEY ? FIRECRAWL_API_KEY.substring(0, 5) : 'N/A');
         console.log('-------------------------------');
         
         // Try to scrape with Firecrawl
         try {
             console.log('Attempting to scrape with Firecrawl...');
-            return await scrapeWithFirecrawl(cleanUrl, apiKey, envReport);
+            return await scrapeWithFirecrawl(cleanUrl, envReport);
         } catch (firecrawlError) {
-            console.error('DETAILED ERROR REPORT:', JSON.stringify({
+            // Create a detailed error report
+            const errorReport = {
                 ...envReport,
                 error: {
                     message: firecrawlError.message,
@@ -247,22 +231,27 @@ async function scrapeRightmoveProperty(propertyUrl) {
                     name: firecrawlError.name,
                     code: firecrawlError.code
                 }
-            }, null, 2));
-            throw firecrawlError;
+            };
+            
+            console.error('DETAILED ERROR REPORT:', JSON.stringify(errorReport, null, 2));
+            throw new Error(`Firecrawl scraping failed: ${firecrawlError.message}\nEnvironment: ${JSON.stringify(envReport.apiKeyStatus)}`);
         }
     } catch (error) {
-        console.error('Error in scrapeRightmoveProperty:', error);
+        console.error('Property scraping failed:', error);
         throw error;
     }
 }
 
 // Firecrawl-specific scraping function
-async function scrapeWithFirecrawl(cleanUrl, apiKey, envReport) {
-    const prompt = "Capture the price, address, number of bedrooms, bathrooms, and square ft of the property. Include the name, address, and logo of the estate agent. Capture the property description, key features, and all gallery images";
+async function scrapeWithFirecrawl(cleanUrl, envReport) {
+    // Define the prompt for data extraction
+        const prompt = "Capture the price, address, number of bedrooms, bathrooms, and square ft of the property. Include the name, address, and logo of the estate agent. Capture the property description, key features, and all gallery images";
 
-    for (let mainAttempt = 1; mainAttempt <= 3; mainAttempt++) {
-        try {
+    // Retry the extraction process
+        for (let mainAttempt = 1; mainAttempt <= 3; mainAttempt++) {
+            try {
             console.log(`Firecrawl extraction attempt ${mainAttempt}/3`);
+            console.log('Using API Key:', FIRECRAWL_API_KEY ? `${FIRECRAWL_API_KEY.substring(0, 5)}...` : 'Missing');
             
             const requestBody = {
                 urls: [cleanUrl],
@@ -270,10 +259,10 @@ async function scrapeWithFirecrawl(cleanUrl, apiKey, envReport) {
             };
             
             const requestOptions = {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${apiKey}`,
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${FIRECRAWL_API_KEY}`,
                     'Accept': 'application/json',
                     'User-Agent': 'TrofaiApp/1.0'
                 },
@@ -366,22 +355,30 @@ async function scrapeWithFirecrawl(cleanUrl, apiKey, envReport) {
                 return await processFirecrawlResults(jsonData.data[0]);
             } else if (jsonData.id) {
                 console.log(`Firecrawl extraction initiated with ID: ${jsonData.id}`);
-                const pollResult = await pollFirecrawlResults(jsonData.id, apiKey, envReport);
+                const pollResult = await pollFirecrawlResults(jsonData.id, envReport);
                 
                 console.log('Poll result received');
                 return await processFirecrawlResults(pollResult);
             } else {
                 throw new Error('Unexpected response format from Firecrawl');
             }
-        } catch (error) {
-            if (mainAttempt === 3) throw error;
-            console.log(`Attempt ${mainAttempt} failed, retrying...`);
-            await new Promise(resolve => setTimeout(resolve, 2000));
+    } catch (error) {
+            console.warn(`Firecrawl attempt ${mainAttempt} failed:`, error.message);
+            
+            if (mainAttempt === 3) {
+                console.error('All Firecrawl attempts failed. Trying fallback...');
+        throw error;
+            }
+            
+            // Wait before retrying
+            const delay = 3000 * Math.pow(1.5, mainAttempt - 1);
+            console.log(`Waiting ${delay}ms before next attempt...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
         }
     }
 }
 
-async function pollFirecrawlResults(extractId, apiKey, envReport) {
+async function pollFirecrawlResults(extractId, envReport) {
     let attempts = 0;
 
     const poll = async () => {
@@ -408,7 +405,7 @@ async function pollFirecrawlResults(extractId, apiKey, envReport) {
                 const requestOptions = {
                     method: 'GET',
                     headers: {
-                        'Authorization': `Bearer ${apiKey}`,
+                        'Authorization': `Bearer ${FIRECRAWL_API_KEY}`,
                         'Accept': 'application/json'
                     }
                 };
@@ -827,22 +824,16 @@ async function createOutputData(formattedData) {
 
 async function generateBannerbearImage(propertyData) {
     try {
-        // Get Bannerbear credentials from Parameter Store
-        const apiKey = await configService.getBannerbearApiKey();
-        const webhookUrl = await configService.getParameter('BANNERBEAR_WEBHOOK_URL');
-        const webhookSecret = await configService.getParameter('BANNERBEAR_WEBHOOK_SECRET');
-        const projectId = await configService.getParameter('BANNERBEAR_PROJECT_ID');
-
         const bannerbearPayload = {
             ...propertyData.bannerbear,
-            project_id: projectId || 'E56OLrMKYWnzwl3oQj'
+            project_id: 'E56OLrMKYWnzwl3oQj'
         };
 
         // Add webhook configuration
-        if (webhookUrl) {
-            bannerbearPayload.webhook_url = webhookUrl;
+        if (serverRuntimeConfig.BANNERBEAR_WEBHOOK_URL) {
+            bannerbearPayload.webhook_url = serverRuntimeConfig.BANNERBEAR_WEBHOOK_URL;
             bannerbearPayload.webhook_headers = {
-                'Authorization': `Bearer ${webhookSecret}`
+                'Authorization': `Bearer ${serverRuntimeConfig.BANNERBEAR_WEBHOOK_SECRET}`
             };
         }
 
@@ -851,7 +842,7 @@ async function generateBannerbearImage(propertyData) {
         const response = await fetch('https://api.bannerbear.com/v2/images', {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${apiKey}`,
+                'Authorization': `Bearer ${serverRuntimeConfig.BANNERBEAR_API_KEY}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(bannerbearPayload)
@@ -880,57 +871,11 @@ async function generateBannerbearImage(propertyData) {
 
 async function generateBannerbearCollection(propertyData, templateSetUid) {
     try {
-        console.log('Starting Bannerbear collection generation with template set:', templateSetUid);
-        console.log('Environment check:', {
-            USE_FIRECRAWL: process.env.USE_FIRECRAWL,
-            BANNERBEAR_TEMPLATE_SET_UID: process.env.BANNERBEAR_TEMPLATE_SET_UID ? 'Set' : 'Not set',
-            BANNERBEAR_PROJECT_ID: process.env.BANNERBEAR_PROJECT_ID ? 'Set' : 'Not set'
-        });
+        // Get all available property images
+        const propertyImages = propertyData.raw.property.allImages;
+        console.log('Available property images:', propertyImages.length);
 
-        // Get Bannerbear credentials with more detailed logging
-        let apiKey;
-        try {
-            apiKey = await configService.getBannerbearApiKey();
-            console.log('Successfully retrieved Bannerbear API key');
-        } catch (error) {
-            console.error('Failed to get Bannerbear API key:', error.message);
-            throw new Error(`Bannerbear API key retrieval failed: ${error.message}`);
-        }
-
-        // Get webhook configuration with more detailed logging
-        let webhookUrl, webhookSecret, projectId;
-        try {
-            webhookUrl = await configService.getParameter('BANNERBEAR_WEBHOOK_URL');
-            console.log('Webhook URL:', webhookUrl ? 'Retrieved' : 'Not found');
-        } catch (error) {
-            console.warn('Failed to get Bannerbear webhook URL:', error.message);
-        }
-
-        try {
-            webhookSecret = await configService.getParameter('BANNERBEAR_WEBHOOK_SECRET');
-            console.log('Webhook secret:', webhookSecret ? 'Retrieved' : 'Not found');
-        } catch (error) {
-            console.warn('Failed to get Bannerbear webhook secret:', error.message);
-        }
-
-        try {
-            projectId = await configService.getParameter('BANNERBEAR_PROJECT_ID');
-            console.log('Project ID:', projectId ? 'Retrieved' : 'Not found');
-        } catch (error) {
-            console.warn('Failed to get Bannerbear project ID:', error.message);
-            // Fallback to hardcoded value if not found
-            projectId = 'E56OLrMKYWnzwl3oQj';
-            console.log('Using fallback project ID:', projectId);
-        }
-
-        // Verify we have the required property images
-        const propertyImages = propertyData.raw.property.images || [];
-        if (!propertyImages.length) {
-            throw new Error('No property images found in the data');
-        }
-        console.log(`Found ${propertyImages.length} property images for Bannerbear collection`);
-
-        // Build the common base modifications
+        // Create base modifications for common fields
         const baseModifications = [
             {
                 name: "property_price",
@@ -959,11 +904,11 @@ async function generateBannerbearCollection(propertyData, templateSetUid) {
         ];
 
         // Add image modifications for each template
+        // We'll cycle through available images if we have more templates than images
         const imageModifications = [];
         for (let i = 0; i <= 23; i++) {
             const layerName = i === 0 ? "property_image" : `property_image${i}`;
-            // Use modulo to cycle through available images
-            const imageIndex = i % propertyImages.length;
+            const imageIndex = i % propertyImages.length; // Cycle through images if we run out
             
             imageModifications.push({
                 name: layerName,
@@ -975,80 +920,42 @@ async function generateBannerbearCollection(propertyData, templateSetUid) {
         const collectionPayload = {
             template_set: templateSetUid,
             modifications: [...baseModifications, ...imageModifications],
-            project_id: projectId || 'E56OLrMKYWnzwl3oQj',
+            project_id: 'E56OLrMKYWnzwl3oQj',
             metadata: {
                 source: "rightmove",
                 scraped_at: new Date().toISOString(),
-                property_id: propertyData.raw.property.id,
                 propertyId: propertyData.raw.property.id,
                 total_images: propertyImages.length
             }
         };
 
         // Add webhook configuration if available
-        if (webhookUrl) {
-            collectionPayload.webhook_url = webhookUrl;
-            if (webhookSecret) {
-                collectionPayload.webhook_headers = {
-                    'Authorization': `Bearer ${webhookSecret}`
-                };
-            }
+        if (serverRuntimeConfig.BANNERBEAR_WEBHOOK_URL) {
+            collectionPayload.webhook_url = serverRuntimeConfig.BANNERBEAR_WEBHOOK_URL;
+            collectionPayload.webhook_headers = {
+                'Authorization': `Bearer ${serverRuntimeConfig.BANNERBEAR_WEBHOOK_SECRET}`
+            };
         }
 
-        console.log('Sending Bannerbear collection request with payload:', JSON.stringify({
-            ...collectionPayload,
-            modifications: `[${collectionPayload.modifications.length} modifications]` // Truncate for logging
-        }, null, 2));
-
-        console.log('Bannerbear API URL:', 'https://api.bannerbear.com/v2/collections');
-        console.log('Using API key starting with:', apiKey ? apiKey.substring(0, 6) + '...' : 'undefined');
+        console.log('Sending Bannerbear collection request with payload:', JSON.stringify(collectionPayload, null, 2));
 
         const response = await fetch('https://api.bannerbear.com/v2/collections', {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${apiKey}`,
+                'Authorization': `Bearer ${serverRuntimeConfig.BANNERBEAR_API_KEY}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(collectionPayload)
         });
 
-        // Full response logging
-        const responseStatus = response.status;
-        const responseHeaders = Object.fromEntries(response.headers.entries());
-        console.log('Bannerbear API response status:', responseStatus);
-        console.log('Bannerbear API response headers:', responseHeaders);
-
-        // Handle unsuccessful response
         if (!response.ok) {
-            let errorText;
-            try {
-                errorText = await response.text();
-                console.error('Bannerbear API Error Response:', errorText);
-            } catch (e) {
-                errorText = `Failed to read error response: ${e.message}`;
-            }
-            
-            console.error('Bannerbear Collection API Error:', {
-                status: response.status,
-                statusText: response.statusText,
-                text: errorText
-            });
-            
-            throw new Error(`Bannerbear Collection API error: ${response.status} - ${response.statusText} - ${errorText}`);
+            const error = await response.json();
+            console.error('Bannerbear Collection API Error:', error);
+            throw new Error(`Bannerbear Collection API error: ${response.status} - ${response.statusText}`);
         }
 
-        // Parse successful response
-        let result;
-        try {
-            result = await response.json();
-        } catch (e) {
-            const rawText = await response.text();
-            console.error('Failed to parse Bannerbear response JSON:', e.message);
-            console.error('Raw response text:', rawText);
-            throw new Error(`Invalid JSON in Bannerbear response: ${e.message}`);
-        }
-
-        console.log('Bannerbear collection generation initiated:', JSON.stringify(result, null, 2));
+        const result = await response.json();
+        console.log('Bannerbear collection generation initiated:', result);
 
         // Return collection info for tracking
         return {
@@ -1058,7 +965,7 @@ async function generateBannerbearCollection(propertyData, templateSetUid) {
             template_set: templateSetUid
         };
     } catch (error) {
-        console.error('Error in generateBannerbearCollection:', error);
+        console.error('Error generating Bannerbear collection:', error);
         throw error;
     }
 }

@@ -6,9 +6,8 @@ require('dotenv').config();
 const getConfig = require('next/config').default;
 
 // Import specialized scrapers
-const rightmoveScraper = require('./utils/firecrawl-rightmove-scraper');
-const zillowScraper = require('./utils/firecrawl-zillow-scraper');
-const configService = require('./utils/config-service');
+const rightmoveScraper = require('./firecrawl-rightmove-scraper');
+const zillowScraper = require('./firecrawl-zillow-scraper');
 
 // Add a console log to ensure scrapers are loaded
 console.log('Scraper modules loaded:', {
@@ -50,19 +49,40 @@ function getScraper(url) {
 }
 
 /**
- * Scrape property data from a URL
- * @param {string} url - The URL to scrape
+ * Scrape property data from a URL, automatically routing to the right scraper
+ * @param {string} propertyUrl - The URL to scrape
  * @returns {Promise<object>} The scraped property data
  */
-async function scrapeProperty(url) {
-    // Determine which scraper to use based on the URL
-    if (url.includes('rightmove.co.uk')) {
-        return await rightmoveScraper.scrapeRightmoveProperty(url);
-    } else if (url.includes('zillow.com')) {
-        return await zillowScraper.scrapeZillowProperty(url);
+async function scrapeProperty(propertyUrl) {
+  console.log(`Scraping property data from: ${propertyUrl}`);
+  
+  try {
+    // Get the appropriate scraper for this URL
+    const scraper = getScraper(propertyUrl);
+    
+    // Explicitly log available functions in the scraper
+    console.log('Available functions in scraper:', Object.keys(scraper));
+    
+    // Call the specialized scraper function with explicit error handling
+    if (RIGHTMOVE_URL_PATTERN.test(propertyUrl)) {
+      if (typeof scraper.scrapeRightmoveProperty !== 'function') {
+        throw new Error('scrapeRightmoveProperty is not a function in the rightmove scraper module');
+      }
+      console.log('Calling scraper.scrapeRightmoveProperty()');
+      return await scraper.scrapeRightmoveProperty(propertyUrl);
+    } else if (ZILLOW_URL_PATTERN.test(propertyUrl)) {
+      if (typeof scraper.scrapeZillowProperty !== 'function') {
+        throw new Error('scrapeZillowProperty is not a function in the zillow scraper module');
+      }
+      console.log('Calling scraper.scrapeZillowProperty()');
+      return await scraper.scrapeZillowProperty(propertyUrl);
     } else {
-        throw new Error('Unsupported property website');
+      throw new Error(`No scraper implementation found for URL: ${propertyUrl}`);
     }
+  } catch (error) {
+    console.error('Error in scrapeProperty:', error);
+    throw error;
+  }
 }
 
 /**
@@ -71,15 +91,15 @@ async function scrapeProperty(url) {
  * @returns {Promise<object>} The Bannerbear response
  */
 async function generateBannerbearImage(propertyData) {
-    // Determine which scraper to use based on the metadata
-    const source = propertyData.bannerbear.metadata.source;
-    if (source === 'rightmove') {
-        return await rightmoveScraper.generateBannerbearImage(propertyData);
-    } else if (source === 'zillow') {
-        return await zillowScraper.generateBannerbearImage(propertyData);
-    } else {
-        throw new Error(`Unknown property source: ${source}`);
-    }
+  // Determine which scraper to use based on the metadata
+  const source = propertyData.bannerbear.metadata.source;
+  if (source === 'rightmove') {
+    return await rightmoveScraper.generateBannerbearImage(propertyData);
+  } else if (source === 'zillow') {
+    return await zillowScraper.generateBannerbearImage(propertyData);
+  } else {
+    throw new Error(`Unknown property source: ${source}`);
+  }
 }
 
 /**
@@ -89,15 +109,15 @@ async function generateBannerbearImage(propertyData) {
  * @returns {Promise<object>} The Bannerbear response
  */
 async function generateBannerbearCollection(propertyData, templateSetUid) {
-    // Determine which scraper to use based on the metadata
-    const source = propertyData.bannerbear.metadata.source;
-    if (source === 'rightmove') {
-        return await rightmoveScraper.generateBannerbearCollection(propertyData, templateSetUid);
-    } else if (source === 'zillow') {
-        return await zillowScraper.generateBannerbearCollection(propertyData, templateSetUid);
-    } else {
-        throw new Error(`Unknown property source: ${source}`);
-    }
+  // Determine which scraper to use based on the metadata
+  const source = propertyData.bannerbear.metadata.source;
+  if (source === 'rightmove') {
+    return await rightmoveScraper.generateBannerbearCollection(propertyData, templateSetUid);
+  } else if (source === 'zillow') {
+    return await zillowScraper.generateBannerbearCollection(propertyData, templateSetUid);
+  } else {
+    throw new Error(`Unknown property source: ${source}`);
+  }
 }
 
 /**
@@ -135,47 +155,48 @@ function processBannerbearWebhook(webhookData) {
 
 // Simple function to test the scraper selection
 async function testScraper() {
-    const url = process.argv[2];
-    if (!url) {
-        console.error('Please provide a URL to test');
-        console.log('Usage: node scraper.js <URL>');
-        process.exit(1);
+  const url = process.argv[2];
+  if (!url) {
+    console.error('Please provide a URL to test');
+    console.log('Usage: node scraper.js <URL>');
+    process.exit(1);
+  }
+  
+  try {
+    console.log(`Testing scraper for URL: ${url}`);
+    const propertyData = await scrapeProperty(url);
+    console.log('Successfully scraped property data!');
+    
+    // Use template set generation by default if available
+    const templateSetUid = serverRuntimeConfig.BANNERBEAR_TEMPLATE_SET_UID 
+                        || process.env.BANNERBEAR_TEMPLATE_SET_UID;
+    
+    if (!templateSetUid) {
+      console.log('No template set UID configured, using single template generation...');
+      const bannerbearResponse = await generateBannerbearImage(propertyData);
+      console.log('Image generation initiated!');
+      console.log('Image UID for tracking:', bannerbearResponse.uid);
+      return;
     }
     
-    try {
-        console.log(`Testing scraper for URL: ${url}`);
-        const propertyData = await scrapeProperty(url);
-        console.log('Successfully scraped property data!');
-        
-        // Get template set UID from Parameter Store
-        const templateSetUid = await configService.getParameter('BANNERBEAR_TEMPLATE_SET_UID');
-        
-        if (!templateSetUid) {
-            console.log('No template set UID configured, using single template generation...');
-            const bannerbearResponse = await generateBannerbearImage(propertyData);
-            console.log('Image generation initiated!');
-            console.log('Image UID for tracking:', bannerbearResponse.uid);
-            return;
-        }
-        
-        console.log('Generating collection using template set:', templateSetUid);
-        const collectionResponse = await generateBannerbearCollection(propertyData, templateSetUid);
-        
-        console.log('Collection generation initiated!');
-        console.log('Collection UID for tracking:', collectionResponse.uid);
-    } catch (error) {
-        console.error('Error testing scraper:', error);
-    }
+    console.log('Generating collection using template set:', templateSetUid);
+    const collectionResponse = await generateBannerbearCollection(propertyData, templateSetUid);
+    
+    console.log('Collection generation initiated!');
+    console.log('Collection UID for tracking:', collectionResponse.uid);
+  } catch (error) {
+    console.error('Error testing scraper:', error);
+  }
 }
 
 // Export functions
 module.exports = {
-    scrapeProperty,
-    generateBannerbearImage,
-    generateBannerbearCollection,
-    processBannerbearWebhook,
-    testScraper,
-    useFirecrawl
+  scrapeProperty,
+  generateBannerbearImage,
+  generateBannerbearCollection,
+  processBannerbearWebhook,
+  testScraper,
+  useFirecrawl
 };
 
 // Run the test if this file is executed directly

@@ -5,12 +5,10 @@
   "main": "index.js",
   "scripts": {
     "dev": "next dev",
-    "check-env": "node scripts/check-env.js",
-    "build": "npm run check-env && next build",
+    "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "node test-rightmove.js",
-    "setup-params": "node scripts/setup-parameter-store.js"
+    "test": "node test-rightmove.js"
   },
   "author": "",
   "license": "MIT",
@@ -26,7 +24,7 @@
     "aws-sdk": "^2.1692.0",
     "body-parser": "^1.20.3",
     "cors": "^2.8.5",
-    "dotenv": "^16.5.0",
+    "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
     "next": "^14.1.3",

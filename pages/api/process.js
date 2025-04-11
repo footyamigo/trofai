@@ -445,53 +445,15 @@ export default async function handler(req, res) {
     
     // Generate images using our imported generateBannerbearCollection function
     let bannerbearResponse;
-    const templateSetToUse = params.templateId || BANNERBEAR_TEMPLATE_SET_UID || process.env.NEXT_PUBLIC_BANNERBEAR_TEMPLATE_SET_UID;
+    const templateSetToUse = params.templateId || BANNERBEAR_TEMPLATE_SET_UID;
     
-    // Log Bannerbear configuration details
-    console.log('Bannerbear configuration:', {
-      templateSetToUse,
-      BANNERBEAR_API_KEY: BANNERBEAR_API_KEY ? 'Set (starts with ' + BANNERBEAR_API_KEY.substring(0, 6) + '...)' : 'Not set',
-      BANNERBEAR_TEMPLATE_SET_UID: BANNERBEAR_TEMPLATE_SET_UID || 'Not set',
-      NEXT_PUBLIC_BANNERBEAR_TEMPLATE_SET_UID: process.env.NEXT_PUBLIC_BANNERBEAR_TEMPLATE_SET_UID || 'Not set'
-    });
-    
-    if (!templateSetToUse) {
-      console.warn('No template set UID provided, falling back to default template set');
-      // Fallback to a hardcoded template set UID
-      templateSetToUse = '5AaLxyr4P8xrP8bDRG';
-    }
-    
-    try {
+    if (templateSetToUse) {
       console.log('Using template set for collection generation:', templateSetToUse);
       bannerbearResponse = await generateBannerbearCollection(propertyData, templateSetToUse);
       console.log('Bannerbear response received:', JSON.stringify(bannerbearResponse, null, 2));
-    } catch (error) {
-      console.error('Error generating Bannerbear collection:', error.message);
-      
-      // Try to generate a single image instead if collection fails
-      try {
-        console.log('Attempting fallback to single template image generation');
-        bannerbearResponse = await generateBannerbearImage(propertyData);
-        console.log('Single image generation succeeded:', JSON.stringify(bannerbearResponse, null, 2));
-      } catch (singleImageError) {
-        console.error('Both collection and single image generation failed:', singleImageError.message);
-        
-        // Return a partial response even if Bannerbear fails
-        return res.status(206).json({
-          message: 'Property scraped successfully but Bannerbear image generation failed',
-          error: error.message,
-          data: {
-            property: {
-              address: propertyData.raw?.property?.address || '',
-              price: propertyData.raw?.property?.price || '',
-              bedrooms: propertyData.raw?.property?.bedrooms || '',
-              bathrooms: propertyData.raw?.property?.bathrooms || ''
-            },
-            scraped: true,
-            bannerbear_status: 'failed'
-          }
-        });
-      }
+    } else {
+      console.log('Using single template for image generation');
+      bannerbearResponse = await generateBannerbearImage(propertyData);
     }
     
     if (!bannerbearResponse) {
