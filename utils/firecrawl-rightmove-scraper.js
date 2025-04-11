@@ -2,7 +2,7 @@
 
 require('dotenv').config();
 const fetch = require('node-fetch');
-const { generatePropertyCaptions, CAPTION_TYPES } = require('./caption-generator');
+const { generatePropertyCaptions, CAPTION_TYPES } = require('../caption-generator');
 const getConfig = require('next/config').default;
 const configService = require('./config-service');
 
@@ -827,16 +827,22 @@ async function createOutputData(formattedData) {
 
 async function generateBannerbearImage(propertyData) {
     try {
+        // Get Bannerbear credentials from Parameter Store
+        const apiKey = await configService.getBannerbearApiKey();
+        const webhookUrl = await configService.getParameter('BANNERBEAR_WEBHOOK_URL');
+        const webhookSecret = await configService.getParameter('BANNERBEAR_WEBHOOK_SECRET');
+        const projectId = await configService.getParameter('BANNERBEAR_PROJECT_ID');
+
         const bannerbearPayload = {
             ...propertyData.bannerbear,
-            project_id: 'E56OLrMKYWnzwl3oQj'
+            project_id: projectId || 'E56OLrMKYWnzwl3oQj'
         };
 
         // Add webhook configuration
-        if (serverRuntimeConfig.BANNERBEAR_WEBHOOK_URL) {
-            bannerbearPayload.webhook_url = serverRuntimeConfig.BANNERBEAR_WEBHOOK_URL;
+        if (webhookUrl) {
+            bannerbearPayload.webhook_url = webhookUrl;
             bannerbearPayload.webhook_headers = {
-                'Authorization': `Bearer ${serverRuntimeConfig.BANNERBEAR_WEBHOOK_SECRET}`
+                'Authorization': `Bearer ${webhookSecret}`
             };
         }
 
@@ -845,7 +851,7 @@ async function generateBannerbearImage(propertyData) {
         const response = await fetch('https://api.bannerbear.com/v2/images', {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${serverRuntimeConfig.BANNERBEAR_API_KEY}`,
+                'Authorization': `Bearer ${apiKey}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(bannerbearPayload)
@@ -874,6 +880,12 @@ async function generateBannerbearImage(propertyData) {
 
 async function generateBannerbearCollection(propertyData, templateSetUid) {
     try {
+        // Get Bannerbear credentials from Parameter Store
+        const apiKey = await configService.getBannerbearApiKey();
+        const webhookUrl = await configService.getParameter('BANNERBEAR_WEBHOOK_URL');
+        const webhookSecret = await configService.getParameter('BANNERBEAR_WEBHOOK_SECRET');
+        const projectId = await configService.getParameter('BANNERBEAR_PROJECT_ID');
+
         // Get all available property images
         const propertyImages = propertyData.raw.property.allImages;
         console.log('Available property images:', propertyImages.length);
@@ -923,7 +935,7 @@ async function generateBannerbearCollection(propertyData, templateSetUid) {
         const collectionPayload = {
             template_set: templateSetUid,
             modifications: [...baseModifications, ...imageModifications],
-            project_id: 'E56OLrMKYWnzwl3oQj',
+            project_id: projectId || 'E56OLrMKYWnzwl3oQj',
             metadata: {
                 source: "rightmove",
                 scraped_at: new Date().toISOString(),
@@ -933,10 +945,10 @@ async function generateBannerbearCollection(propertyData, templateSetUid) {
         };
 
         // Add webhook configuration if available
-        if (serverRuntimeConfig.BANNERBEAR_WEBHOOK_URL) {
-            collectionPayload.webhook_url = serverRuntimeConfig.BANNERBEAR_WEBHOOK_URL;
+        if (webhookUrl) {
+            collectionPayload.webhook_url = webhookUrl;
             collectionPayload.webhook_headers = {
-                'Authorization': `Bearer ${serverRuntimeConfig.BANNERBEAR_WEBHOOK_SECRET}`
+                'Authorization': `Bearer ${webhookSecret}`
             };
         }
 
@@ -945,7 +957,7 @@ async function generateBannerbearCollection(propertyData, templateSetUid) {
         const response = await fetch('https://api.bannerbear.com/v2/collections', {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${serverRuntimeConfig.BANNERBEAR_API_KEY}`,
+                'Authorization': `Bearer ${apiKey}`,
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify(collectionPayload)
