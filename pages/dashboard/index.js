@@ -792,7 +792,7 @@ export default function Dashboard() {
                           ) : (
                             <FiTrash2 />
                           )}
-                        </button>
+              </button>
             </div>
                     </td>
                   </tr>

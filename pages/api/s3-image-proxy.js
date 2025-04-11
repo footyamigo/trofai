@@ -39,9 +39,16 @@ async function streamToResponse(stream, res) {
 }
 
 export default async function handler(req, res) {
-  // Set CORS headers for all responses
+  // Set comprehensive CORS headers for all responses
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
   
   // Only allow GET requests
   if (req.method !== 'GET') {
@@ -77,6 +84,10 @@ export default async function handler(req, res) {
     if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) {
       console.warn('AWS credentials not configured - serving placeholder image');
       
+      // Set CORS headers for the redirect
+      res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
+      res.setHeader('Content-Type', 'image/png');
+      
       // Return a placeholder image with the folder and file name
       res.redirect(`https://via.placeholder.com/300x200/FF5722/FFFFFF?text=${folder}+${file.split('.')[0]}`);
       return;
@@ -94,6 +105,8 @@ export default async function handler(req, res) {
     // Set appropriate headers based on content type and caching
     res.setHeader('Content-Type', response.ContentType || 'image/jpeg');
     res.setHeader('Cache-Control', 'public, max-age=31536000'); // Cache for 1 year
+    res.setHeader('ETag', response.ETag || `"${Date.now().toString()}"`);
+    res.setHeader('Last-Modified', response.LastModified || new Date().toUTCString());
     
     // If the object has a body that's a Readable stream, pipe it to the response
     if (response.Body instanceof Readable) {
@@ -116,13 +129,20 @@ export default async function handler(req, res) {
       requestBucket: S3_BUCKET_NAME
     });
     
+    // Set header for the redirect
+    res.setHeader('Content-Type', 'image/png');
+    
     if (error.name === 'NoSuchKey' || error.name === 'NotFound') {
       // Redirect to a placeholder image if the file doesn't exist
       console.log(`Image not found in S3: ${key} - serving placeholder`);
       res.redirect(`https://via.placeholder.com/300x200/FF5722/FFFFFF?text=Not+Found:+${folder}+${file.split('.')[0]}`);
     } else {
-      // For other errors, return an error response or a placeholder
+      // For other errors, return a direct image response instead of a redirect
+      // This avoids potential CORS issues with redirects
       console.log(`Error retrieving image from S3: ${error.message} - serving error placeholder`);
+      
+      // Instead of redirect, we could serve a local fallback image stored in the project
+      // But redirecting to placeholder.com is simpler for now
       res.redirect(`https://via.placeholder.com/300x200/FF5722/FFFFFF?text=Error:+${folder}+${file.split('.')[0]}`);
     }
   }

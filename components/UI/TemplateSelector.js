@@ -132,24 +132,65 @@ export default function TemplateSelector({ selectedTemplate, onSelect }) {
         
         console.log('Formatted previews:', previews);
         
-        // Update state with the previews
-        setTemplatePreviews(prev => {
-          const newState = {
-            ...prev,
-            [templateId]: previews
-          };
-          
-          // Save the updated template previews to localStorage
-          try {
-            localStorage.setItem('templatePreviews', JSON.stringify(newState));
-            console.log('Cached template previews to localStorage');
-          } catch (error) {
-            console.error('Error caching template previews:', error);
+        // Check if the first image URL is accessible by trying to load it
+        try {
+          if (previews.length > 0) {
+            const testUrl = previews[0].url;
+            const imgTest = new Image();
+            
+            // Immediately use previews, but also verify they're valid
+            setTemplatePreviews(prev => {
+              const newState = {
+                ...prev,
+                [templateId]: previews
+              };
+              
+              // Save the updated template previews to localStorage
+              try {
+                localStorage.setItem('templatePreviews', JSON.stringify(newState));
+                console.log('Cached template previews to localStorage');
+              } catch (error) {
+                console.error('Error caching template previews:', error);
+              }
+              
+              console.log('New template previews state:', newState);
+              return newState;
+            });
+            
+            // Also verify the images load correctly
+            imgTest.onerror = () => {
+              console.error(`Image failed to load: ${testUrl}`);
+              
+              // If in production and image fails to load, try clearing cache
+              // as URLs might be using incorrect format
+              if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
+                console.log('Production environment detected and image failed, clearing cache');
+                try {
+                  localStorage.removeItem('templatePreviews');
+                } catch (e) {}
+                
+                // Use fallbacks since image loading failed
+                setTemplatePreviews(prev => {
+                  const fallbacks = FALLBACK_PREVIEWS[templateId]?.map((url, index) => ({
+                    url,
+                    name: `Design ${index + 1}`,
+                    filename: `fallback_${index + 1}.png`
+                  })) || [];
+                  
+                  return {
+                    ...prev,
+                    [templateId]: fallbacks
+                  };
+                });
+              }
+            };
+            
+            // Set the src to trigger the load event
+            imgTest.src = testUrl;
           }
-          
-          console.log('New template previews state:', newState);
-          return newState;
-        });
+        } catch (imageTestError) {
+          console.error('Error testing image loading:', imageTestError);
+        }
       } else {
         console.log('No templates found in API response');
         throw new Error('No templates found');
@@ -157,6 +198,17 @@ export default function TemplateSelector({ selectedTemplate, onSelect }) {
       
     } catch (error) {
       console.error('Error fetching S3 preview images:', error);
+      
+      // Check if we're in production by examining the hostname
+      const isProduction = typeof window !== 'undefined' && window.location.hostname !== 'localhost';
+      
+      // If in production, try to clear the cache and show a more descriptive error
+      if (isProduction) {
+        try {
+          localStorage.removeItem('templatePreviews');
+          console.log('Cleared template previews cache due to error in production');
+        } catch (e) {}
+      }
       
       // Use fallbacks on error
       setTemplatePreviews(prev => {

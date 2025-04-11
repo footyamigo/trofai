@@ -381,9 +381,15 @@ export default async function handler(req, res) {
     let propertyData;
     let propertyUrl = url;
     
-    // If we have a property ID but not a URL, get it from DynamoDB
-    if (url && !url.includes('rightmove.co.uk')) {
-      console.log('Attempting to fetch property from DynamoDB with URL:', url);
+    // First check if this is a URL we know how to scrape
+    const isRightmoveUrl = url.includes('rightmove.co.uk');
+    const isZillowUrl = url.includes('zillow.com');
+    const isKnownScraperUrl = isRightmoveUrl || isZillowUrl;
+    
+    // Only try to get from DynamoDB if this is not a recognizable scraper URL
+    // and might be a property ID from DynamoDB
+    if (!isKnownScraperUrl) {
+      console.log('URL is not a recognized scraper URL, attempting to fetch property from DynamoDB:', url);
       
       if (!dynamoDb) {
         return res.status(400).json({ error: 'DynamoDB not configured and no URL provided' });
@@ -410,8 +416,8 @@ export default async function handler(req, res) {
     if (!propertyData) {
       console.log('Starting property scrape with URL:', propertyUrl);
       
-      // Clean the URL first
-      const cleanedUrl = cleanRightmoveUrl(propertyUrl);
+      // Clean the URL only if it's a Rightmove URL
+      const cleanedUrl = isRightmoveUrl ? cleanRightmoveUrl(propertyUrl) : propertyUrl;
       console.log('Cleaned URL:', cleanedUrl);
       
       try {

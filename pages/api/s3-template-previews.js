@@ -24,7 +24,14 @@ const s3Client = new S3Client({
 export default async function handler(req, res) {
   // Set CORS headers for all responses
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
+  
+  // Handle preflight requests
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
   
   if (req.method !== 'GET') {
     return res.status(405).json({ message: 'Method not allowed' });
@@ -43,7 +50,7 @@ export default async function handler(req, res) {
     requestHost: req.headers.host,
     referer: req.headers.referer || 'none',
     userAgent: req.headers['user-agent'] || 'none',
-    protocol: req.headers['x-forwarded-proto'] || 'http',
+    protocol: req.headers['x-forwarded-proto'] || req.headers['X-Forwarded-Proto'] || 'http',
     timestamp: new Date().toISOString()
   };
   console.log('Template previews request:', requestInfo);
@@ -102,19 +109,46 @@ export default async function handler(req, res) {
     const timestamp = Date.now(); // Add timestamp to prevent caching
     
     // Determine the correct base URL for the API
-    let baseUrl = '';
-    if (req.headers.host) {
-      const protocol = req.headers['x-forwarded-proto'] || 'http';
-      baseUrl = `${protocol}://${req.headers.host}`;
+    // First try from forwarded headers (used by CDNs and proxies)
+    let protocol = req.headers['x-forwarded-proto'] || req.headers['X-Forwarded-Proto'];
+    let host = req.headers['x-forwarded-host'] || req.headers['X-Forwarded-Host'] || req.headers.host;
+    
+    // Default to standard headers if forwarded headers not available
+    if (!protocol) {
+      protocol = req.headers.referer ? new URL(req.headers.referer).protocol.replace(':', '') : 'http';
+    }
+    
+    // Build the base URL
+    const baseUrl = host ? `${protocol}://${host}` : '';
+    console.log(`Determined base URL: ${baseUrl ? baseUrl : 'Using relative URLs'}`);
+    
+    // Use environment to determine URL format
+    const isProduction = process.env.NODE_ENV === 'production';
+    console.log(`Environment: ${isProduction ? 'production' : 'development'}`);
+    
+    // Get the referer hostname to check if we're being called from the same domain
+    let refererHostname = null;
+    try {
+      if (req.headers.referer) {
+        refererHostname = new URL(req.headers.referer).hostname;
+      }
+    } catch (e) {
+      console.error('Error parsing referer:', e);
     }
     
     const templates = imageFiles.map((filename, index) => {
-      // Use absolute URLs with hostname when in production, relative URLs in development
-      const isProduction = process.env.NODE_ENV === 'production';
-      const url = isProduction && baseUrl 
-        ? `${baseUrl}/api/s3-image-proxy?folder=${folderName}&file=${filename}&t=${timestamp}`
-        : `/api/s3-image-proxy?folder=${folderName}&file=${filename}&t=${timestamp}`;
-        
+      // Always use absolute URLs in production, otherwise use relative URLs
+      // This ensures the URLs work correctly regardless of where they're used
+      let url = `/api/s3-image-proxy?folder=${folderName}&file=${filename}&t=${timestamp}`;
+      
+      // In production, or if the baseUrl is available and from a different domain than the referer,
+      // use absolute URLs to prevent CORS issues
+      const needsAbsoluteUrl = isProduction || (baseUrl && refererHostname && !host.includes(refererHostname));
+      
+      if (needsAbsoluteUrl && baseUrl) {
+        url = `${baseUrl}${url}`;
+      }
+      
       console.log(`Generated URL for ${filename}: ${url}`);
       
       return {
@@ -131,7 +165,15 @@ export default async function handler(req, res) {
       folderName,
       templates,
       baseUrl,
-      requestInfo
+      requestInfo,
+      isProduction,
+      // Include URL generation info for debugging
+      urlInfo: {
+        protocol,
+        host,
+        refererHostname,
+        usingAbsoluteUrls: isProduction || (baseUrl && refererHostname && !host.includes(refererHostname))
+      }
     });
     
   } catch (error) {
@@ -148,20 +190,32 @@ export default async function handler(req, res) {
       console.warn('Using fallback template previews due to missing AWS credentials');
       
       // Determine the correct base URL for the API
-      let baseUrl = '';
-      if (req.headers.host) {
-        const protocol = req.headers['x-forwarded-proto'] || 'http';
-        baseUrl = `${protocol}://${req.headers.host}`;
-      }
+      const protocol = req.headers['x-forwarded-proto'] || req.headers['X-Forwarded-Proto'] || 
+                      (req.headers.referer ? new URL(req.headers.referer).protocol.replace(':', '') : 'http');
+      const host = req.headers['x-forwarded-host'] || req.headers['X-Forwarded-Host'] || req.headers.host;
+      const baseUrl = host ? `${protocol}://${host}` : '';
       
-      // Fallback data for template sets using our proxy for better error handling
+      // Fall back to placeholder images but keep the URL format consistent
+      // with the rest of the logic (absolute URLs in production, relative in dev)
       const isProduction = process.env.NODE_ENV === 'production';
       const urlPrefix = isProduction && baseUrl ? baseUrl : '';
       
       const fallbackTemplates = [
-        { filename: 'design_1.png', name: 'Design 1', url: `${urlPrefix}/api/s3-image-proxy?folder=${folderName}&file=design_1.png` },
-        { filename: 'design_2.png', name: 'Design 2', url: `${urlPrefix}/api/s3-image-proxy?folder=${folderName}&file=design_2.png` },
-        { filename: 'design_3.png', name: 'Design 3', url: `${urlPrefix}/api/s3-image-proxy?folder=${folderName}&file=design_3.png` }
+        { 
+          filename: 'design_1.png', 
+          name: 'Design 1', 
+          url: `${urlPrefix}/api/s3-image-proxy?folder=${folderName}&file=design_1.png&t=${Date.now()}` 
+        },
+        { 
+          filename: 'design_2.png', 
+          name: 'Design 2', 
+          url: `${urlPrefix}/api/s3-image-proxy?folder=${folderName}&file=design_2.png&t=${Date.now()}` 
+        },
+        { 
+          filename: 'design_3.png', 
+          name: 'Design 3', 
+          url: `${urlPrefix}/api/s3-image-proxy?folder=${folderName}&file=design_3.png&t=${Date.now()}` 
+        }
       ];
       
       return res.status(200).json({
@@ -169,7 +223,8 @@ export default async function handler(req, res) {
         templates: fallbackTemplates,
         isFallback: true,
         baseUrl,
-        requestInfo
+        requestInfo,
+        error: error.message
       });
     }
     
