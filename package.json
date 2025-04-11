@@ -9,7 +9,8 @@
     "build": "npm run check-env && next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "node test-rightmove.js"
+    "test": "node test-rightmove.js",
+    "setup-params": "node scripts/setup-parameter-store.js"
   },
   "author": "",
   "license": "MIT",
@@ -25,7 +26,7 @@
     "aws-sdk": "^2.1692.0",
     "body-parser": "^1.20.3",
     "cors": "^2.8.5",
-    "dotenv": "^16.4.7",
+    "dotenv": "^16.5.0",
     "express": "^4.21.2",
     "jsonwebtoken": "^9.0.2",
     "next": "^14.1.3",

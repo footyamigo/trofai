@@ -1,5 +1,11 @@
 // Script to verify environment variables during build
-console.log('🔍 Checking environment variables...\n');
+require('dotenv').config();
+
+console.log('🔍 Starting environment variable check...\n');
+
+// Print current working directory and available files
+console.log('Current directory:', process.cwd());
+console.log('Files in directory:', require('fs').readdirSync(process.cwd()));
 
 const requiredVars = [
   'FIRECRAWL_API_KEY',
@@ -17,11 +23,14 @@ const optionalVars = [
   'USE_FIRECRAWL'
 ];
 
-console.log('Environment Variables Available:', 
-  Object.keys(process.env)
-    .filter(key => !key.includes('SECRET') && !key.includes('KEY'))
-    .join(', ')
-);
+// Print all environment variables (excluding sensitive ones)
+console.log('\n📋 All Environment Variables:');
+Object.keys(process.env)
+  .filter(key => !key.includes('SECRET') && !key.includes('KEY') && !key.includes('PASSWORD'))
+  .sort()
+  .forEach(key => {
+    console.log(`${key}: ${process.env[key]}`);
+  });
 
 console.log('\n📋 Required Variables Status:');
 const missingRequired = [];
@@ -36,6 +45,14 @@ optionalVars.forEach(varName => {
   const isSet = !!process.env[varName];
   console.log(`${isSet ? '✅' : '⚠️'} ${varName}: ${isSet ? 'Set' : 'Not Set'}`);
 });
+
+// Check for .env file
+try {
+  const envFile = require('fs').readFileSync('.env', 'utf8');
+  console.log('\n📋 .env file exists with', envFile.split('\n').length, 'lines');
+} catch (error) {
+  console.log('\n⚠️ No .env file found');
+}
 
 if (missingRequired.length > 0) {
   console.error('\n❌ Error: Missing required environment variables:');

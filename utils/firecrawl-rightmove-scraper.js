@@ -4,6 +4,7 @@ require('dotenv').config();
 const fetch = require('node-fetch');
 const { generatePropertyCaptions, CAPTION_TYPES } = require('./caption-generator');
 const getConfig = require('next/config').default;
+const configService = require('./config-service');
 
 // Import FirecrawlApp from the package if it exists, otherwise continue with fetch
 let FirecrawlApp;
@@ -178,52 +179,67 @@ async function retryWithBackoff(fn, maxAttempts = MAX_RETRY_ATTEMPTS) {
     throw lastError;
 }
 
+async function getFirecrawlApiKey() {
+    try {
+        const key = await configService.getFirecrawlApiKey();
+        console.log('API Key status:', {
+            keyExists: !!key,
+            keyPrefix: key ? key.substring(0, 5) : 'N/A'
+        });
+        return key;
+    } catch (error) {
+        console.error('Failed to retrieve Firecrawl API key:', error);
+        throw error;
+    }
+}
+
 async function scrapeRightmoveProperty(propertyUrl) {
     console.log(`Starting scrape for: ${propertyUrl}`);
 
-    // Create a detailed environment report to include in error messages
-    const envReport = {
-        timestamp: new Date().toISOString(),
-        nodeEnv: process.env.NODE_ENV,
-        nodeVersion: process.version,
-        platform: process.platform,
-        arch: process.arch,
-        memoryUsage: process.memoryUsage(),
-        apiKeyStatus: {
-            serverRuntime: serverRuntimeConfig?.FIRECRAWL_API_KEY ? 'Present' : 'Missing',
-            processEnv: process.env.FIRECRAWL_API_KEY ? 'Present' : 'Missing',
-            nextPublic: process.env.NEXT_PUBLIC_FIRECRAWL_API_KEY ? 'Present' : 'Missing',
-            finalStatus: FIRECRAWL_API_KEY ? 'Found' : 'Missing',
-            keyPrefix: FIRECRAWL_API_KEY ? FIRECRAWL_API_KEY.substring(0, 5) : 'N/A',
-        }
-    };
-    
-    console.log('Environment report:', JSON.stringify(envReport, null, 2));
-    
     try {
-        // Validate the URL
+        // Get the API key first
+        const apiKey = await getFirecrawlApiKey();
+        console.log('Successfully retrieved Firecrawl API key');
+
+        // Create a detailed environment report
+        const envReport = {
+            timestamp: new Date().toISOString(),
+            nodeEnv: process.env.NODE_ENV,
+            nodeVersion: process.version,
+            platform: process.platform,
+            arch: process.arch,
+            memoryUsage: process.memoryUsage(),
+            apiKeyStatus: {
+                exists: !!apiKey,
+                keyPrefix: apiKey ? apiKey.substring(0, 5) : 'N/A'
+            }
+        };
+
+        // First try using the FirecrawlApp package if available
+        if (FirecrawlApp) {
+            try {
+                return await scrapeWithFirecrawlPackage(propertyUrl, apiKey);
+            } catch (packageError) {
+                console.warn('Failed to use FirecrawlApp package, falling back to direct API:', packageError.message);
+            }
+        }
+
+        // Validate and clean the URL
         validateRightmoveUrl(propertyUrl);
         const cleanUrl = cleanRightmoveUrl(propertyUrl);
         
-        // Create a record of our attempt for debugging
         console.log('----- SCRAPE ATTEMPT INFO -----');
         console.log('Environment:', process.env.NODE_ENV);
         console.log('Clean URL:', cleanUrl);
-        console.log('API Key sources:');
-        console.log('- serverRuntimeConfig?.FIRECRAWL_API_KEY:', serverRuntimeConfig?.FIRECRAWL_API_KEY ? 'Present' : 'Missing');
-        console.log('- process.env.FIRECRAWL_API_KEY:', process.env.FIRECRAWL_API_KEY ? 'Present' : 'Missing');
-        console.log('- process.env.NEXT_PUBLIC_FIRECRAWL_API_KEY:', process.env.NEXT_PUBLIC_FIRECRAWL_API_KEY ? 'Present' : 'Missing');
-        console.log('Final FIRECRAWL_API_KEY status:', FIRECRAWL_API_KEY ? 'Found' : 'Missing');
-        console.log('API Key prefix:', FIRECRAWL_API_KEY ? FIRECRAWL_API_KEY.substring(0, 5) : 'N/A');
+        console.log('API Key status:', envReport.apiKeyStatus);
         console.log('-------------------------------');
         
         // Try to scrape with Firecrawl
         try {
             console.log('Attempting to scrape with Firecrawl...');
-            return await scrapeWithFirecrawl(cleanUrl, envReport);
+            return await scrapeWithFirecrawl(cleanUrl, apiKey, envReport);
         } catch (firecrawlError) {
-            // Create a detailed error report
-            const errorReport = {
+            console.error('DETAILED ERROR REPORT:', JSON.stringify({
                 ...envReport,
                 error: {
                     message: firecrawlError.message,
@@ -231,27 +247,22 @@ async function scrapeRightmoveProperty(propertyUrl) {
                     name: firecrawlError.name,
                     code: firecrawlError.code
                 }
-            };
-            
-            console.error('DETAILED ERROR REPORT:', JSON.stringify(errorReport, null, 2));
-            throw new Error(`Firecrawl scraping failed: ${firecrawlError.message}\nEnvironment: ${JSON.stringify(envReport.apiKeyStatus)}`);
+            }, null, 2));
+            throw firecrawlError;
         }
     } catch (error) {
-        console.error('Property scraping failed:', error);
+        console.error('Error in scrapeRightmoveProperty:', error);
         throw error;
     }
 }
 
 // Firecrawl-specific scraping function
-async function scrapeWithFirecrawl(cleanUrl, envReport) {
-    // Define the prompt for data extraction
-        const prompt = "Capture the price, address, number of bedrooms, bathrooms, and square ft of the property. Include the name, address, and logo of the estate agent. Capture the property description, key features, and all gallery images";
+async function scrapeWithFirecrawl(cleanUrl, apiKey, envReport) {
+    const prompt = "Capture the price, address, number of bedrooms, bathrooms, and square ft of the property. Include the name, address, and logo of the estate agent. Capture the property description, key features, and all gallery images";
 
-    // Retry the extraction process
-        for (let mainAttempt = 1; mainAttempt <= 3; mainAttempt++) {
-            try {
+    for (let mainAttempt = 1; mainAttempt <= 3; mainAttempt++) {
+        try {
             console.log(`Firecrawl extraction attempt ${mainAttempt}/3`);
-            console.log('Using API Key:', FIRECRAWL_API_KEY ? `${FIRECRAWL_API_KEY.substring(0, 5)}...` : 'Missing');
             
             const requestBody = {
                 urls: [cleanUrl],
@@ -259,10 +270,10 @@ async function scrapeWithFirecrawl(cleanUrl, envReport) {
             };
             
             const requestOptions = {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${FIRECRAWL_API_KEY}`,
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${apiKey}`,
                     'Accept': 'application/json',
                     'User-Agent': 'TrofaiApp/1.0'
                 },
@@ -355,30 +366,22 @@ async function scrapeWithFirecrawl(cleanUrl, envReport) {
                 return await processFirecrawlResults(jsonData.data[0]);
             } else if (jsonData.id) {
                 console.log(`Firecrawl extraction initiated with ID: ${jsonData.id}`);
-                const pollResult = await pollFirecrawlResults(jsonData.id, envReport);
+                const pollResult = await pollFirecrawlResults(jsonData.id, apiKey, envReport);
                 
                 console.log('Poll result received');
                 return await processFirecrawlResults(pollResult);
             } else {
                 throw new Error('Unexpected response format from Firecrawl');
             }
-    } catch (error) {
-            console.warn(`Firecrawl attempt ${mainAttempt} failed:`, error.message);
-            
-            if (mainAttempt === 3) {
-                console.error('All Firecrawl attempts failed. Trying fallback...');
-        throw error;
-            }
-            
-            // Wait before retrying
-            const delay = 3000 * Math.pow(1.5, mainAttempt - 1);
-            console.log(`Waiting ${delay}ms before next attempt...`);
-            await new Promise(resolve => setTimeout(resolve, delay));
+        } catch (error) {
+            if (mainAttempt === 3) throw error;
+            console.log(`Attempt ${mainAttempt} failed, retrying...`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
         }
     }
 }
 
-async function pollFirecrawlResults(extractId, envReport) {
+async function pollFirecrawlResults(extractId, apiKey, envReport) {
     let attempts = 0;
 
     const poll = async () => {
@@ -405,7 +408,7 @@ async function pollFirecrawlResults(extractId, envReport) {
                 const requestOptions = {
                     method: 'GET',
                     headers: {
-                        'Authorization': `Bearer ${FIRECRAWL_API_KEY}`,
+                        'Authorization': `Bearer ${apiKey}`,
                         'Accept': 'application/json'
                     }
                 };

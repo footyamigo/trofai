@@ -61,10 +61,8 @@ const nextConfig = {
   },
   // Explicitly set runtime configs
   serverRuntimeConfig: {
-    // Will only be available on the server side
+    // These will only be available on the server side
     FIRECRAWL_API_KEY: process.env.FIRECRAWL_API_KEY,
-    ROBORABBIT_API_KEY: process.env.ROBORABBIT_API_KEY,
-    TASK_UID: process.env.TASK_UID,
     BANNERBEAR_API_KEY: process.env.BANNERBEAR_API_KEY,
     BANNERBEAR_TEMPLATE_UID: process.env.BANNERBEAR_TEMPLATE_UID,
     BANNERBEAR_WEBHOOK_URL: process.env.BANNERBEAR_WEBHOOK_URL,
@@ -80,19 +78,33 @@ const nextConfig = {
     DYNAMODB_PROPERTIES_TABLE: process.env.DYNAMODB_PROPERTIES_TABLE || 'trofai-properties',
     DYNAMODB_DESIGNS_TABLE: process.env.DYNAMODB_DESIGNS_TABLE || 'trofai-designs',
     DYNAMODB_CAPTIONS_TABLE: process.env.DYNAMODB_CAPTIONS_TABLE || 'trofai-captions',
-    S3_BUCKET_NAME: process.env.S3_BUCKET_NAME || process.env.NEXT_PUBLIC_S3_BUCKET || 'trofai'
+    S3_BUCKET_NAME: process.env.NEXT_PUBLIC_S3_BUCKET
   },
   publicRuntimeConfig: {
-    // Will be available on both server and client
+    // These will be available on both server and client
     USE_FIRECRAWL: process.env.USE_FIRECRAWL || 'true',
-    NODE_ENV: process.env.NODE_ENV || 'production',
+    NODE_ENV: process.env.NODE_ENV || 'development',
     USE_FALLBACK: process.env.USE_FALLBACK || 'false',
-    NEXT_PUBLIC_AWS_REGION: process.env.NEXT_PUBLIC_AWS_REGION || process.env.REGION || 'us-east-1',
+    NEXT_PUBLIC_AWS_REGION: process.env.REGION || 'us-east-1',
     NEXT_PUBLIC_USER_POOL_ID: process.env.NEXT_PUBLIC_USER_POOL_ID,
     NEXT_PUBLIC_USER_POOL_WEB_CLIENT_ID: process.env.NEXT_PUBLIC_USER_POOL_WEB_CLIENT_ID,
-    NEXT_PUBLIC_S3_BUCKET: process.env.NEXT_PUBLIC_S3_BUCKET || 'trofai-assets',
-    NEXT_PUBLIC_API_ENDPOINT: getApiEndpoint()
-  }
+    NEXT_PUBLIC_S3_BUCKET: process.env.NEXT_PUBLIC_S3_BUCKET,
+    NEXT_PUBLIC_API_ENDPOINT: process.env.NODE_ENV === 'production' ? '/api' : 'http://localhost:3000/api'
+  },
+  // Enable static exports for AWS Amplify
+  output: 'standalone',
+  // Add custom webpack configuration if needed
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      // Don't attempt to load AWS SDK on the client side
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        aws4: false,
+        'aws-sdk': false,
+      };
+    }
+    return config;
+  },
 };
 
 // Log the final config (excluding sensitive data)
