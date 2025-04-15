@@ -143,8 +143,73 @@ export default function SettingsPage() {
   };
 
   const handleConnectInstagram = () => {
-    console.log('Connect Instagram clicked');
-    toast.info('Connect Facebook first to enable Instagram posting.');
+    if (!isFacebookConnected) {
+        toast.error('Please connect your Facebook account first.');
+        return;
+    }
+    if (typeof FB === 'undefined') {
+      toast.error('Facebook SDK not loaded. Please refresh the page.');
+      return;
+    }
+
+    const sessionToken = localStorage.getItem('session');
+    if (!sessionToken) {
+      toast.error('You seem to be logged out. Please log in again.');
+      return;
+    }
+
+    setIsConnecting(true);
+    toast.loading('Connecting to Instagram via Facebook...');
+
+    FB.login(function(response) {
+        toast.dismiss();
+        setIsConnecting(false);
+
+        if (response.authResponse) {
+            console.log('Instagram via Facebook Auth Response:', response.authResponse);
+            const fbAccessToken = response.authResponse.accessToken;
+
+            fetch('/api/social/instagram-connect', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${sessionToken}`
+                },
+                body: JSON.stringify({ fbAccessToken: fbAccessToken }),
+            })
+            .then(res => {
+                if (!res.ok) {
+                    return res.json().then(errData => {
+                      throw new Error(errData.message || `Request failed with status ${res.status}`);
+                    }).catch(() => {
+                       throw new Error(`Request failed with status ${res.status}`);
+                    });
+                }
+                return res.json();
+            })
+            .then(data => {
+                toast.success(data.message || 'Instagram connected successfully!');
+                setIsInstagramConnected(true);
+            })
+            .catch(error => {
+                console.error('Error connecting Instagram:', error);
+                toast.error(error.message || 'Failed to connect Instagram.');
+            });
+
+        } else {
+            console.log('User cancelled Instagram login/permissions or did not fully authorize.');
+            toast.error('Instagram connection cancelled or failed.');
+        }
+    }, {
+        scope: 'email,public_profile,pages_show_list,pages_read_engagement,pages_manage_posts,instagram_basic,instagram_content_publish',
+        return_scopes: true
+    });
+  };
+
+  const handleDisconnectInstagram = () => {
+     console.log('Disconnect Instagram');
+     toast('Disconnect Instagram functionality not yet implemented.');
+     // TODO: Implement backend call and state update
   };
 
   if (isLoadingStatus) {
@@ -225,16 +290,30 @@ export default function SettingsPage() {
                 <div className="social-connection">
                   <div className="connection-header">
                     <h2>Instagram</h2>
-                    {isInstagramConnected ? <span className="status connected">Connected</span> : <span className="status disconnected">Not Connected</span>}
+                    {isInstagramConnected ? (
+                      <span className="status connected">Connected</span>
+                    ) : (
+                      <span className="status disconnected">Not Connected</span>
+                    )}
                   </div>
                   <p>Connect your Instagram Business account (via Facebook) to post property designs.</p>
-                  <button 
-                    className="button primary" 
-                    onClick={handleConnectInstagram}
-                    disabled={!isFacebookConnected || isConnecting || isInstagramConnected}
-                  >
-                    {isInstagramConnected ? 'Disconnect Instagram' : 'Connect Instagram'}
-                  </button>
+                  {isInstagramConnected ? (
+                    <button
+                      className="button secondary"
+                      onClick={handleDisconnectInstagram}
+                      disabled={isConnecting}
+                    >
+                      Disconnect Instagram
+                    </button>
+                  ) : (
+                    <button
+                      className="button primary"
+                      onClick={handleConnectInstagram}
+                      disabled={!isFacebookConnected || isConnecting}
+                    >
+                      {isConnecting ? "Connecting..." : "Connect Instagram"}
+                    </button>
+                  )}
                   <p className="small-text">Note: Requires a connected Facebook Business account with an associated Instagram Business profile.</p>
                 </div>
               </Card>
