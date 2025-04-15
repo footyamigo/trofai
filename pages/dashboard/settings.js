@@ -1,0 +1,285 @@
+import React, { useState, useEffect } from 'react';
+import Head from 'next/head';
+import { useAuth } from '../../src/context/AuthContext';
+import ProtectedRoute from '../../src/components/ProtectedRoute';
+import DashboardHeader from '../../components/Dashboard/DashboardHeader';
+import Sidebar from '../../components/Layout/Sidebar';
+import MobileMenu from '../../components/Layout/MobileMenu';
+import Card from '../../components/UI/Card';
+import { toast } from 'react-hot-toast';
+
+export default function SettingsPage() {
+  const { user } = useAuth();
+  const [isFacebookConnected, setIsFacebookConnected] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+
+  useEffect(() => {
+    // Example: fetch user's social connections from your backend/DB
+    // const fetchStatus = async () => { 
+    //   const status = await getUserSocialConnections(user.username); 
+    //   setIsFacebookConnected(status.facebookConnected);
+    // };
+    // fetchStatus();
+  }, [user]);
+
+  const handleConnectFacebook = () => {
+    if (typeof FB === 'undefined') {
+      toast.error('Facebook SDK not loaded. Please refresh the page.');
+      return;
+    }
+
+    setIsConnecting(true);
+    toast.loading('Connecting to Facebook...');
+
+    FB.login(function(response) {
+      toast.dismiss();
+      setIsConnecting(false);
+
+      if (response.authResponse) {
+        console.log('Welcome! Fetching your information.... ');
+        console.log('Facebook Auth Response:', response.authResponse);
+        const accessToken = response.authResponse.accessToken;
+        const userID = response.authResponse.userID;
+
+        fetch('/api/social/facebook-connect', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${user.signInUserSession.idToken.jwtToken}` 
+          },
+          body: JSON.stringify({ 
+            accessToken: accessToken,
+            facebookUserId: userID 
+          }),
+        })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            toast.success('Facebook connected successfully!');
+            setIsFacebookConnected(true);
+          } else {
+            toast.error(data.message || 'Failed to connect Facebook account.');
+          }
+        })
+        .catch(error => {
+          console.error('Error sending token to backend:', error);
+          toast.error('An error occurred while connecting Facebook.');
+        });
+
+      } else {
+        console.log('User cancelled login or did not fully authorize.');
+        toast.error('Facebook connection cancelled or failed.');
+      }
+    }, { 
+      scope: 'email,public_profile,pages_show_list,pages_read_engagement,pages_manage_posts',
+      return_scopes: true
+    });
+  };
+
+  const handleDisconnectFacebook = () => {
+    console.log('Disconnect Facebook');
+    toast.promise(
+      fetch('/api/social/facebook-disconnect', { method: 'POST' }).then(res => {
+        if (!res.ok) throw new Error('Failed to disconnect');
+        return res.json();
+      }),
+      {
+        loading: 'Disconnecting Facebook...',
+        success: () => {
+          setIsFacebookConnected(false);
+          return 'Facebook disconnected.';
+        },
+        error: 'Failed to disconnect Facebook.',
+      }
+    );
+  };
+
+  const handleConnectInstagram = () => {
+    console.log('Connect Instagram clicked');
+    toast.info('Connect Facebook first to enable Instagram posting.');
+  };
+
+  return (
+    <ProtectedRoute>
+      <div className="dashboard">
+        <Head>
+          <title>Account Settings - Trofai</title>
+          <meta name="description" content="Manage your Trofai account settings and connected social media accounts." />
+          <link rel="icon" href="/favicon.ico" />
+        </Head>
+
+        <MobileMenu activePage="settings" />
+        <Sidebar activePage="settings" />
+
+        <div className="dashboard-container">
+          <DashboardHeader />
+          
+          <main className="main">
+            <div className="content">
+              <div className="dashboard-header">
+                <h1 className="title">Account Settings</h1>
+                <p className="subtitle">Manage your profile and social media connections.</p>
+              </div>
+
+              <Card title="Social Media Connections">
+                <div className="social-connection">
+                  <div className="connection-header">
+                    <h2>Facebook</h2>
+                    {isFacebookConnected && <span className="status connected">Connected</span>}
+                    {!isFacebookConnected && <span className="status disconnected">Not Connected</span>}
+                  </div>
+                  <p>Connect your Facebook account to post property designs directly to your pages.</p>
+                  {isFacebookConnected ? (
+                    <button 
+                      className="button secondary" 
+                      onClick={handleDisconnectFacebook}
+                      disabled={isConnecting}
+                    >
+                      Disconnect Facebook
+                    </button>
+                  ) : (
+                    <button 
+                      className="button primary" 
+                      onClick={handleConnectFacebook}
+                      disabled={isConnecting}
+                    >
+                      {isConnecting ? 'Connecting...' : 'Connect Facebook'}
+                    </button>
+                  )}
+                </div>
+                
+                <div className="social-connection">
+                  <div className="connection-header">
+                    <h2>Instagram</h2>
+                    <span className="status disconnected">Not Connected</span> 
+                  </div>
+                  <p>Connect your Instagram Business account (via Facebook) to post property designs.</p>
+                  <button 
+                    className="button primary" 
+                    onClick={handleConnectInstagram}
+                    disabled={!isFacebookConnected || isConnecting}
+                  >
+                    Connect Instagram
+                  </button>
+                  <p className="small-text">Note: Requires a connected Facebook Business account with an associated Instagram Business profile.</p>
+                </div>
+              </Card>
+
+              {/* TODO: Add other settings sections (e.g., Profile, Billing) */}
+
+            </div>
+          </main>
+        </div>
+      </div>
+
+      <style jsx>{`
+        .dashboard {
+          display: flex;
+          min-height: 100vh;
+          background-color: #f9fafb;
+        }
+        .dashboard-container {
+          flex-grow: 1;
+          display: flex;
+          flex-direction: column;
+        }
+        .main {
+          flex-grow: 1;
+          padding: 1rem 2rem;
+        }
+        .content {
+          max-width: 1000px;
+          margin: 0 auto;
+        }
+        .dashboard-header {
+          margin-bottom: 2rem;
+        }
+        .title {
+          font-size: 1.8rem;
+          font-weight: 700;
+          color: #1f2937;
+          margin-bottom: 0.5rem;
+        }
+        .subtitle {
+          font-size: 1rem;
+          color: #6b7280;
+        }
+        .social-connection {
+          border-top: 1px solid #e5e7eb;
+          padding: 1.5rem 0;
+        }
+        .social-connection:first-of-type {
+          border-top: none;
+          padding-top: 0;
+        }
+        .connection-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 0.5rem;
+        }
+        .social-connection h2 {
+          font-size: 1.2rem;
+          font-weight: 600;
+          margin: 0;
+        }
+        .status {
+          font-size: 0.8rem;
+          font-weight: 600;
+          padding: 0.2rem 0.6rem;
+          border-radius: 12px;
+          text-transform: uppercase;
+        }
+        .status.connected {
+          background-color: #e6f4ea;
+          color: #34a853;
+        }
+        .status.disconnected {
+          background-color: #f1f3f4;
+          color: #5f6368;
+        }
+        .social-connection p {
+          color: #4b5563;
+          margin-bottom: 1rem;
+          font-size: 0.9rem;
+        }
+        .button {
+          padding: 0.6rem 1.2rem;
+          border: none;
+          border-radius: 6px;
+          cursor: pointer;
+          font-weight: 500;
+          transition: background-color 0.2s ease, color 0.2s ease, opacity 0.2s ease;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-width: 140px;
+        }
+        .button.primary {
+          background-color: #62d76b;
+          color: white;
+        }
+        .button.primary:hover:not(:disabled) {
+          background-color: #4caf50;
+        }
+        .button.secondary {
+          background-color: #f1f3f4;
+          color: #5f6368;
+          border: 1px solid #dadce0;
+        }
+        .button.secondary:hover:not(:disabled) {
+          background-color: #e8eaed;
+        }
+        .button:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+        .small-text {
+          font-size: 0.85rem;
+          color: #6b7280;
+          margin-top: 0.75rem;
+        }
+      `}</style>
+    </ProtectedRoute>
+  );
+} 

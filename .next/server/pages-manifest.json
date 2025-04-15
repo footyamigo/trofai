@@ -4,5 +4,7 @@
   "/_document": "pages/_document.js",
   "/auth/signin": "pages/auth/signin.js",
   "/dashboard": "pages/dashboard.js",
-  "/api/properties/list": "pages/api/properties/list.js"
+  "/": "pages/index.js",
+  "/api/auth/validate-session": "pages/api/auth/validate-session.js",
+  "/api/auth/signin": "pages/api/auth/signin.js"
 }

@@ -21,7 +21,7 @@ export default function MobileMenu({ activePage }) {
     { id: 'activity', label: 'Activity Logs', icon: TbActivityHeartbeat, href: '/activity' },
     { id: 'usage', label: 'Usage', icon: IoStatsChartOutline, href: '/usage' },
     { id: 'api-keys', label: 'API Keys', icon: FiKey, href: '/api-keys' },
-    { id: 'settings', label: 'Settings', icon: IoSettingsOutline, href: '/settings' },
+    { id: 'settings', label: 'Settings', icon: IoSettingsOutline, href: '/dashboard/settings' },
   ];
 
   const toggleMenu = () => setIsOpen(!isOpen);

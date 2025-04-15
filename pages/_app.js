@@ -5,59 +5,104 @@ import { AuthProvider } from '../src/context/AuthContext';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { isAmplifyConfigured, configureAmplify } from '../src/aws/config';
 
+// Function to load Facebook SDK
+const loadFacebookSDK = () => {
+  return new Promise((resolve) => {
+    // Check if SDK is already loaded
+    if (document.getElementById('facebook-jssdk')) {
+      resolve();
+      return;
+    }
+
+    window.fbAsyncInit = function() {
+      FB.init({
+        appId            : process.env.NEXT_PUBLIC_FACEBOOK_APP_ID,
+        cookie           : true,  // Enable cookies to allow the server to access the session.
+        xfbml            : true,  // Parse social plugins on this webpage.
+        version          : 'v18.0' // Use the latest graph api version
+      });
+      FB.AppEvents.logPageView();   
+      console.log('Facebook SDK initialized.');
+      resolve();
+    };
+
+    // Load the SDK asynchronously
+    (function(d, s, id){
+       var js, fjs = d.getElementsByTagName(s)[0];
+       if (d.getElementById(id)) {return;} // Already loaded
+       js = d.createElement(s); js.id = id;
+       js.src = "https://connect.facebook.net/en_US/sdk.js";
+       fjs.parentNode.insertBefore(js, fjs);
+     }(document, 'script', 'facebook-jssdk'));
+  });
+};
+
 function MyApp({ Component, pageProps }) {
   const [isClient, setIsClient] = useState(false);
   const [amplifyReady, setAmplifyReady] = useState(false);
+  const [facebookReady, setFacebookReady] = useState(false); // State for FB SDK
   const [initError, setInitError] = useState(null);
   const [loadingTime, setLoadingTime] = useState(0);
   
-  // Initialize Amplify on client-side
+  // Initialize Amplify & Facebook SDK on client-side
   useEffect(() => {
     setIsClient(true);
-    
-    try {
-      // First check if already configured
-      if (isAmplifyConfigured()) {
-        console.log('Amplify already configured');
-        setAmplifyReady(true);
-        return;
-      }
-      
-      // Try to configure Amplify
-      const configured = configureAmplify();
-      
-      if (configured) {
-        console.log('Amplify configured successfully');
-        setAmplifyReady(true);
-      } else {
-        // Retry after a short delay
-        console.log('Retrying Amplify configuration...');
-        const timer = setTimeout(() => {
-          const retryResult = configureAmplify();
-          setAmplifyReady(retryResult);
-          
-          if (!retryResult) {
-            console.error('Failed to configure Amplify after retry');
-            setInitError('Failed to initialize authentication system');
+    let amplifyTimer = null;
+
+    const initialize = async () => {
+      try {
+        // --- Amplify Initialization ---
+        if (!isAmplifyConfigured()) {
+          const configured = configureAmplify();
+          if (!configured) {
+            console.log('Retrying Amplify configuration...');
+            amplifyTimer = setTimeout(() => {
+              const retryResult = configureAmplify();
+              setAmplifyReady(retryResult);
+              if (!retryResult) {
+                console.error('Failed to configure Amplify after retry');
+                setInitError('Failed to initialize authentication system');
+              }
+            }, 1500);
+          } else {
+            console.log('Amplify configured successfully');
+            setAmplifyReady(true);
           }
-        }, 1500);
-        
-        return () => clearTimeout(timer);
+        } else {
+          console.log('Amplify already configured');
+          setAmplifyReady(true);
+        }
+
+        // --- Facebook SDK Initialization ---
+        if (process.env.NEXT_PUBLIC_FACEBOOK_APP_ID) {
+          await loadFacebookSDK();
+          setFacebookReady(true);
+        } else {
+          console.warn('Facebook App ID not configured, skipping SDK load.');
+          setFacebookReady(true); // Consider it 'ready' if not needed
+        }
+      } catch (error) {
+        console.error('Error during initialization:', error);
+        setInitError(error.message || 'Failed to initialize application');
       }
-    } catch (error) {
-      console.error('Error during Amplify initialization:', error);
-      setInitError(error.message || 'Failed to initialize application');
-    }
+    };
+
+    initialize();
+    
+    // Cleanup timer if component unmounts
+    return () => clearTimeout(amplifyTimer);
+
   }, []);
 
   // Track loading time and force a reload if it takes too long
   useEffect(() => {
-    if (!isClient || amplifyReady) return;
+    // Only track if Amplify or Facebook SDK are still loading
+    if (!isClient || (amplifyReady && facebookReady)) return;
     
     const interval = setInterval(() => {
       setLoadingTime(prev => {
         const newTime = prev + 1;
-        console.log(`App has been loading for ${newTime} seconds`);
+        console.log(`App has been loading for ${newTime} seconds (Amplify: ${amplifyReady}, FB: ${facebookReady})`);
         
         // If still loading after 30 seconds, try force reloading
         if (newTime >= 30 && typeof window !== 'undefined') {
@@ -71,7 +116,7 @@ function MyApp({ Component, pageProps }) {
     }, 1000);
     
     return () => clearInterval(interval);
-  }, [isClient, amplifyReady]);
+  }, [isClient, amplifyReady, facebookReady]); // Depend on both readiness states
 
   // Validate essential environment variables on startup
   useEffect(() => {
@@ -82,6 +127,8 @@ function MyApp({ Component, pageProps }) {
       BANNERBEAR_API_KEY: process.env.BANNERBEAR_API_KEY,
       BANNERBEAR_TEMPLATE_UID: process.env.BANNERBEAR_TEMPLATE_UID,
       BANNERBEAR_TEMPLATE_SET_UID: process.env.BANNERBEAR_TEMPLATE_SET_UID,
+      // Check for Facebook App ID only if intended to be used
+      NEXT_PUBLIC_FACEBOOK_APP_ID: process.env.NEXT_PUBLIC_FACEBOOK_APP_ID
     };
 
     // Check if any required vars are missing
@@ -95,18 +142,22 @@ function MyApp({ Component, pageProps }) {
         `Please ensure these are set in your .env file or environment.`
       );
       
-      // Set init error if critical authentication variables are missing
+      // Set init error if critical variables are missing
       if (
         missingVars.includes('NEXT_PUBLIC_USER_POOL_ID') || 
         missingVars.includes('NEXT_PUBLIC_USER_POOL_WEB_CLIENT_ID')
       ) {
-        setInitError('Missing required authentication configuration. Please check your environment variables.');
+        setInitError('Missing required authentication configuration.');
+      }
+      if (missingVars.includes('NEXT_PUBLIC_FACEBOOK_APP_ID')) {
+         // Only warn if FB connect is a core feature, maybe not an error yet
+         console.warn('Facebook App ID is missing. Social connection features may be disabled.');
       }
     }
   }, []);
 
   // Show loading state when not ready
-  if (!isClient || !amplifyReady) {
+  if (!isClient || !amplifyReady || !facebookReady) { // Check both readiness states
     return (
       <div style={{ 
         minHeight: '100vh', 

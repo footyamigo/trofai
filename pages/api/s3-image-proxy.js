@@ -40,19 +40,24 @@ async function streamToResponse(stream, res) {
 
 export default async function handler(req, res) {
   // Set comprehensive CORS headers for all responses
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  const origin = req.headers.origin || '*';
+  res.setHeader('Access-Control-Allow-Origin', origin);
+  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, Cache-Control');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
   res.setHeader('Access-Control-Max-Age', '86400'); // 24 hours
+  res.setHeader('Vary', 'Origin'); // Important for CDN caching
   
   // Handle preflight requests
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    res.status(200).end();
+    return;
   }
   
   // Only allow GET requests
   if (req.method !== 'GET') {
-    return res.status(405).json({ message: 'Method not allowed' });
+    res.status(405).json({ message: 'Method not allowed' });
+    return;
   }
 
   // Get the path and folder parameters from the query string
@@ -60,7 +65,8 @@ export default async function handler(req, res) {
 
   if (!folder || !file) {
     console.warn('Missing parameters:', { folder, file });
-    return res.status(400).json({ message: 'Both folder and file parameters are required' });
+    res.status(400).json({ message: 'Both folder and file parameters are required' });
+    return;
   }
 
   // Construct the S3 key (path to the file in S3)
@@ -72,6 +78,7 @@ export default async function handler(req, res) {
     bucket: S3_BUCKET_NAME,
     requestHost: req.headers.host,
     referer: req.headers.referer || 'none',
+    origin: req.headers.origin || 'none',
     userAgent: req.headers['user-agent'] || 'none',
     timestamp: new Date().toISOString()
   };
