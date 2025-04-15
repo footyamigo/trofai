@@ -29,20 +29,23 @@ export default function ResultsModal({ isOpen, onClose, results }) {
   const [isLoadingStatus, setIsLoadingStatus] = useState(false); // To prevent multiple fetches
   const [isPosting, setIsPosting] = useState(false); // Loading state for posting actions
 
-  // Fetch social connection status when the modal opens or the social tab is active
+  // Fetch social connection status ONCE when the modal opens
   useEffect(() => {
+    let isMounted = true; // Prevent state update on unmounted component
+
     const fetchStatus = async () => {
-      if (!isOpen || isLoadingStatus) return; // Only run if open and not already loading
+      if (!isMounted || isLoadingStatus) return; // Don't fetch if already loading
 
       setIsLoadingStatus(true);
       const sessionToken = localStorage.getItem('session');
 
       if (!sessionToken) {
         console.log('ResultsModal: No session token, cannot fetch status.');
-        // Assume disconnected if no token
-        setIsFacebookConnected(false);
-        setIsInstagramConnected(false);
-        setIsLoadingStatus(false);
+        if (isMounted) {
+          setIsFacebookConnected(false);
+          setIsInstagramConnected(false);
+          setIsLoadingStatus(false);
+        }
         return;
       }
 
@@ -50,32 +53,50 @@ export default function ResultsModal({ isOpen, onClose, results }) {
         const response = await fetch('/api/social/status', {
           headers: { 'Authorization': `Bearer ${sessionToken}` }
         });
+        // Check again if mounted before processing response
+        if (!isMounted) return; 
+        
         const data = await response.json();
         if (data.success && data.connections) {
           setIsFacebookConnected(data.connections.facebook || false);
           setIsInstagramConnected(data.connections.instagram || false);
         } else {
           console.error('ResultsModal: Failed to fetch social status:', data.message);
-           // Don't toast here, might be annoying
+           // Handle potential errors, maybe set defaults
+           setIsFacebookConnected(false);
+           setIsInstagramConnected(false);
         }
       } catch (error) {
-        console.error('ResultsModal: Error fetching social status:', error);
+         if (!isMounted) return; 
+         console.error('ResultsModal: Error fetching social status:', error);
+         // Set defaults on error
+         setIsFacebookConnected(false);
+         setIsInstagramConnected(false);
       } finally {
-        setIsLoadingStatus(false);
+         if (isMounted) {
+            setIsLoadingStatus(false);
+         }
       }
     };
 
-    // Fetch status if modal is open, or specifically when social tab becomes active
-    if (isOpen && activeTab === 'social') {
+    // Fetch status only when modal becomes visible
+    if (isOpen) {
+      // Reset status before fetching if needed, or rely on initial state
+      // setIsLoadingStatus(true); // Moved inside fetchStatus to avoid race conditions
       fetchStatus();
-    }
-    
-    // Reset loading flag if modal closes
-    if (!isOpen) {
-        setIsLoadingStatus(false);
+    } else {
+      // Optionally reset state when modal closes
+      setIsLoadingStatus(false);
+      setIsFacebookConnected(false); 
+      setIsInstagramConnected(false);
     }
 
-  }, [isOpen, activeTab, isLoadingStatus]); // Add dependencies
+    // Cleanup function
+    return () => {
+      isMounted = false;
+    };
+
+  }, [isOpen]); // Depend only on isOpen to trigger fetch
 
   // Initialize captions when results change
   useEffect(() => {

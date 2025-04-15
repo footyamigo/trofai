@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-export default function Modal({ isOpen, onClose, children, title }) {
+export default function Modal({ isOpen, onClose, children, title, footer }) {
   const modalRef = useRef();
   
   // Close modal when clicking outside
@@ -44,6 +44,11 @@ export default function Modal({ isOpen, onClose, children, title }) {
         <div className="modal-content">
           {children}
         </div>
+        {footer && (
+          <div className="modal-footer">
+            {footer}
+          </div>
+        )}
       </div>
       
       <style jsx>{`
@@ -110,6 +115,12 @@ export default function Modal({ isOpen, onClose, children, title }) {
           flex-grow: 1;
         }
         
+        .modal-footer {
+          padding: 1rem 1.5rem;
+          border-top: 1px solid rgba(234, 234, 234, 0.5);
+          background-color: rgba(248, 249, 250, 0.5);
+        }
+        
         @keyframes modalFadeIn {
           from {
             opacity: 0;
@@ -132,6 +143,10 @@ export default function Modal({ isOpen, onClose, children, title }) {
           }
           
           .modal-content {
+            padding: 1rem;
+          }
+          
+          .modal-footer {
             padding: 1rem;
           }
         }
