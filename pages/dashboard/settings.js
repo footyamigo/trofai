@@ -7,6 +7,8 @@ import Sidebar from '../../components/Layout/Sidebar';
 import MobileMenu from '../../components/Layout/MobileMenu';
 import Card from '../../components/UI/Card';
 import { toast } from 'react-hot-toast';
+import InstagramConnectInfoModal from '../../components/UI/InstagramConnectInfoModal';
+import InstagramAccountSelectModal from '../../components/UI/InstagramAccountSelectModal';
 
 export default function SettingsPage() {
   const { user } = useAuth();
@@ -14,6 +16,10 @@ export default function SettingsPage() {
   const [isInstagramConnected, setIsInstagramConnected] = useState(false);
   const [isLoadingStatus, setIsLoadingStatus] = useState(true);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [showInstagramInfoModal, setShowInstagramInfoModal] = useState(false);
+  const [showInstagramSelectModal, setShowInstagramSelectModal] = useState(false);
+  const [availableIgAccounts, setAvailableIgAccounts] = useState([]);
+  const [isLinking, setIsLinking] = useState(false);
 
   useEffect(() => {
     const fetchStatus = async () => {
@@ -142,16 +148,13 @@ export default function SettingsPage() {
     );
   };
 
-  const handleConnectInstagram = () => {
-    if (!isFacebookConnected) {
-        toast.error('Please connect your Facebook account first.');
-        return;
-    }
+  const proceedWithInstagramConnect = () => {
+    setShowInstagramInfoModal(false);
+    
     if (typeof FB === 'undefined') {
       toast.error('Facebook SDK not loaded. Please refresh the page.');
       return;
     }
-
     const sessionToken = localStorage.getItem('session');
     if (!sessionToken) {
       toast.error('You seem to be logged out. Please log in again.');
@@ -159,17 +162,14 @@ export default function SettingsPage() {
     }
 
     setIsConnecting(true);
-    toast.loading('Connecting to Instagram via Facebook...');
+    toast.loading('Checking Facebook permissions & fetching accounts...');
 
     FB.login(function(response) {
-        toast.dismiss();
-        setIsConnecting(false);
-
         if (response.authResponse) {
             console.log('Instagram via Facebook Auth Response:', response.authResponse);
             const fbAccessToken = response.authResponse.accessToken;
 
-            fetch('/api/social/instagram-connect', {
+            fetch('/api/social/instagram-connect', { 
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -179,24 +179,39 @@ export default function SettingsPage() {
             })
             .then(res => {
                 if (!res.ok) {
-                    return res.json().then(errData => {
+                    return res.json().then(errData => { 
                       throw new Error(errData.message || `Request failed with status ${res.status}`);
-                    }).catch(() => {
-                       throw new Error(`Request failed with status ${res.status}`);
-                    });
+                    }).catch(() => { throw new Error(`Request failed with status ${res.status}`); });
                 }
                 return res.json();
             })
             .then(data => {
-                toast.success(data.message || 'Instagram connected successfully!');
-                setIsInstagramConnected(true);
+                toast.dismiss();
+                setIsConnecting(false);
+
+                if (data.success && data.accounts) {
+                    if (data.accounts.length > 0) {
+                        console.log('Available IG accounts:', data.accounts);
+                        setAvailableIgAccounts(data.accounts);
+                        setShowInstagramSelectModal(true);
+                    } else {
+                        toast.error('No Instagram Business/Creator accounts found linked to your Facebook Pages.');
+                        setAvailableIgAccounts([]);
+                    }
+                } else {
+                     throw new Error(data.message || 'Failed to fetch Instagram accounts.');
+                }
             })
             .catch(error => {
-                console.error('Error connecting Instagram:', error);
-                toast.error(error.message || 'Failed to connect Instagram.');
+                toast.dismiss(); 
+                setIsConnecting(false); 
+                console.error('Error fetching Instagram accounts list:', error);
+                toast.error(error.message || 'Failed to fetch Instagram accounts list.');
             });
 
         } else {
+            toast.dismiss();
+            setIsConnecting(false);
             console.log('User cancelled Instagram login/permissions or did not fully authorize.');
             toast.error('Instagram connection cancelled or failed.');
         }
@@ -206,10 +221,64 @@ export default function SettingsPage() {
     });
   };
 
+  const handleConnectInstagram = () => {
+    if (!isFacebookConnected) {
+        toast.error('Please connect your Facebook account first.');
+        return;
+    }
+    setShowInstagramInfoModal(true);
+  };
+
   const handleDisconnectInstagram = () => {
      console.log('Disconnect Instagram');
      toast('Disconnect Instagram functionality not yet implemented.');
      // TODO: Implement backend call and state update
+  };
+
+  const handleInstagramAccountSelected = async (selectedAccount) => {
+    if (!selectedAccount) return;
+
+    const sessionToken = localStorage.getItem('session');
+    if (!sessionToken) {
+      toast.error('You seem to be logged out. Please log in again.');
+      return;
+    }
+    
+    setIsLinking(true);
+    setShowInstagramSelectModal(false);
+    toast.loading('Linking selected Instagram account...');
+
+    try {
+      const response = await fetch('/api/social/instagram-link-account', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${sessionToken}`
+        },
+        body: JSON.stringify({
+          igUserId: selectedAccount.igUserId,
+          igUsername: selectedAccount.igUsername,
+          fbPageId: selectedAccount.fbPageId,
+        }),
+      });
+
+      const data = await response.json();
+      toast.dismiss();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || 'Failed to link Instagram account.');
+      }
+
+      toast.success(data.message || 'Instagram account linked successfully!');
+      setIsInstagramConnected(true);
+
+    } catch (error) {
+      toast.dismiss();
+      console.error('Error linking Instagram account:', error);
+      toast.error(error.message || 'Failed to link Instagram account.');
+    } finally {
+      setIsLinking(false);
+    }
   };
 
   if (isLoadingStatus) {
@@ -301,7 +370,7 @@ export default function SettingsPage() {
                     <button
                       className="button secondary"
                       onClick={handleDisconnectInstagram}
-                      disabled={isConnecting}
+                      disabled={isConnecting || isLinking}
                     >
                       Disconnect Instagram
                     </button>
@@ -309,9 +378,9 @@ export default function SettingsPage() {
                     <button
                       className="button primary"
                       onClick={handleConnectInstagram}
-                      disabled={!isFacebookConnected || isConnecting}
+                      disabled={!isFacebookConnected || isConnecting || isLinking}
                     >
-                      {isConnecting ? "Connecting..." : "Connect Instagram"}
+                      {(isConnecting || isLinking) ? "Processing..." : "Connect Instagram"}
                     </button>
                   )}
                   <p className="small-text">Note: Requires a connected Facebook Business account with an associated Instagram Business profile.</p>
@@ -324,6 +393,19 @@ export default function SettingsPage() {
           </main>
         </div>
       </div>
+
+      <InstagramConnectInfoModal 
+        isOpen={showInstagramInfoModal}
+        onClose={() => setShowInstagramInfoModal(false)}
+        onProceed={proceedWithInstagramConnect}
+      />
+      <InstagramAccountSelectModal 
+        isOpen={showInstagramSelectModal}
+        onClose={() => setShowInstagramSelectModal(false)}
+        accounts={availableIgAccounts}
+        onConnect={handleInstagramAccountSelected}
+        isLoading={isLinking}
+      />
 
       <style jsx>{`
         .dashboard {
