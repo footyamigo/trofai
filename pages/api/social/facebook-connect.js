@@ -1,4 +1,5 @@
-import { usersDb } from '../../../src/aws/dynamoDb'; // Assuming you have a users DB helper
+import { usersDb, dynamoDb } from '../../../src/aws/dynamoDb'; // Import dynamoDb generic helper too
+import tables from '../../../src/aws/dynamoDbSchema'; // Import the schema definition
 import fetch from 'node-fetch';
 
 // Load Facebook App Secret from environment variables
@@ -73,8 +74,9 @@ export default async function handler(req, res) {
     }
 
     console.log('FB Connect: Validating session via DynamoDB...');
-    const userResponse = await usersDb.query(usersDb.tables.users.tableName, {
-        IndexName: 'SessionIndex',
+    // Use the generic dynamoDb.query and the imported tables schema
+    const userResponse = await dynamoDb.query(tables.users.tableName, { 
+        IndexName: tables.users.indexes.bySession.indexName, // Use schema for index name
         KeyConditionExpression: '#sess = :session',
         ExpressionAttributeNames: {
             '#sess': 'session'

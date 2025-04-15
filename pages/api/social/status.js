@@ -1,4 +1,5 @@
-import { usersDb } from '../../../src/aws/dynamoDb'; // Use the same DB helper
+import { usersDb, dynamoDb } from '../../../src/aws/dynamoDb'; // Use the same DB helper
+import tables from '../../../src/aws/dynamoDbSchema'; // Import the schema definition
 
 // Helper to extract token from Authorization header
 const getSessionFromHeader = (req) => {
@@ -27,11 +28,9 @@ export default async function handler(req, res) {
     }
 
     // 2. Validate session token by looking up user in DynamoDB
-    // Assuming usersDb has a method to query by session, or we adapt the logic
-    // from validate-session.js (using the generic query method)
     console.log('Status check: Validating session via DynamoDB...');
-    const userResponse = await usersDb.query(usersDb.tables.users.tableName, {
-        IndexName: 'SessionIndex', // Use the correct index name from your schema
+    const userResponse = await dynamoDb.query(tables.users.tableName, { 
+        IndexName: tables.users.indexes.bySession.indexName, // Use schema for index name
         KeyConditionExpression: '#sess = :session',
         ExpressionAttributeNames: {
             '#sess': 'session'
