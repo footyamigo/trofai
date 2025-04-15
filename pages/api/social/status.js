@@ -19,55 +19,61 @@ export default async function handler(req, res) {
   let userData = null;
 
   try {
-    // 1. Get session token from header
+    // 1. Get session token from header and validate
     const session = getSessionFromHeader(req);
-
     if (!session) {
-      console.log('Status check: No session token provided in header');
-      return res.status(401).json({ success: false, message: 'Authentication required' });
+      // Return status as not connected if no token
+      return res.status(200).json({ 
+        success: true, 
+        connections: { facebook: false, instagram: false } 
+      });
     }
 
-    // 2. Validate session token by looking up user in DynamoDB
     console.log('Status check: Validating session via DynamoDB...');
     const userResponse = await dynamoDb.query(tables.users.tableName, { 
-        IndexName: tables.users.indexes.bySession.indexName, // Use schema for index name
+        IndexName: tables.users.indexes.bySession.indexName,
         KeyConditionExpression: '#sess = :session',
-        ExpressionAttributeNames: {
-            '#sess': 'session'
-        },
-        ExpressionAttributeValues: {
-            ':session': session
-        }
+        ExpressionAttributeNames: { '#sess': 'session' },
+        ExpressionAttributeValues: { ':session': session }
     });
 
     if (!userResponse || !userResponse.Items || userResponse.Items.length === 0) {
-        console.log('Status check: Invalid session token (no user found)');
-        return res.status(401).json({ success: false, message: 'Invalid session' });
+        // Return status as not connected if session invalid
+        return res.status(200).json({ 
+            success: true, 
+            connections: { facebook: false, instagram: false } 
+        });
     }
 
     userData = userResponse.Items[0];
-    userId = userData.userId; // Extract userId from the fetched user data
+    userId = userData.userId;
     console.log(`Status check: Session valid for user ${userId}`);
 
-    // 3. Determine connection status from the fetched userData
-    const isFacebookConnected = !!userData?.facebookUserId; // Check if facebookUserId exists
-    const isInstagramConnected = !!userData?.instagramUserId; // Placeholder
+    // 2. Determine connection status AND get names from userData
+    const isFacebookConnected = !!userData?.facebookPageId; // Use pageId as definitive check
+    const facebookPageName = userData?.facebookPageName || null; // Get page name
+    
+    const isInstagramConnected = !!userData?.instagramUserId; // Use igUserId as check
+    const instagramUsername = userData?.instagramUsername || null; // Get username
 
-    // 4. Return Status
+    // 3. Return Status including names
     return res.status(200).json({
       success: true,
       connections: {
         facebook: isFacebookConnected,
+        facebookPageName: facebookPageName, // Include page name
         instagram: isInstagramConnected,
+        instagramUsername: instagramUsername, // Include username
       },
     });
 
   } catch (error) {
     console.error('Error fetching social connection status:', error);
-    return res.status(500).json({
-      success: false,
-      message: 'An internal server error occurred while fetching status.',
-      error: error.message,
-    });
+    // Return disconnected status on error
+    return res.status(200).json({ 
+        success: true, // Request succeeded, but status is 'disconnected' due to error
+        connections: { facebook: false, instagram: false },
+        error: 'Failed to retrieve connection status.' // Optional error info
+     }); 
   }
 } 
