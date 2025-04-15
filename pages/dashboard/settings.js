@@ -11,20 +11,59 @@ import { toast } from 'react-hot-toast';
 export default function SettingsPage() {
   const { user } = useAuth();
   const [isFacebookConnected, setIsFacebookConnected] = useState(false);
+  const [isInstagramConnected, setIsInstagramConnected] = useState(false);
+  const [isLoadingStatus, setIsLoadingStatus] = useState(true);
   const [isConnecting, setIsConnecting] = useState(false);
 
   useEffect(() => {
-    // Example: fetch user's social connections from your backend/DB
-    // const fetchStatus = async () => { 
-    //   const status = await getUserSocialConnections(user.username); 
-    //   setIsFacebookConnected(status.facebookConnected);
-    // };
-    // fetchStatus();
-  }, [user]);
+    const fetchStatus = async () => {
+      setIsLoadingStatus(true);
+      const sessionToken = localStorage.getItem('session');
+
+      if (!sessionToken) {
+        console.log('No session token found, cannot fetch status.');
+        setIsLoadingStatus(false);
+        setIsFacebookConnected(false);
+        setIsInstagramConnected(false);
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/social/status', {
+          headers: {
+            'Authorization': `Bearer ${sessionToken}`
+          }
+        });
+        const data = await response.json();
+        if (data.success && data.connections) {
+          setIsFacebookConnected(data.connections.facebook || false);
+          setIsInstagramConnected(data.connections.instagram || false);
+        } else {
+          console.error('Failed to fetch social status:', data.message);
+          if (response.status !== 401) {
+             toast.error('Could not load social connection status.');
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching social status:', error);
+        toast.error('Error loading social connection status.');
+      } finally {
+        setIsLoadingStatus(false);
+      }
+    };
+
+    fetchStatus();
+  }, []);
 
   const handleConnectFacebook = () => {
     if (typeof FB === 'undefined') {
       toast.error('Facebook SDK not loaded. Please refresh the page.');
+      return;
+    }
+
+    const sessionToken = localStorage.getItem('session');
+    if (!sessionToken) {
+      toast.error('You seem to be logged out. Please log in again.');
       return;
     }
 
@@ -45,32 +84,37 @@ export default function SettingsPage() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${user.signInUserSession.idToken.jwtToken}` 
+            'Authorization': `Bearer ${sessionToken}`
           },
-          body: JSON.stringify({ 
+          body: JSON.stringify({
             accessToken: accessToken,
-            facebookUserId: userID 
+            facebookUserId: userID
           }),
         })
-        .then(res => res.json())
-        .then(data => {
-          if (data.success) {
-            toast.success('Facebook connected successfully!');
-            setIsFacebookConnected(true);
-          } else {
-            toast.error(data.message || 'Failed to connect Facebook account.');
+        .then(res => {
+          if (!res.ok) {
+            return res.json().then(errData => {
+              throw new Error(errData.message || `Request failed with status ${res.status}`);
+            }).catch(() => {
+               throw new Error(`Request failed with status ${res.status}`);
+            });
           }
+          return res.json();
+        })
+        .then(data => {
+          toast.success('Facebook connected successfully!');
+          setIsFacebookConnected(true);
         })
         .catch(error => {
           console.error('Error sending token to backend:', error);
-          toast.error('An error occurred while connecting Facebook.');
+          toast.error(error.message || 'An error occurred while connecting Facebook.');
         });
 
       } else {
         console.log('User cancelled login or did not fully authorize.');
         toast.error('Facebook connection cancelled or failed.');
       }
-    }, { 
+    }, {
       scope: 'email,public_profile,pages_show_list,pages_read_engagement,pages_manage_posts',
       return_scopes: true
     });
@@ -85,11 +129,15 @@ export default function SettingsPage() {
       }),
       {
         loading: 'Disconnecting Facebook...',
-        success: () => {
-          setIsFacebookConnected(false);
-          return 'Facebook disconnected.';
+        success: (data) => {
+          if(data.success) {
+            setIsFacebookConnected(false);
+            return 'Facebook disconnected.';
+          } else {
+            throw new Error(data.message || 'Failed to disconnect');
+          }
         },
-        error: 'Failed to disconnect Facebook.',
+        error: (err) => err.message || 'Failed to disconnect Facebook.',
       }
     );
   };
@@ -98,6 +146,33 @@ export default function SettingsPage() {
     console.log('Connect Instagram clicked');
     toast.info('Connect Facebook first to enable Instagram posting.');
   };
+
+  if (isLoadingStatus) {
+    return (
+      <ProtectedRoute>
+        <div className="dashboard">
+          <Head><title>Loading Settings... - Trofai</title></Head>
+          <MobileMenu activePage="settings" />
+          <Sidebar activePage="settings" />
+          <div className="dashboard-container flex-center">
+            <div className="loading-indicator">Loading settings...</div>
+          </div>
+        </div>
+        <style jsx>{`
+          .dashboard-container.flex-center {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-grow: 1;
+          }
+          .loading-indicator {
+            font-size: 1.2rem;
+            color: #6b7280;
+          }
+        `}</style>
+      </ProtectedRoute>
+    );
+  }
 
   return (
     <ProtectedRoute>
@@ -125,8 +200,7 @@ export default function SettingsPage() {
                 <div className="social-connection">
                   <div className="connection-header">
                     <h2>Facebook</h2>
-                    {isFacebookConnected && <span className="status connected">Connected</span>}
-                    {!isFacebookConnected && <span className="status disconnected">Not Connected</span>}
+                    {isFacebookConnected ? <span className="status connected">Connected</span> : <span className="status disconnected">Not Connected</span>}
                   </div>
                   <p>Connect your Facebook account to post property designs directly to your pages.</p>
                   {isFacebookConnected ? (
@@ -151,15 +225,15 @@ export default function SettingsPage() {
                 <div className="social-connection">
                   <div className="connection-header">
                     <h2>Instagram</h2>
-                    <span className="status disconnected">Not Connected</span> 
+                    {isInstagramConnected ? <span className="status connected">Connected</span> : <span className="status disconnected">Not Connected</span>}
                   </div>
                   <p>Connect your Instagram Business account (via Facebook) to post property designs.</p>
                   <button 
                     className="button primary" 
                     onClick={handleConnectInstagram}
-                    disabled={!isFacebookConnected || isConnecting}
+                    disabled={!isFacebookConnected || isConnecting || isInstagramConnected}
                   >
-                    Connect Instagram
+                    {isInstagramConnected ? 'Disconnect Instagram' : 'Connect Instagram'}
                   </button>
                   <p className="small-text">Note: Requires a connected Facebook Business account with an associated Instagram Business profile.</p>
                 </div>

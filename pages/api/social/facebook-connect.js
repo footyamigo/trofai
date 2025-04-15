@@ -1,10 +1,18 @@
-import { withSSRContext } from 'aws-amplify';
 import { usersDb } from '../../../src/aws/dynamoDb'; // Assuming you have a users DB helper
 import fetch from 'node-fetch';
 
 // Load Facebook App Secret from environment variables
 const FACEBOOK_APP_ID = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID;
 const FACEBOOK_APP_SECRET = process.env.FACEBOOK_APP_SECRET;
+
+// Helper to extract token from Authorization header
+const getSessionFromHeader = (req) => {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return authHeader.substring(7); // Remove 'Bearer '
+  }
+  return null;
+};
 
 // Function to verify the access token with Facebook
 async function verifyFacebookToken(accessToken, expectedUserId) {
@@ -54,46 +62,54 @@ export default async function handler(req, res) {
     return res.status(405).json({ success: false, message: 'Method not allowed' });
   }
 
-  try {
-    // 1. Authenticate Trofai User
-    const SSR = withSSRContext({ req });
-    let user;
-    try {
-      user = await SSR.Auth.currentAuthenticatedUser();
-    } catch (error) {
-      console.error('API authentication error:', error);
-      return res.status(401).json({ success: false, message: 'Not authenticated' });
-    }
-    const userId = user.username; // Or user.attributes.sub depending on your setup
+  let userId = null; // Variable to store the authenticated userId
 
-    // 2. Get token from request body
+  try {
+    // 1. Authenticate Trofai User via Session Token
+    const session = getSessionFromHeader(req);
+    if (!session) {
+      console.log('FB Connect: No session token provided in header');
+      return res.status(401).json({ success: false, message: 'Authentication required' });
+    }
+
+    console.log('FB Connect: Validating session via DynamoDB...');
+    const userResponse = await usersDb.query(usersDb.tables.users.tableName, {
+        IndexName: 'SessionIndex',
+        KeyConditionExpression: '#sess = :session',
+        ExpressionAttributeNames: {
+            '#sess': 'session'
+        },
+        ExpressionAttributeValues: {
+            ':session': session
+        }
+    });
+
+    if (!userResponse || !userResponse.Items || userResponse.Items.length === 0) {
+        console.log('FB Connect: Invalid session token (no user found)');
+        return res.status(401).json({ success: false, message: 'Invalid session' });
+    }
+
+    const userData = userResponse.Items[0];
+    userId = userData.userId; // Successfully authenticated and got userId
+    console.log(`FB Connect: Session valid for user ${userId}`);
+
+    // 2. Get Facebook token from request body
     const { accessToken, facebookUserId } = req.body;
     if (!accessToken || !facebookUserId) {
       return res.status(400).json({ success: false, message: 'Access token and Facebook User ID are required' });
     }
 
     // 3. Verify Facebook Token
-    // It's crucial to verify the token on the backend to ensure it's valid 
-    // and belongs to the user who initiated the request.
     await verifyFacebookToken(accessToken, facebookUserId);
 
     // 4. Store connection details in DynamoDB
-    // IMPORTANT: You should ideally exchange the short-lived token for a 
-    // long-lived token here before storing it.
-    // We are storing the short-lived token for simplicity in this example.
     const updateData = {
       facebookUserId: facebookUserId,
-      facebookAccessToken: accessToken, // Store the token (consider encryption/security)
-      // facebookTokenExpiry: verifiedTokenData.data_access_expires_at, // Store expiry if using debug_token
+      facebookAccessToken: accessToken, // Store the token (consider encryption)
       facebookConnectedAt: new Date().toISOString(),
     };
-
     console.log(`Updating user ${userId} with Facebook connection:`, { facebookUserId: facebookUserId });
-
-    // Use your DynamoDB utility function to update the user
-    // This assumes usersDb.updateUser exists and handles attribute updates
     await usersDb.updateUser(userId, updateData);
-
     console.log(`Successfully connected Facebook account for user ${userId}`);
 
     // 5. Return Success
