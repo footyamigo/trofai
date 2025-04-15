@@ -23,6 +23,60 @@ export default function ResultsModal({ isOpen, onClose, results }) {
   const [selectedImages, setSelectedImages] = useState([]);
   const [isRegenerating, setIsRegenerating] = useState(false);
 
+  // State for social connection status
+  const [isFacebookConnected, setIsFacebookConnected] = useState(false);
+  const [isInstagramConnected, setIsInstagramConnected] = useState(false);
+  const [isLoadingStatus, setIsLoadingStatus] = useState(false); // To prevent multiple fetches
+  const [isPosting, setIsPosting] = useState(false); // Loading state for posting actions
+
+  // Fetch social connection status when the modal opens or the social tab is active
+  useEffect(() => {
+    const fetchStatus = async () => {
+      if (!isOpen || isLoadingStatus) return; // Only run if open and not already loading
+
+      setIsLoadingStatus(true);
+      const sessionToken = localStorage.getItem('session');
+
+      if (!sessionToken) {
+        console.log('ResultsModal: No session token, cannot fetch status.');
+        // Assume disconnected if no token
+        setIsFacebookConnected(false);
+        setIsInstagramConnected(false);
+        setIsLoadingStatus(false);
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/social/status', {
+          headers: { 'Authorization': `Bearer ${sessionToken}` }
+        });
+        const data = await response.json();
+        if (data.success && data.connections) {
+          setIsFacebookConnected(data.connections.facebook || false);
+          setIsInstagramConnected(data.connections.instagram || false);
+        } else {
+          console.error('ResultsModal: Failed to fetch social status:', data.message);
+           // Don't toast here, might be annoying
+        }
+      } catch (error) {
+        console.error('ResultsModal: Error fetching social status:', error);
+      } finally {
+        setIsLoadingStatus(false);
+      }
+    };
+
+    // Fetch status if modal is open, or specifically when social tab becomes active
+    if (isOpen && activeTab === 'social') {
+      fetchStatus();
+    }
+    
+    // Reset loading flag if modal closes
+    if (!isOpen) {
+        setIsLoadingStatus(false);
+    }
+
+  }, [isOpen, activeTab, isLoadingStatus]); // Add dependencies
+
   // Initialize captions when results change
   useEffect(() => {
     if (results) {
@@ -40,6 +94,8 @@ export default function ResultsModal({ isOpen, onClose, results }) {
         alternative: altCaption
       });
       setIsSaved(false);
+      // Reset selected images when results change
+      setSelectedImages([]);
     }
   }, [results]);
 
@@ -340,6 +396,84 @@ export default function ResultsModal({ isOpen, onClose, results }) {
     }
   };
   
+  // --- Handlers for posting --- 
+  const handlePostToInstagram = async () => {
+    // 1. Check connection status FIRST
+    if (!isInstagramConnected) {
+      toast.error("Please connect your Instagram account in Settings first.");
+      // TODO: Maybe add a link/button to settings?
+      return;
+    }
+    // 2. Check if images are selected
+    if (selectedImages.length === 0) {
+      toast.error("Please select at least one image to post.");
+      return;
+    }
+    // 3. Proceed with posting logic (currently placeholder)
+    console.log("Attempting to post to Instagram:", { caption: currentCaption, images: selectedImages });
+    toast('Instagram posting not yet implemented.');
+    // TODO: Implement API call 
+    // ... (setIsPosting, fetch, finally) ...
+  };
+
+  const handlePostToFacebook = async () => {
+    // Checks for connection and selected images remain
+     if (!isFacebookConnected) {
+      toast.error("Please connect your Facebook account in Settings first.");
+      return;
+    }
+     if (selectedImages.length === 0) {
+      toast.error("Please select at least one image to post.");
+      return;
+    }
+    
+    const sessionToken = localStorage.getItem('session');
+    if (!sessionToken) {
+      toast.error('Authentication error. Please log in again.');
+      return;
+    }
+    
+    // Extract image URLs (use .url property)
+    const imageUrlsToPost = selectedImages.map(img => img.url);
+    
+    // --- Call Backend API --- 
+    setIsPosting(true);
+    toast.loading('Posting to Facebook...');
+
+    try {
+      const response = await fetch('/api/social/post-facebook', { 
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${sessionToken}`
+        },
+        body: JSON.stringify({
+          caption: currentCaption, 
+          imageUrls: imageUrlsToPost // Send array of URLs
+        }),
+      });
+
+      const data = await response.json();
+      toast.dismiss(); // Dismiss loading toast regardless of outcome
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || 'Failed to post to Facebook.');
+      }
+
+      toast.success(data.message || 'Successfully posted to Facebook!');
+      // Maybe close modal or clear selection after successful post?
+      // onClose(); 
+      // setSelectedImages([]);
+
+    } catch (error) {
+      toast.dismiss();
+      console.error('Error posting to Facebook:', error);
+      toast.error(error.message || 'Failed to post to Facebook.');
+    } finally {
+      setIsPosting(false); 
+    }
+  };
+
   return (
     <Modal 
       isOpen={isOpen} 
@@ -607,35 +741,41 @@ export default function ResultsModal({ isOpen, onClose, results }) {
 
                   <div className="social-actions">
                     <h3 className="section-title">Share to Social Media</h3>
-                    <div className="social-buttons">
-                      <a 
-                        href="https://www.instagram.com/"
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                        className="social-button instagram"
-                      >
-                        <FaInstagram className="icon" />
-                        <div className="button-content">
-                          <span className="button-title">Post to Instagram</span>
-                          <span className="button-desc">Share your property listing</span>
+                    {isLoadingStatus && <p>Loading connection status...</p>} 
+                    {!isLoadingStatus && (
+                        <div className="social-buttons">
+                        {/* Instagram Button - Removed !isInstagramConnected from disabled */}
+                        <button 
+                            className="social-button instagram"
+                            onClick={handlePostToInstagram}
+                            disabled={isPosting || selectedImages.length === 0} // Only disable if posting or no images selected
+                        >
+                            <FaInstagram className="icon" />
+                            <div className="button-content">
+                            <span className="button-title">Post to Instagram</span>
+                            <span className="button-desc">Share your property listing</span>
+                            </div>
+                        </button>
+                        {/* Facebook Button - Removed !isFacebookConnected from disabled */}
+                        <button 
+                            className="social-button facebook"
+                            onClick={handlePostToFacebook}
+                            disabled={isPosting || selectedImages.length === 0} // Only disable if posting or no images selected
+                        >
+                            <FaFacebookSquare className="icon" />
+                            <div className="button-content">
+                            <span className="button-title">Share on Facebook</span>
+                            <span className="button-desc">Post to your business page</span>
+                            </div>
+                        </button>
                         </div>
-                      </a>
-                      <a 
-                        href="https://www.facebook.com/"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="social-button facebook"
-                      >
-                        <FaFacebookSquare className="icon" />
-                        <div className="button-content">
-                          <span className="button-title">Share on Facebook</span>
-                          <span className="button-desc">Post to your business page</span>
-              </div>
-                      </a>
-                    </div>
-                    <p className="social-tip">
-                      💡 Tip: Copy your caption first, then click on the social media platform where you want to post. Paste your caption in the post creation page.
-                    </p>
+                    )}
+                    {/* Keep the tip encouraging connection */}
+                    {!isLoadingStatus && (!isFacebookConnected || !isInstagramConnected) && (
+                        <p className="connect-tip">
+                            Connect your accounts in <a href="/dashboard/settings" target="_blank" rel="noopener noreferrer">Settings</a> to enable posting.
+                        </p>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1567,6 +1707,16 @@ export default function ResultsModal({ isOpen, onClose, results }) {
         
         .save-button.saved {
           background-color: #2e7d32;
+        }
+
+        .connect-tip {
+          margin-top: 1rem;
+          padding: 1rem;
+          background: #f8f9fa;
+          border-radius: 8px;
+          font-size: 0.9rem;
+          color: #666;
+          border-left: 3px solid #62d76b;
         }
       `}</style>
     </Modal>

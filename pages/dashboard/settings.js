@@ -9,6 +9,7 @@ import Card from '../../components/UI/Card';
 import { toast } from 'react-hot-toast';
 import InstagramConnectInfoModal from '../../components/UI/InstagramConnectInfoModal';
 import InstagramAccountSelectModal from '../../components/UI/InstagramAccountSelectModal';
+import FacebookPageSelectModal from '../../components/UI/FacebookPageSelectModal';
 
 export default function SettingsPage() {
   const { user } = useAuth();
@@ -20,6 +21,9 @@ export default function SettingsPage() {
   const [showInstagramSelectModal, setShowInstagramSelectModal] = useState(false);
   const [availableIgAccounts, setAvailableIgAccounts] = useState([]);
   const [isLinking, setIsLinking] = useState(false);
+  const [showFacebookPageModal, setShowFacebookPageModal] = useState(false);
+  const [availableFbPages, setAvailableFbPages] = useState([]);
+  const [fbConnectData, setFbConnectData] = useState(null);
 
   useEffect(() => {
     const fetchStatus = async () => {
@@ -74,54 +78,66 @@ export default function SettingsPage() {
     }
 
     setIsConnecting(true);
-    toast.loading('Connecting to Facebook...');
+    toast.loading('Connecting to Facebook & fetching pages...');
 
     FB.login(function(response) {
-      toast.dismiss();
-      setIsConnecting(false);
-
       if (response.authResponse) {
-        console.log('Welcome! Fetching your information.... ');
         console.log('Facebook Auth Response:', response.authResponse);
         const accessToken = response.authResponse.accessToken;
-        const userID = response.authResponse.userID;
+        const facebookUserId = response.authResponse.userID;
 
-        fetch('/api/social/facebook-connect', {
+        fetch('/api/social/facebook-connect', { 
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${sessionToken}`
+            'Authorization': `Bearer ${sessionToken}` 
           },
-          body: JSON.stringify({
-            accessToken: accessToken,
-            facebookUserId: userID
+          body: JSON.stringify({ 
+            accessToken: accessToken,      
+            facebookUserId: facebookUserId         
           }),
         })
         .then(res => {
-          if (!res.ok) {
-            return res.json().then(errData => {
-              throw new Error(errData.message || `Request failed with status ${res.status}`);
-            }).catch(() => {
-               throw new Error(`Request failed with status ${res.status}`);
-            });
-          }
-          return res.json();
+           if (!res.ok) {
+                return res.json().then(errData => { throw new Error(errData.message || `Request failed with status ${res.status}`); })
+                    .catch(() => { throw new Error(`Request failed with status ${res.status}`); });
+            }
+           return res.json();
         })
         .then(data => {
-          toast.success('Facebook connected successfully!');
-          setIsFacebookConnected(true);
+          toast.dismiss();
+          setIsConnecting(false);
+          if (data.success && data.pages) {
+            if (data.pages.length > 0) {
+                setAvailableFbPages(data.pages);
+                setFbConnectData({ 
+                    facebookUserId: data.facebookUserId, 
+                    fbUserAccessToken: data.fbUserAccessToken 
+                });
+                setShowFacebookPageModal(true);
+            } else {
+                toast.error('No Facebook Pages found. Please create or manage a Page.');
+                setAvailableFbPages([]);
+            }
+          } else {
+            throw new Error(data.message || 'Failed to fetch Facebook Pages.');
+          }
         })
         .catch(error => {
-          console.error('Error sending token to backend:', error);
-          toast.error(error.message || 'An error occurred while connecting Facebook.');
+          toast.dismiss();
+          setIsConnecting(false);
+          console.error('Error fetching Facebook pages:', error);
+          toast.error(error.message || 'Failed to fetch Facebook pages.');
         });
 
       } else {
+        toast.dismiss();
+        setIsConnecting(false);
         console.log('User cancelled login or did not fully authorize.');
         toast.error('Facebook connection cancelled or failed.');
       }
-    }, {
-      scope: 'email,public_profile,pages_show_list,pages_read_engagement,pages_manage_posts',
+    }, { 
+      scope: 'email,public_profile,pages_show_list,pages_read_engagement,pages_manage_posts', 
       return_scopes: true
     });
   };
@@ -281,6 +297,55 @@ export default function SettingsPage() {
     }
   };
 
+  const handleFacebookPageSelected = async (selectedPage) => {
+      if (!selectedPage || !fbConnectData) return;
+
+      const sessionToken = localStorage.getItem('session');
+      if (!sessionToken) {
+          toast.error('You seem to be logged out. Please log in again.');
+          return;
+      }
+      
+      setIsLinking(true); 
+      setShowFacebookPageModal(false);
+      toast.loading('Linking selected Facebook Page...');
+
+      try {
+          const response = await fetch('/api/social/facebook-link-page', { 
+              method: 'POST',
+              headers: {
+                  'Content-Type': 'application/json',
+                  'Authorization': `Bearer ${sessionToken}`
+              },
+              body: JSON.stringify({
+                  fbPageId: selectedPage.fbPageId,
+                  fbPageName: selectedPage.fbPageName,
+                  fbPageAccessToken: selectedPage.fbPageAccessToken,
+                  facebookUserId: fbConnectData.facebookUserId,
+                  fbUserAccessToken: fbConnectData.fbUserAccessToken
+              }),
+          });
+
+          const data = await response.json();
+          toast.dismiss();
+
+          if (!response.ok || !data.success) {
+              throw new Error(data.message || 'Failed to link Facebook Page.');
+          }
+
+          toast.success(data.message || 'Facebook Page linked successfully!');
+          setIsFacebookConnected(true);
+          setFbConnectData(null);
+
+      } catch (error) {
+          toast.dismiss();
+          console.error('Error linking Facebook Page:', error);
+          toast.error(error.message || 'Failed to link Facebook Page.');
+      } finally {
+          setIsLinking(false); 
+      }
+  };
+
   if (isLoadingStatus) {
     return (
       <ProtectedRoute>
@@ -394,6 +459,13 @@ export default function SettingsPage() {
         </div>
       </div>
 
+      <FacebookPageSelectModal
+        isOpen={showFacebookPageModal}
+        onClose={() => setShowFacebookPageModal(false)}
+        pages={availableFbPages}
+        onConnect={handleFacebookPageSelected}
+        isLoading={isLinking}
+      />
       <InstagramConnectInfoModal 
         isOpen={showInstagramInfoModal}
         onClose={() => setShowInstagramInfoModal(false)}
