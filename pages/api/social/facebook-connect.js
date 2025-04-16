@@ -15,71 +15,37 @@ const getSessionFromHeader = (req) => {
   return null;
 };
 
-// Function to verify the access token with Facebook
-async function verifyFacebookToken(accessToken, expectedUserId) {
+// Helper function to exchange token (now used earlier)
+async function exchangeForLongLivedUserToken(shortLivedToken) {
   if (!FACEBOOK_APP_ID || !FACEBOOK_APP_SECRET) {
-    console.error('Facebook App ID or Secret not configured on the server.');
-    throw new Error('Server configuration error for Facebook integration.');
+      console.error('Cannot get long-lived token: FB App ID or Secret missing.');
+      throw new Error('Server configuration error for Facebook token exchange.');
   }
-
-  // Option 1: Use debug_token (more secure, verifies token belongs to your app)
-  // const debugUrl = `https://graph.facebook.com/debug_token?input_token=${accessToken}&access_token=${FACEBOOK_APP_ID}|${FACEBOOK_APP_SECRET}`;
-  // const debugResponse = await fetch(debugUrl);
-  // const debugData = await debugResponse.json();
-  // 
-  // if (!debugResponse.ok || !debugData.data?.is_valid || debugData.data.app_id !== FACEBOOK_APP_ID) {
-  //   console.error('Facebook token validation failed (debug_token):', debugData);
-  //   throw new Error('Invalid Facebook access token.');
-  // }
-  // if (debugData.data.user_id !== expectedUserId) {
-  //   console.error(`Token user ID (${debugData.data.user_id}) does not match expected user ID (${expectedUserId}).`);
-  //   throw new Error('Facebook token user mismatch.');
-  // }
-  // return debugData.data; // Contains expiry, scopes, etc.
-
-  // Option 2: Call /me endpoint (simpler, verifies token belongs to the user)
-  const meUrl = `https://graph.facebook.com/me?access_token=${accessToken}`;
-  const meResponse = await fetch(meUrl);
-  const meData = await meResponse.json();
-
-  if (!meResponse.ok || !meData.id) {
-    console.error('Failed to fetch user data from Facebook:', meData);
-    throw new Error('Invalid Facebook access token or failed to fetch user info.');
-  }
-
-  if (meData.id !== expectedUserId) {
-    console.error(`Token user ID (${meData.id}) does not match expected user ID (${expectedUserId}).`);
-    throw new Error('Facebook token user mismatch.');
-  }
-
-  console.log('Facebook token verified successfully for user:', meData.id);
-  // We might want to get a long-lived token here in a real implementation
-  // For now, we'll proceed with the short-lived one provided.
-  return { user_id: meData.id }; 
+  const url = `https://graph.facebook.com/v18.0/oauth/access_token?grant_type=fb_exchange_token&client_id=${FACEBOOK_APP_ID}&client_secret=${FACEBOOK_APP_SECRET}&fb_exchange_token=${shortLivedToken}`;
+  try {
+      console.log('Exchanging FB user token for long-lived token...');
+      const response = await fetch(url);
+      const data = await response.json();
+      if (!response.ok || data.error || !data.access_token) {
+          console.error('Error exchanging token:', data?.error);
+          throw new Error(data?.error?.message || 'Failed to obtain long-lived Facebook token.');
+      }
+      console.log('Successfully obtained long-lived FB user token.');
+      return { longLivedToken: data.access_token, expiresIn: data.expires_in };
+  } catch (error) { /* ... error handling ... */ throw error; }
 }
 
-// Updated function to fetch ALL Facebook Pages with pagination
-async function findFacebookPages(fbUserAccessToken) {
+// Updated function to fetch ALL Facebook Pages using the long-lived token
+async function findFacebookPages(longLivedFbUserToken) { 
     let allPages = [];
-    // Start with the initial URL, request a decent limit
-    let accountsUrl = `https://graph.facebook.com/v18.0/me/accounts?fields=id,name,access_token&limit=100&access_token=${fbUserAccessToken}`;
-
+    let accountsUrl = `https://graph.facebook.com/v18.0/me/accounts?fields=id,name,access_token&limit=100&access_token=${longLivedFbUserToken}`;
     try {
-        console.log('Querying Facebook Graph API for managed pages (handling pagination)...');
-        
-        // Loop while there's a next page URL
+        console.log('Querying FB Graph API for managed pages with LLT (handling pagination)...');
         while (accountsUrl) {
-            console.log(`Fetching page data from: ${accountsUrl.substring(0, 100)}...`); // Log URL start
+            console.log(`Fetching page data from: ${accountsUrl.substring(0, 100)}...`);
             const response = await fetch(accountsUrl);
             const data = await response.json();
-
-            if (!response.ok || data.error) {
-                console.error("Error fetching FB pages batch:", data?.error);
-                 if (data?.error?.code === 200) { throw new Error('Permission denied fetching Pages.'); }
-                 throw new Error(data?.error?.message || 'Failed to fetch Facebook pages batch.');
-            }
-
-            // Add pages from the current batch to our list
+            if (!response.ok || data.error) { /* ... error handling ... */ throw new Error(data?.error?.message || 'Failed to fetch Facebook pages batch.'); }
             if (data.data && data.data.length > 0) {
                 const pagesInBatch = data.data.map(page => ({ 
                     fbPageId: page.id,
@@ -88,40 +54,20 @@ async function findFacebookPages(fbUserAccessToken) {
                 }));
                 allPages = allPages.concat(pagesInBatch);
             }
-
-            // Check for the next page URL
-            if (data.paging && data.paging.next) {
-                accountsUrl = data.paging.next; // Set URL for the next iteration
-            } else {
-                accountsUrl = null; // No more pages, exit loop
-            }
+            accountsUrl = (data.paging && data.paging.next) ? data.paging.next : null;
         }
-
         console.log(`Found ${allPages.length} managed Facebook page(s) in total.`);
         return allPages;
-
-    } catch (error) {
-        console.error("Error in findFacebookPages (pagination loop):", error);
-        throw error; 
-    }
+    } catch (error) { /* ... error handling ... */ throw error; }
 }
 
-// This API route now FETCHES available pages after login
+// This API route now exchanges the token first, then fetches pages
 export default async function handler(req, res) {
-    if (req.method !== 'POST') {
-        return res.status(405).json({ success: false, message: 'Method not allowed' });
-    }
-
+    if (req.method !== 'POST') { return res.status(405).json({ success: false, message: 'Method not allowed' }); }
     try {
-        // 1. Authenticate Trofai User via Session Token
+        // 1. Authenticate Trofai User 
         const session = getSessionFromHeader(req);
-        if (!session) {
-            console.log('FB Connect: No session token provided in header');
-            return res.status(401).json({ success: false, message: 'Authentication required' });
-        }
-
-        console.log('FB Connect: Validating session via DynamoDB...');
-        // Use the generic dynamoDb.query and the imported tables schema
+        if (!session) { return res.status(401).json({ success: false, message: 'Authentication required' }); }
         const userResponse = await dynamoDb.query(tables.users.tableName, { 
             IndexName: tables.users.indexes.bySession.indexName, // Use schema for index name
             KeyConditionExpression: '#sess = :session',
@@ -132,41 +78,34 @@ export default async function handler(req, res) {
                 ':session': session
             }
         });
+        if (!userResponse || !userResponse.Items || !userResponse.Items.length === 0) { return res.status(401).json({ success: false, message: 'Invalid session' }); }
+        const userId = userResponse.Items[0].userId;
+        console.log(`FB Connect (Fetch Pages - LLT): Session valid for user ${userId}`);
 
-        if (!userResponse || !userResponse.Items || userResponse.Items.length === 0) {
-            console.log('FB Connect: Invalid session token (no user found)');
-            return res.status(401).json({ success: false, message: 'Invalid session' });
-        }
-
-        const userData = userResponse.Items[0];
-        const userId = userData.userId; // Successfully authenticated and got userId
-        console.log(`FB Connect (Fetch Pages): Session valid for user ${userId}`);
-
-        // 2. Get Facebook USER access token from request body (received from FB.login)
+        // 2. Get SHORT-LIVED FB user token from body
         const { accessToken, facebookUserId } = req.body;
-        if (!accessToken || !facebookUserId) {
-            return res.status(400).json({ success: false, message: 'Facebook User Access Token and User ID are required' });
-        }
+        if (!accessToken || !facebookUserId) { return res.status(400).json({ success: false, message: 'Facebook User Access Token and User ID are required' }); }
         
-        // NOTE: We don't need to call verifyFacebookToken here anymore, as fetching pages implicitly verifies it.
+        // 3. Exchange for LONG-LIVED token immediately
+        const { longLivedToken, expiresIn } = await exchangeForLongLivedUserToken(accessToken);
 
-        // 3. Find ALL Facebook Pages (now handles pagination)
-        const availablePages = await findFacebookPages(accessToken);
+        // 4. Find Facebook Pages using the LONG-LIVED token
+        const availablePages = await findFacebookPages(longLivedToken);
+        
+        // Calculate expiry timestamp for the LLT
+        const expiryTimestamp = expiresIn ? Math.floor(Date.now() / 1000) + expiresIn : null;
 
-        // 4. Return the list of found pages (or empty list)
-        // We also return the user ID and user access token needed for the final linking step
+        // 5. Return list, LLT, expiry, and original user ID
         return res.status(200).json({ 
             success: true, 
             pages: availablePages,
-            facebookUserId: facebookUserId, // Pass back FB User ID
-            fbUserAccessToken: accessToken // Pass back the potentially refreshed user token
+            facebookUserId: facebookUserId,      // Original User ID
+            fbUserAccessToken: longLivedToken, // The LONG-LIVED token
+            fbTokenExpiry: expiryTimestamp       // Expiry time
         });
 
     } catch (error) {
-        console.error('Error fetching Facebook pages:', error);
-        return res.status(500).json({
-            success: false,
-            message: error.message || 'An internal server error occurred while fetching Facebook pages.',
-        });
+        console.error('Error in FB Connect (Fetch Pages - LLT) flow:', error);
+        return res.status(500).json({ success: false, message: error.message || 'Error processing Facebook connection.' });
     }
 } 

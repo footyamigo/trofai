@@ -35,7 +35,8 @@ export default async function handler(req, res) {
         console.log(`IG Link: Session valid for user ${userId}`);
 
         // 2. Get selected account details from request body
-        const { igUserId, igUsername, fbPageId /* Add other fields if needed */ } = req.body;
+        const { igUserId, igUsername, fbPageId, fbUserAccessToken, fbTokenExpiry } = req.body;
+        
         if (!igUserId || !igUsername || !fbPageId) {
             return res.status(400).json({ success: false, message: 'Missing required Instagram account details' });
         }
@@ -45,7 +46,9 @@ export default async function handler(req, res) {
             instagramUserId: igUserId,
             instagramUsername: igUsername,
             facebookPageIdForInstagram: fbPageId,
-            // Potentially clear or update FB/Page access tokens here if needed/obtained
+            // Optionally store the LL FB User token here too for consistency or future use
+            // facebookUserAccessToken: fbUserAccessToken,
+            // facebookTokenExpiry: fbTokenExpiry || null,
             instagramConnectedAt: new Date().toISOString(),
         };
 

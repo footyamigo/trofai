@@ -10,13 +10,18 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { currentCaption, currentOption } = req.body;
+    const { currentCaption, currentOption, style } = req.body;
 
     if (!currentCaption) {
       return res.status(400).json({ error: 'Current caption is required' });
     }
 
-    const prompt = `As a professional real estate copywriter, please rewrite this property listing caption in a more engaging and sophisticated way. Maintain the key information while making it more appealing and human-centric. Keep the emojis and hashtags, but feel free to enhance their placement.
+    let styleInstruction = '';
+    if (style) {
+      styleInstruction = `\n\nRewrite the caption in a "${style.charAt(0).toUpperCase() + style.slice(1)}" style.`;
+    }
+
+    const prompt = `As a professional real estate copywriter, please rewrite this property listing caption in a more engaging and sophisticated way. Maintain the key information while making it more appealing and human-centric. Keep the emojis and hashtags, but feel free to enhance their placement.${styleInstruction}
 
 Important: Do not use any asterisks (*) or markdown formatting in your response. Write the text as plain text with emojis.
 
@@ -35,7 +40,7 @@ Requirements:
 Please write the new caption:`;
 
     const completion = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || "gpt-3.5-turbo",
+      model: process.env.OPENAI_MODEL || "gpt-4o-mini",
       messages: [
         {
           role: "system",

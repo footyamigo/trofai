@@ -2,7 +2,7 @@ import { useState } from 'react';
 import ErrorDisplay from '../UI/ErrorDisplay';
 import Button from '../UI/Button';
 
-export default function PropertyURLForm({ onSubmit, buttonText = 'Trof it!', placeholder = "Enter Rightmove or Zillow property URL" }) {
+export default function PropertyURLForm({ onSubmit, buttonText = 'Trof it!', placeholder = "Paste a Rightmove, Zillow, or OnTheMarket property URL" }) {
   const [url, setUrl] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState({ message: '', details: '', code: '' });
@@ -21,9 +21,10 @@ export default function PropertyURLForm({ onSubmit, buttonText = 'Trof it!', pla
       // Check for supported property sites
       const isRightmove = url.includes('rightmove.co.uk/properties/');
       const isZillow = url.includes('zillow.com/');
+      const isOnTheMarket = url.includes('onthemarket.com/details/');
       
-      if (!isRightmove && !isZillow) {
-        throw new Error('Please enter a valid Rightmove or Zillow property URL');
+      if (!isRightmove && !isZillow && !isOnTheMarket) {
+        throw new Error('Please enter a valid Rightmove, Zillow, or OnTheMarket property URL');
       }
       
       await onSubmit(url);

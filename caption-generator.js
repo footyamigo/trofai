@@ -58,7 +58,7 @@ ${propertyData.agent.about || ''}
 
 Requirements:
 - Maximum length: ${CAPTION_LENGTHS[type]} characters
-- Create 2-3 engaging paragraphs that flow naturally
+- Create 3-5 engaging paragraphs that flow naturally
 - Use emojis thoughtfully to enhance the narrative
 - Include 3-5 relevant hashtags elegantly placed
 - Focus on lifestyle and emotional appeal

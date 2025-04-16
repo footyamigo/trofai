@@ -53,7 +53,7 @@ export default function DashboardHeader() {
             <span className="welcome-text">
               Welcome, {getUserDisplayName()}
             </span>
-            <Link href="/profile">
+            <Link href="/dashboard/settings">
               <button className="header-button profile">
                 <span>Profile</span>
               </button>

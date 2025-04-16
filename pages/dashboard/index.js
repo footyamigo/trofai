@@ -1236,7 +1236,7 @@ export default function Dashboard() {
                 <PropertyURLForm 
                   onSubmit={handleSubmit} 
                   buttonText="Make it Happen"
-                  placeholder="Paste a Rightmove or Zillow property URL"
+                  placeholder="Paste a Rightmove, Zillow, or OnTheMarket property URL"
                 />
               </Card>
 

@@ -26,6 +26,7 @@ export default function SettingsPage() {
   const [fbConnectData, setFbConnectData] = useState(null);
   const [facebookPageName, setFacebookPageName] = useState(null);
   const [instagramUsername, setInstagramUsername] = useState(null);
+  const [igConnectData, setIgConnectData] = useState(null);
 
   useEffect(() => {
     let isMounted = true; 
@@ -131,7 +132,8 @@ export default function SettingsPage() {
                 setAvailableFbPages(data.pages);
                 setFbConnectData({ 
                     facebookUserId: data.facebookUserId, 
-                    fbUserAccessToken: data.fbUserAccessToken 
+                    fbUserAccessToken: data.fbUserAccessToken,
+                    fbTokenExpiry: data.fbTokenExpiry
                 });
                 setShowFacebookPageModal(true);
             } else {
@@ -205,7 +207,7 @@ export default function SettingsPage() {
   };
 
   const proceedWithInstagramConnect = () => {
-    setShowInstagramInfoModal(false);
+    setShowInstagramInfoModal(false); 
     
     if (typeof FB === 'undefined') {
       toast.error('Facebook SDK not loaded. Please refresh the page.');
@@ -217,10 +219,13 @@ export default function SettingsPage() {
       return;
     }
 
-    setIsConnecting(true);
-    toast.loading('Checking Facebook permissions & fetching accounts...');
+    setIsConnecting(true); 
+    toast.loading('Connecting to Instagram via Facebook...');
 
     FB.login(function(response) {
+        toast.dismiss();
+        setIsConnecting(false);
+
         if (response.authResponse) {
             console.log('Instagram via Facebook Auth Response:', response.authResponse);
             const fbAccessToken = response.authResponse.accessToken;
@@ -243,13 +248,15 @@ export default function SettingsPage() {
             })
             .then(data => {
                 toast.dismiss();
-                setIsConnecting(false);
-
+                setIsConnecting(false); 
                 if (data.success && data.accounts) {
                     if (data.accounts.length > 0) {
-                        console.log('Available IG accounts:', data.accounts);
                         setAvailableIgAccounts(data.accounts);
-                        setShowInstagramSelectModal(true);
+                        setIgConnectData({ 
+                            fbUserAccessToken: data.fbUserAccessToken,
+                            fbTokenExpiry: data.fbTokenExpiry
+                        });
+                        setShowInstagramSelectModal(true); 
                     } else {
                         toast.error('No Instagram Business/Creator accounts found linked to your Facebook Pages.');
                         setAvailableIgAccounts([]);
@@ -264,7 +271,6 @@ export default function SettingsPage() {
                 console.error('Error fetching Instagram accounts list:', error);
                 toast.error(error.message || 'Failed to fetch Instagram accounts list.');
             });
-
         } else {
             toast.dismiss();
             setIsConnecting(false);
@@ -278,11 +284,7 @@ export default function SettingsPage() {
   };
 
   const handleConnectInstagram = () => {
-    if (!isFacebookConnected) {
-        toast.error('Please connect your Facebook account first.');
-        return;
-    }
-    setShowInstagramInfoModal(true);
+    setShowInstagramInfoModal(true); 
   };
 
   const handleDisconnectInstagram = () => {
@@ -329,7 +331,7 @@ export default function SettingsPage() {
   };
 
   const handleInstagramAccountSelected = async (selectedAccount) => {
-    if (!selectedAccount) return;
+    if (!selectedAccount || !igConnectData) return;
 
     const sessionToken = localStorage.getItem('session');
     if (!sessionToken) {
@@ -364,6 +366,8 @@ export default function SettingsPage() {
 
       toast.success(data.message || 'Instagram account linked successfully!');
       setIsInstagramConnected(true);
+      setInstagramUsername(selectedAccount.igUsername);
+      setIgConnectData(null);
 
     } catch (error) {
       toast.dismiss();
@@ -399,7 +403,8 @@ export default function SettingsPage() {
                   fbPageName: selectedPage.fbPageName,
                   fbPageAccessToken: selectedPage.fbPageAccessToken,
                   facebookUserId: fbConnectData.facebookUserId,
-                  fbUserAccessToken: fbConnectData.fbUserAccessToken
+                  fbUserAccessToken: fbConnectData.fbUserAccessToken,
+                  fbTokenExpiry: fbConnectData.fbTokenExpiry
               }),
           });
 
@@ -412,6 +417,7 @@ export default function SettingsPage() {
 
           toast.success(data.message || 'Facebook Page linked successfully!');
           setIsFacebookConnected(true);
+          setFacebookPageName(selectedPage.fbPageName);
           setFbConnectData(null);
 
       } catch (error) {
@@ -526,7 +532,7 @@ export default function SettingsPage() {
                     <button
                       className="button primary"
                       onClick={handleConnectInstagram}
-                      disabled={!isFacebookConnected || isConnecting || isLinking}
+                      disabled={isConnecting || isLinking}
                     >
                       {(isConnecting || isLinking) ? "Processing..." : "Connect Instagram"}
                     </button>
@@ -566,18 +572,18 @@ export default function SettingsPage() {
 
       <style jsx>{`
         .dashboard {
-          display: flex;
           min-height: 100vh;
-          background-color: #f9fafb;
+          background: linear-gradient(to top, rgba(98, 215, 107, 0.15) 0%, rgba(255, 255, 255, 0) 100%);
         }
         .dashboard-container {
-          flex-grow: 1;
+          margin-left: 240px;
+          min-height: 100vh;
           display: flex;
           flex-direction: column;
         }
         .main {
-          flex-grow: 1;
-          padding: 1rem 2rem;
+          flex: 1;
+          padding: 2rem;
         }
         .content {
           max-width: 1000px;
@@ -683,6 +689,12 @@ export default function SettingsPage() {
         }
         .connected-account-info strong {
             color: #2e7d32;
+        }
+        @media (max-width: 768px) {
+          .dashboard-container {
+            margin-left: 0;
+            padding-top: 64px; /* Height of mobile header */
+          }
         }
       `}</style>
     </ProtectedRoute>

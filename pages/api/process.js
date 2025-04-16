@@ -384,7 +384,8 @@ export default async function handler(req, res) {
     // First check if this is a URL we know how to scrape
     const isRightmoveUrl = url.includes('rightmove.co.uk');
     const isZillowUrl = url.includes('zillow.com');
-    const isKnownScraperUrl = isRightmoveUrl || isZillowUrl;
+    const isOnTheMarketUrl = url.includes('onthemarket.com');
+    const isKnownScraperUrl = isRightmoveUrl || isZillowUrl || isOnTheMarketUrl;
     
     // Only try to get from DynamoDB if this is not a recognizable scraper URL
     // and might be a property ID from DynamoDB

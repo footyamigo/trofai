@@ -8,16 +8,19 @@ const getConfig = require('next/config').default;
 // Import specialized scrapers
 const rightmoveScraper = require('./firecrawl-rightmove-scraper');
 const zillowScraper = require('./firecrawl-zillow-scraper');
+const onthemarketScraper = require('./firecrawl-onthemarket-scraper');
 
 // Add a console log to ensure scrapers are loaded
 console.log('Scraper modules loaded:', {
   rightmove: typeof rightmoveScraper === 'object' ? `Found with ${Object.keys(rightmoveScraper).length} exports` : 'Not found',
-  zillow: typeof zillowScraper === 'object' ? `Found with ${Object.keys(zillowScraper).length} exports` : 'Not found'
+  zillow: typeof zillowScraper === 'object' ? `Found with ${Object.keys(zillowScraper).length} exports` : 'Not found',
+  onthemarket: typeof onthemarketScraper === 'object' ? `Found with ${Object.keys(onthemarketScraper).length} exports` : 'Not found'
 });
 
 // Log exactly what functions are exported by each scraper
 console.log('Rightmove scraper exports:', Object.keys(rightmoveScraper));
 console.log('Zillow scraper exports:', Object.keys(zillowScraper));
+console.log('OnTheMarket scraper exports:', typeof onthemarketScraper === 'object' ? Object.keys(onthemarketScraper) : typeof onthemarketScraper);
 
 const { serverRuntimeConfig } = getConfig() || {
   serverRuntimeConfig: {
@@ -37,6 +40,9 @@ const RIGHTMOVE_URL_PATTERN = /^https:\/\/(?:www\.)?rightmove\.co\.uk\/propertie
 // Updated Zillow pattern to explicitly match homedetails URLs as well
 const ZILLOW_URL_PATTERN = /^https:\/\/(?:www\.)?zillow\.com\/(?:homedetails\/[^\/]+\/\d+_zpid\/|[^\/]+\/.*)/;
 
+// OnTheMarket pattern
+const ONTHEMARKET_URL_PATTERN = /^https:\/\/(?:www\.)?onthemarket\.com\/details\/\d+\/?/;
+
 // Test function for URL patterns
 function testUrlPatterns() {
   const testUrls = [
@@ -51,6 +57,7 @@ function testUrlPatterns() {
     console.log(`URL: ${url}`);
     console.log(`  Zillow pattern: ${ZILLOW_URL_PATTERN.test(url)}`);
     console.log(`  Rightmove pattern: ${RIGHTMOVE_URL_PATTERN.test(url)}`);
+    console.log(`  OnTheMarket pattern: ${ONTHEMARKET_URL_PATTERN.test(url)}`);
   }
 }
 
@@ -72,11 +79,15 @@ function getScraper(url) {
   } else if (ZILLOW_URL_PATTERN.test(url)) {
     console.log('URL matched Zillow pattern');
     return zillowScraper;
+  } else if (ONTHEMARKET_URL_PATTERN.test(url)) {
+    console.log('URL matched OnTheMarket pattern');
+    return onthemarketScraper;
   } else {
     // Log more debug info when no match is found
     console.error('No pattern match found for URL:', url);
     console.error('Rightmove pattern test:', RIGHTMOVE_URL_PATTERN.test(url));
     console.error('Zillow pattern test:', ZILLOW_URL_PATTERN.test(url));
+    console.error('OnTheMarket pattern test:', ONTHEMARKET_URL_PATTERN.test(url));
     throw new Error(`Unsupported URL pattern: ${url}`);
   }
 }
@@ -122,6 +133,16 @@ async function scrapeProperty(propertyUrl) {
         console.error('Error in scrapeZillowProperty:', zillowError);
         throw zillowError;
       }
+    } else if (ONTHEMARKET_URL_PATTERN.test(propertyUrl)) {
+      if (typeof scraper === 'function' || typeof scraper.default === 'function') {
+        console.log('Calling OnTheMarket scraper (default export)');
+        return await (scraper.default || scraper)(propertyUrl);
+      } else if (typeof scraper.scrapeOnTheMarketProperty === 'function') {
+        console.log('Calling scraper.scrapeOnTheMarketProperty()');
+        return await scraper.scrapeOnTheMarketProperty(propertyUrl);
+      } else {
+        throw new Error('No valid function found in OnTheMarket scraper module');
+      }
     } else {
       throw new Error(`No scraper implementation found for URL: ${propertyUrl}`);
     }
@@ -143,6 +164,8 @@ async function generateBannerbearImage(propertyData) {
     return await rightmoveScraper.generateBannerbearImage(propertyData);
   } else if (source === 'zillow') {
     return await zillowScraper.generateBannerbearImage(propertyData);
+  } else if (source === 'onthemarket') {
+    return await onthemarketScraper.generateBannerbearImage(propertyData);
   } else {
     throw new Error(`Unknown property source: ${source}`);
   }
@@ -161,6 +184,8 @@ async function generateBannerbearCollection(propertyData, templateSetUid) {
     return await rightmoveScraper.generateBannerbearCollection(propertyData, templateSetUid);
   } else if (source === 'zillow') {
     return await zillowScraper.generateBannerbearCollection(propertyData, templateSetUid);
+  } else if (source === 'onthemarket') {
+    return await onthemarketScraper.generateBannerbearCollection(propertyData, templateSetUid);
   } else {
     throw new Error(`Unknown property source: ${source}`);
   }

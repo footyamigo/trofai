@@ -6,15 +6,17 @@ import { TbActivityHeartbeat } from 'react-icons/tb';
 import { IoStatsChartOutline, IoEllipsisHorizontal } from 'react-icons/io5';
 import { IoSettingsOutline } from 'react-icons/io5';
 import { FiKey } from 'react-icons/fi';
+import { BsBuilding } from 'react-icons/bs';
+import { MdOutlineViewModule } from 'react-icons/md';
+import { RiText } from 'react-icons/ri';
 
 export default function Sidebar({ activePage = 'home' }) {
   const navItems = [
-    { id: 'overview', label: 'Overview', icon: AiOutlineHome, href: '/' },
-    { id: 'playground', label: 'Playground', icon: BiPlayCircle, href: '/playground', isNew: false },
-    { id: 'extract', label: 'Extract', icon: VscExtensions, href: '/extract', isNew: true },
+    { id: 'dashboard', label: 'Dashboard', icon: AiOutlineHome, href: '/dashboard' },
+    { id: 'properties', label: 'Properties', icon: BsBuilding, href: '/properties' },
+    { id: 'templates', label: 'Templates', icon: MdOutlineViewModule, href: '/templates' },
+    { id: 'caption', label: 'Caption Generator', icon: RiText, href: '/caption', isNew: false },
     { id: 'activity', label: 'Activity Logs', icon: TbActivityHeartbeat, href: '/activity' },
-    { id: 'usage', label: 'Usage', icon: IoStatsChartOutline, href: '/usage' },
-    { id: 'api-keys', label: 'API Keys', icon: FiKey, href: '/api-keys' },
     { id: 'settings', label: 'Settings', icon: IoSettingsOutline, href: '/dashboard/settings' },
   ];
 
