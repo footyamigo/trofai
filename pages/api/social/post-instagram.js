@@ -63,7 +63,11 @@ async function postToInstagram(igUserId, accessToken, caption, imageUrls) {
   }
   // --- Carousel Post ---
   else {
-    // 1. Create child media containers
+    // 1. Validate image count for carousel
+    if (imageUrls.length < 2 || imageUrls.length > 10) {
+      throw new Error('Instagram carousels require at least 2 and at most 10 images.');
+    }
+    // 2. Create child media containers
     const childIds = [];
     for (const imageUrl of imageUrls) {
       const createUrl = `https://graph.facebook.com/v18.0/${igUserId}/media`;
@@ -74,14 +78,20 @@ async function postToInstagram(igUserId, accessToken, caption, imageUrls) {
       const createRes = await fetch(createUrl, { method: 'POST', body: formData });
       const createData = await createRes.json();
       if (!createRes.ok || createData.error || !createData.id) {
+        console.error('Failed to create IG carousel child media:', createData);
         throw new Error(createData?.error?.message || 'Failed to create IG carousel child media.');
       }
       // Poll for each child
       const ready = await pollMediaContainerStatus(igUserId, createData.id, accessToken);
-      if (!ready) throw new Error('Instagram carousel child media not ready after polling.');
+      if (!ready) {
+        console.error('Instagram carousel child media not ready after polling:', createData.id);
+        throw new Error('Instagram carousel child media not ready after polling.');
+      }
       childIds.push(createData.id);
     }
-    // 2. Create parent carousel container
+    // Log child IDs
+    console.log('IG carousel child IDs:', childIds);
+    // 3. Create parent carousel container
     const parentUrl = `https://graph.facebook.com/v18.0/${igUserId}/media`;
     const parentForm = new URLSearchParams();
     parentForm.append('media_type', 'CAROUSEL');
@@ -91,12 +101,16 @@ async function postToInstagram(igUserId, accessToken, caption, imageUrls) {
     const parentRes = await fetch(parentUrl, { method: 'POST', body: parentForm });
     const parentData = await parentRes.json();
     if (!parentRes.ok || parentData.error || !parentData.id) {
+      console.error('Failed to create IG carousel parent container:', parentData);
       throw new Error(parentData?.error?.message || 'Failed to create IG carousel parent container.');
     }
-    // 3. Poll for parent
+    // 4. Poll for parent
     const ready = await pollMediaContainerStatus(igUserId, parentData.id, accessToken);
-    if (!ready) throw new Error('Instagram carousel parent container not ready after polling.');
-    // 4. Publish
+    if (!ready) {
+      console.error('Instagram carousel parent container not ready after polling:', parentData.id);
+      throw new Error('Instagram carousel parent container not ready after polling.');
+    }
+    // 5. Publish
     const publishUrl = `https://graph.facebook.com/v18.0/${igUserId}/media_publish`;
     const publishForm = new URLSearchParams();
     publishForm.append('creation_id', parentData.id);
@@ -104,6 +118,7 @@ async function postToInstagram(igUserId, accessToken, caption, imageUrls) {
     const publishRes = await fetch(publishUrl, { method: 'POST', body: publishForm });
     const publishData = await publishRes.json();
     if (!publishRes.ok || publishData.error || !publishData.id) {
+      console.error('Failed to publish IG carousel:', publishData);
       throw new Error(publishData?.error?.message || 'Failed to publish IG carousel.');
     }
     return { success: true, postId: publishData.id, type: 'carousel' };
