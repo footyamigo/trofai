@@ -93,12 +93,25 @@ async function postToInstagram(igUserId, accessToken, caption, imageUrls) {
     console.log('IG carousel child IDs:', childIds);
     // 3. Create parent carousel container
     const parentUrl = `https://graph.facebook.com/v18.0/${igUserId}/media`;
-    const parentForm = new URLSearchParams();
-    parentForm.append('media_type', 'CAROUSEL');
-    parentForm.append('caption', caption);
-    childIds.forEach((id) => parentForm.append('children', id));
-    parentForm.append('access_token', accessToken);
-    const parentRes = await fetch(parentUrl, { method: 'POST', body: parentForm });
+    
+    // --- Change: Use JSON body instead of URLSearchParams --- 
+    const parentBody = {
+      media_type: 'CAROUSEL',
+      caption: caption,
+      children: childIds.join(','), // Comma-separated string
+      access_token: accessToken
+    };
+    console.log('Creating parent carousel container with JSON body:', parentBody);
+    
+    const parentRes = await fetch(parentUrl, { 
+      method: 'POST', 
+      headers: {
+        'Content-Type': 'application/json' // Set correct Content-Type
+      },
+      body: JSON.stringify(parentBody) // Send stringified JSON
+    });
+    // --- End Change --- 
+
     const parentData = await parentRes.json();
     if (!parentRes.ok || parentData.error || !parentData.id) {
       console.error('Failed to create IG carousel parent container:', parentData);
