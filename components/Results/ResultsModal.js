@@ -422,7 +422,6 @@ export default function ResultsModal({ isOpen, onClose, results }) {
     // 1. Check connection status FIRST
     if (!isInstagramConnected) {
       toast.error("Please connect your Instagram account in Settings first.");
-      // TODO: Maybe add a link/button to settings?
       return;
     }
     // 2. Check if images are selected
@@ -430,11 +429,43 @@ export default function ResultsModal({ isOpen, onClose, results }) {
       toast.error("Please select at least one image to post.");
       return;
     }
-    // 3. Proceed with posting logic (currently placeholder)
-    console.log("Attempting to post to Instagram:", { caption: currentCaption, images: selectedImages });
-    toast('Instagram posting not yet implemented.');
-    // TODO: Implement API call 
-    // ... (setIsPosting, fetch, finally) ...
+    // 3. Prepare data
+    const sessionToken = localStorage.getItem('session');
+    if (!sessionToken) {
+      toast.error('Authentication error. Please log in again.');
+      return;
+    }
+    const imageUrlsToPost = selectedImages.map(img => img.url);
+    setIsPosting(true);
+    toast.loading('Posting to Instagram...');
+    try {
+      const response = await fetch('/api/social/post-instagram', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionToken}`
+        },
+        body: JSON.stringify({
+          caption: currentCaption,
+          imageUrls: imageUrlsToPost
+        }),
+      });
+      const data = await response.json();
+      toast.dismiss();
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || 'Failed to post to Instagram.');
+      }
+      toast.success(data.message || 'Successfully posted to Instagram!');
+      // Optionally clear selection or close modal
+      // onClose();
+      // setSelectedImages([]);
+    } catch (error) {
+      toast.dismiss();
+      console.error('Error posting to Instagram:', error);
+      toast.error(error.message || 'Failed to post to Instagram.');
+    } finally {
+      setIsPosting(false);
+    }
   };
 
   const handlePostToFacebook = async () => {
