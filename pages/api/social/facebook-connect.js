@@ -58,42 +58,50 @@ async function verifyFacebookToken(accessToken, expectedUserId) {
   return { user_id: meData.id }; 
 }
 
-// Function to fetch Facebook Pages managed by the user
+// Updated function to fetch ALL Facebook Pages with pagination
 async function findFacebookPages(fbUserAccessToken) {
-    // Request pages managed by the user, getting their ID, name, and a page access token
-    const accountsUrl = `https://graph.facebook.com/v18.0/me/accounts?fields=id,name,access_token&access_token=${fbUserAccessToken}`;
-    let managedPages = [];
-    
+    let allPages = [];
+    // Start with the initial URL, request a decent limit
+    let accountsUrl = `https://graph.facebook.com/v18.0/me/accounts?fields=id,name,access_token&limit=100&access_token=${fbUserAccessToken}`;
+
     try {
-        console.log('Querying Facebook Graph API for managed pages...');
-        const response = await fetch(accountsUrl);
-        const data = await response.json();
-
-        if (!response.ok || data.error) {
-            console.error("Error fetching FB pages:", data?.error);
-            // Handle specific permission errors if needed
-            if (data?.error?.code === 200) { // Missing pages_show_list permission
-                 throw new Error('Permission to access Facebook Pages was denied or not granted.');
-            }
-            throw new Error(data?.error?.message || 'Failed to fetch Facebook pages. Ensure permissions are granted.');
-        }
+        console.log('Querying Facebook Graph API for managed pages (handling pagination)...');
         
-        if (!data.data || data.data.length === 0) {
-            console.log('No Facebook pages found for this user.');
-            return managedPages; // Return empty array
+        // Loop while there's a next page URL
+        while (accountsUrl) {
+            console.log(`Fetching page data from: ${accountsUrl.substring(0, 100)}...`); // Log URL start
+            const response = await fetch(accountsUrl);
+            const data = await response.json();
+
+            if (!response.ok || data.error) {
+                console.error("Error fetching FB pages batch:", data?.error);
+                 if (data?.error?.code === 200) { throw new Error('Permission denied fetching Pages.'); }
+                 throw new Error(data?.error?.message || 'Failed to fetch Facebook pages batch.');
+            }
+
+            // Add pages from the current batch to our list
+            if (data.data && data.data.length > 0) {
+                const pagesInBatch = data.data.map(page => ({ 
+                    fbPageId: page.id,
+                    fbPageName: page.name,
+                    fbPageAccessToken: page.access_token
+                }));
+                allPages = allPages.concat(pagesInBatch);
+            }
+
+            // Check for the next page URL
+            if (data.paging && data.paging.next) {
+                accountsUrl = data.paging.next; // Set URL for the next iteration
+            } else {
+                accountsUrl = null; // No more pages, exit loop
+            }
         }
 
-        managedPages = data.data.map(page => ({ // Extract relevant info
-            fbPageId: page.id,
-            fbPageName: page.name,
-            fbPageAccessToken: page.access_token // Important: Page Access Token
-        }));
-
-        console.log(`Found ${managedPages.length} managed Facebook page(s).`);
-        return managedPages;
+        console.log(`Found ${allPages.length} managed Facebook page(s) in total.`);
+        return allPages;
 
     } catch (error) {
-        console.error("Error in findFacebookPages:", error);
+        console.error("Error in findFacebookPages (pagination loop):", error);
         throw error; 
     }
 }
@@ -142,7 +150,7 @@ export default async function handler(req, res) {
         
         // NOTE: We don't need to call verifyFacebookToken here anymore, as fetching pages implicitly verifies it.
 
-        // 3. Find Facebook Pages managed by the user
+        // 3. Find ALL Facebook Pages (now handles pagination)
         const availablePages = await findFacebookPages(accessToken);
 
         // 4. Return the list of found pages (or empty list)

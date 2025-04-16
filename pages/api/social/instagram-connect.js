@@ -11,46 +11,55 @@ const getSessionFromHeader = (req) => {
   return null;
 };
 
-// Function to fetch ALL Instagram Business Accounts linked to Facebook Pages
+// Updated function to fetch ALL Instagram Accounts with pagination
 async function findInstagramAccounts(fbAccessToken) {
-    const accountsUrl = `https://graph.facebook.com/v18.0/me/accounts?fields=name,access_token,instagram_business_account{id,username,profile_picture_url}&access_token=${fbAccessToken}`;
-    let linkedAccounts = []; // Initialize empty array
+    let allIgAccounts = [];
+    // Request pages and linked IG accounts, increase limit
+    let accountsUrl = `https://graph.facebook.com/v18.0/me/accounts?fields=name,access_token,instagram_business_account{id,username,profile_picture_url}&limit=100&access_token=${fbAccessToken}`;
     
     try {
-        console.log('Querying Facebook Graph API for pages and linked IG accounts...');
-        const response = await fetch(accountsUrl);
-        const data = await response.json();
-
-        if (!response.ok || data.error) {
-            console.error("Error fetching FB pages:", data?.error);
-            throw new Error(data?.error?.message || 'Failed to fetch Facebook pages. Ensure permissions are granted.');
-        }
+        console.log('Querying FB Graph API for pages and linked IG accounts (handling pagination)...');
         
-        if (!data.data || data.data.length === 0) {
-            console.log('No Facebook pages found for this user.');
-            return linkedAccounts; // Return empty array
-        }
+        while (accountsUrl) {
+            console.log(`Fetching IG account data from: ${accountsUrl.substring(0, 100)}...`);
+            const response = await fetch(accountsUrl);
+            const data = await response.json();
 
-        // Collect all pages with a linked Instagram Business Account
-        for (const page of data.data) {
-            if (page.instagram_business_account) {
-                console.log(`Found linked Instagram account: ${page.instagram_business_account.username} on page ${page.name}`);
-                linkedAccounts.push({
-                    igUserId: page.instagram_business_account.id,
-                    igUsername: page.instagram_business_account.username,
-                    igProfilePictureUrl: page.instagram_business_account.profile_picture_url, // Get profile pic
-                    fbPageId: page.id,
-                    fbPageName: page.name, // Include page name for context
-                    // We don't necessarily need the page access token at this stage
-                });
+            if (!response.ok || data.error) {
+                console.error("Error fetching FB pages/IG accounts batch:", data?.error);
+                if (data?.error?.code === 200) { throw new Error('Permission denied fetching Pages/IG Accounts.'); }
+                throw new Error(data?.error?.message || 'Failed to fetch FB pages/IG accounts batch.');
+            }
+            
+            // Collect linked Instagram accounts from the current batch
+            if (data.data && data.data.length > 0) {
+                for (const page of data.data) {
+                    if (page.instagram_business_account) {
+                        console.log(` Found linked Instagram account: ${page.instagram_business_account.username} on page ${page.name}`);
+                        allIgAccounts.push({
+                            igUserId: page.instagram_business_account.id,
+                            igUsername: page.instagram_business_account.username,
+                            igProfilePictureUrl: page.instagram_business_account.profile_picture_url, 
+                            fbPageId: page.id,
+                            fbPageName: page.name,
+                        });
+                    }
+                }
+            }
+
+            // Check for the next page URL
+            if (data.paging && data.paging.next) {
+                accountsUrl = data.paging.next;
+            } else {
+                accountsUrl = null; // No more pages
             }
         }
 
-        console.log(`Found ${linkedAccounts.length} linked Instagram account(s).`);
-        return linkedAccounts; 
+        console.log(`Found ${allIgAccounts.length} linked Instagram account(s) in total.`);
+        return allIgAccounts; 
 
     } catch (error) {
-        console.error("Error in findInstagramAccounts:", error);
+        console.error("Error in findInstagramAccounts (pagination loop):", error);
         throw error; 
     }
 }
