@@ -22,6 +22,8 @@ export default function ResultsModal({ isOpen, onClose, results }) {
   const thumbnailsRef = useRef(null);
   const [selectedImages, setSelectedImages] = useState([]);
   const [isRegenerating, setIsRegenerating] = useState(false);
+  const [selectedStoryImage, setSelectedStoryImage] = useState(null);
+  const [storyIndex, setStoryIndex] = useState(0);
 
   // State for social connection status
   const [isFacebookConnected, setIsFacebookConnected] = useState(false);
@@ -119,6 +121,12 @@ export default function ResultsModal({ isOpen, onClose, results }) {
       setSelectedImages([]);
     }
   }, [results]);
+
+  // Reset specific state when tab changes
+  useEffect(() => {
+    setSelectedImages([]); // Clear feed selections when tab changes
+    setSelectedStoryImage(null); // Clear story selection when tab changes
+  }, [activeTab]);
 
   // Early return after hooks are defined
   if (!results || !results.bannerbear) return null;
@@ -301,19 +309,48 @@ export default function ResultsModal({ isOpen, onClose, results }) {
     }
   };
 
-  // Add image selection handler
-  const toggleImageSelection = (image, index) => {
-    setSelectedImages(prev => {
-      const isSelected = prev.some(img => img.url === image.url);
-      if (isSelected) {
-        return prev.filter(img => img.url !== image.url);
-      } else {
-        return [...prev, { ...image, originalIndex: index }];
-      }
-    });
+  // Helper to navigate between story designs
+  const navigateStory = (direction) => {
+    const storyImages = images.filter(image => image.isStory);
+    if (storyImages.length === 0) return;
+    
+    if (direction === 'next') {
+      setStoryIndex(prev => (prev + 1) % storyImages.length);
+    } else {
+      setStoryIndex(prev => (prev - 1 + storyImages.length) % storyImages.length);
+    }
   };
 
-  // Add remove image handler
+  // Modify toggleImageSelection to work with the new story navigation
+  const toggleImageSelection = (image, index) => {
+    // Only allow multi-select on the 'social' tab
+    if (activeTab === 'social') {
+      setSelectedImages(prev => {
+        const isSelected = prev.some(img => img.url === image.url);
+        if (isSelected) {
+          return prev.filter(img => img.url !== image.url);
+        } else {
+          // Limit feed selection if needed (e.g., max 10 for carousel)
+          if (prev.length >= 10) {
+              toast.error('Maximum 10 images allowed for a post.');
+              return prev;
+          }
+          return [...prev, { ...image, originalIndex: index }];
+        }
+      });
+    } else if (activeTab === 'story') {
+      // For story tab, set the clicked image directly
+      if (selectedStoryImage?.url === image.url) {
+        setSelectedStoryImage(null); // Deselect if clicking the same one
+      } else {
+        // Pass the complete image object with original index
+        const originalIndex = typeof index === 'number' ? index : images.findIndex(img => img.url === image.url);
+        setSelectedStoryImage({ ...image, originalIndex });
+      }
+    }
+  };
+
+  // Keep removeSelectedImage for the feed multi-select display
   const removeSelectedImage = (imageUrl) => {
     setSelectedImages(prev => prev.filter(img => img.url !== imageUrl));
   };
@@ -414,6 +451,54 @@ export default function ResultsModal({ isOpen, onClose, results }) {
       toast.error(error.message || 'Failed to save property. Please try again.');
     } finally {
       setIsSaving(false);
+    }
+  };
+  
+  // Placeholder for story posting handler
+  const handlePostStoryToInstagram = async () => {
+    // 1. Check connection
+    if (!isInstagramConnected) {
+      toast.error("Please connect your Instagram account in Settings first.");
+      return;
+    }
+    // 2. Check if a story image is selected
+    if (!selectedStoryImage) {
+      toast.error("Please select a story image to post.");
+      return;
+    }
+    // 3. Prepare data
+    const sessionToken = localStorage.getItem('session');
+    if (!sessionToken) { /* ... error ... */ return; }
+    
+    setIsPosting(true);
+    toast.loading('Posting Story to Instagram...');
+    
+    try {
+      const response = await fetch('/api/social/post-instagram', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionToken}`
+        },
+        body: JSON.stringify({
+          caption: "", // Captions usually aren't used directly on Story API posts
+          imageUrls: [selectedStoryImage.url], // API expects an array, even for single image/story
+          postType: 'story' // Add the new parameter
+        }),
+      });
+      const data = await response.json();
+      toast.dismiss();
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || 'Failed to post Story to Instagram.');
+      }
+      toast.success(data.message || 'Successfully posted Story to Instagram!');
+      setSelectedStoryImage(null); // Clear selection on success
+    } catch (error) {
+      toast.dismiss();
+      console.error('Error posting Story to Instagram:', error);
+      toast.error(error.message || 'Failed to post Story to Instagram.');
+    } finally {
+      setIsPosting(false);
     }
   };
   
@@ -526,6 +611,56 @@ export default function ResultsModal({ isOpen, onClose, results }) {
     }
   };
 
+  // Add handler for Facebook Story posting
+  const handlePostStoryToFacebook = async () => {
+    // 1. Check connection
+    if (!isFacebookConnected) {
+      toast.error("Please connect your Facebook account in Settings first.");
+      return;
+    }
+    // 2. Check if a story image is selected
+    if (!selectedStoryImage) {
+      toast.error("Please select a story image to post.");
+      return;
+    }
+    // 3. Prepare data
+    const sessionToken = localStorage.getItem('session');
+    if (!sessionToken) {
+      toast.error('Authentication error. Please log in again.');
+      return;
+    }
+    
+    setIsPosting(true);
+    toast.loading('Posting Story to Facebook...');
+    
+    try {
+      const response = await fetch('/api/social/post-facebook', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionToken}`
+        },
+        body: JSON.stringify({
+          caption: "", // Captions usually aren't used directly on Story API posts
+          imageUrls: [selectedStoryImage.url], // API expects an array, even for single image/story
+          postType: 'story' // Add the new parameter to indicate story posting
+        }),
+      });
+      const data = await response.json();
+      toast.dismiss();
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || 'Failed to post Story to Facebook.');
+      }
+      toast.success(data.message || 'Successfully posted Story to Facebook!');
+    } catch (error) {
+      toast.dismiss();
+      console.error('Error posting Story to Facebook:', error);
+      toast.error(error.message || 'Failed to post Story to Facebook.');
+    } finally {
+      setIsPosting(false);
+    }
+  };
+
   return (
     <Modal 
       isOpen={isOpen} 
@@ -550,7 +685,13 @@ export default function ResultsModal({ isOpen, onClose, results }) {
             className={`tab ${activeTab === 'social' ? 'active' : ''}`}
             onClick={() => setActiveTab('social')}
           >
-            Post to Social
+            Post to Feed
+          </button>
+          <button 
+            className={`tab ${activeTab === 'story' ? 'active' : ''}`}
+            onClick={() => setActiveTab('story')}
+          >
+            Post to Story
           </button>
         </div>
         
@@ -699,6 +840,83 @@ export default function ResultsModal({ isOpen, onClose, results }) {
                   rows={12}
                   placeholder="Your caption will appear here for editing..."
                 />
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'story' && (
+          <div className="story-tab">
+            <div className="story-content">
+              <div className="story-layout">
+                <div className="stories-grid-container">
+                  {(() => {
+                    const storyImages = images.filter(image => image.isStory);
+                    
+                    if (storyImages.length === 0) {
+                      return <p className="no-content-message">No story-formatted designs available.</p>;
+                    }
+                    
+                    return (
+                      <div className="stories-grid">
+                        {storyImages.map((storyImage, idx) => (
+                          <div 
+                            key={idx} 
+                            className={`story-item ${selectedStoryImage?.url === storyImage.url ? 'selected' : ''}`}
+                            onClick={() => toggleImageSelection(storyImage, idx)}
+                          >
+                            <div className="story-frame">
+                              <img src={storyImage.url} alt="Story Design" />
+                              
+                              {selectedStoryImage?.url === storyImage.url && (
+                                <div className="selected-badge">
+                                  <span>Selected</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+                
+                <div className="story-actions-container">
+                  <div className="story-actions">
+                    <h3 className="section-title">Share Story to Social Media</h3>
+                    {isLoadingStatus && <p>Loading connection status...</p>}
+                    {!isLoadingStatus && (
+                      <div className="social-buttons story-buttons">
+                        {/* Instagram Story Button */}
+                        <button 
+                          className="social-button instagram"
+                          onClick={handlePostStoryToInstagram}
+                          disabled={!isInstagramConnected || isPosting || !selectedStoryImage}
+                        >
+                          <FaInstagram className="icon" />
+                          <div className="button-content">
+                            <span className="button-title">Post to Instagram Story</span>
+                          </div>
+                        </button>
+                        
+                        {/* Facebook Story Button */}
+                        <button 
+                          className="social-button facebook"
+                          onClick={handlePostStoryToFacebook}
+                          disabled={!isFacebookConnected || isPosting || !selectedStoryImage}
+                        >
+                          <FaFacebookSquare className="icon" />
+                          <div className="button-content">
+                            <span className="button-title">Post to Facebook Story</span>
+                          </div>
+                        </button>
+                      </div>
+                    )}
+                    {!isLoadingStatus && (!isFacebookConnected && !isInstagramConnected) && 
+                      <p className="connection-tip">Connect social accounts in Settings to post stories.</p>
+                    }
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -1417,11 +1635,11 @@ export default function ResultsModal({ isOpen, onClose, results }) {
 
         .social-button:hover {
           transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+          filter: brightness(110%);
         }
 
         .social-button .icon {
-          font-size: 2rem;
+          font-size: 1.25rem;
         }
 
         .button-content {
@@ -1448,7 +1666,7 @@ export default function ResultsModal({ isOpen, onClose, results }) {
           color: #666;
           border-left: 3px solid #62d76b;
         }
-
+        
         .social-thumbnail {
           position: relative;
           aspect-ratio: 1;
@@ -1770,6 +1988,173 @@ export default function ResultsModal({ isOpen, onClose, results }) {
           color: #666;
           border-left: 3px solid #62d76b;
         }
+
+        .social-buttons.single-button { 
+            justify-content: center; 
+         }
+         .no-content-message {
+            width: 100%;
+            text-align: center;
+            padding: 2rem;
+            color: #666;
+         }
+
+         /* Cleaned up Story styles */
+         .story-tab {
+           display: flex;
+           flex-direction: column;
+           padding: 0;
+         }
+         
+         .story-content {
+           padding: 1rem 0;
+         }
+         
+         .story-layout {
+           display: flex;
+           flex-direction: column;
+           align-items: center;
+           gap: 2rem;
+         }
+         
+         .stories-grid-container {
+           width: 100%;
+           padding: 1.5rem 0;
+           display: flex;
+           justify-content: center;
+         }
+         
+         .stories-grid {
+           display: flex;
+           gap: 1.5rem;
+           justify-content: center;
+           width: 100%;
+           max-width: 1000px;
+         }
+         
+         .story-item {
+           cursor: pointer;
+           transition: all 0.2s ease;
+           position: relative;
+         }
+         
+         .story-item.selected:after {
+           content: '';
+           position: absolute;
+           top: -8px;
+           left: -8px;
+           right: -8px;
+           bottom: -8px;
+           border: 3px solid #62d76b;
+           border-radius: 20px;
+           pointer-events: none;
+         }
+         
+         .story-frame {
+           position: relative;
+           width: 180px;
+           height: 320px; /* 9:16 ratio */
+           border-radius: 14px;
+           overflow: hidden;
+           box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+           transition: all 0.2s ease;
+         }
+         
+         .story-item:hover .story-frame {
+           transform: translateY(-5px);
+           box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+         }
+         
+         .story-frame img {
+           width: 100%;
+           height: 100%;
+           object-fit: cover;
+         }
+         
+         .selected-badge {
+           position: absolute;
+           bottom: 16px;
+           left: 50%;
+           transform: translateX(-50%);
+           background: rgba(24, 119, 242, 0.9);
+           color: white;
+           border-radius: 20px;
+           padding: 6px 16px;
+           font-weight: 600;
+           font-size: 0.9rem;
+           box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+         }
+         
+         .story-actions-container {
+           width: 100%;
+           max-width: 450px;
+           margin-top: 1rem;
+         }
+         
+         .story-actions {
+           background: white;
+           border-radius: 12px;
+           padding: 1.5rem;
+           box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+           text-align: center;
+         }
+         
+         .social-buttons.single-button {
+           margin-top: 1rem;
+         }
+         
+         /* Remove the old selected-story-display since we now show selection state directly in the carousel */
+         .selected-story-display {
+           display: none;
+         }
+
+         /* Updated story button styling */
+         .social-buttons.story-buttons {
+           display: flex;
+           flex-direction: column;
+           gap: 1rem;
+           margin-top: 1rem;
+           width: 100%;
+         }
+         
+         .story-actions .social-button {
+           width: 100%;
+           display: flex;
+           align-items: center;
+           padding: 0.8rem 1.5rem;
+           border-radius: 10px;
+           justify-content: center;
+         }
+         
+         .story-actions .social-button .button-title {
+           font-size: 1rem;
+           font-weight: 600;
+         }
+         
+         .story-actions .social-button.instagram {
+           background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+         }
+         
+         .story-actions .social-button.facebook {
+           background: #1877f2;
+         }
+         
+         .story-item.selected .story-frame {
+           border: 3px solid #62d76b;
+           transform: translateY(-5px);
+         }
+         
+         .story-item.selected:after {
+           content: '';
+           position: absolute;
+           top: -6px;
+           left: -6px;
+           right: -6px;
+           bottom: -6px;
+           border: 2px solid #62d76b;
+           border-radius: 16px;
+           pointer-events: none;
+         }
       `}</style>
     </Modal>
   );

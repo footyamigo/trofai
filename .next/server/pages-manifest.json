@@ -2,7 +2,10 @@
   "/_app": "pages/_app.js",
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
-  "/caption": "pages/caption.js",
+  "/": "pages/index.js",
+  "/auth/signin": "pages/auth/signin.js",
+  "/api/process": "pages/api/process.js",
   "/dashboard": "pages/dashboard.js",
-  "/properties": "pages/properties.js"
+  "/api/direct-collection": "pages/api/direct-collection.js",
+  "/api/social/status": "pages/api/social/status.js"
 }
