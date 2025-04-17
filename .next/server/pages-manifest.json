@@ -2,10 +2,9 @@
   "/_app": "pages/_app.js",
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
-  "/": "pages/index.js",
   "/auth/signin": "pages/auth/signin.js",
-  "/api/process": "pages/api/process.js",
+  "/api/bannerbear/template-sets": "pages/api/bannerbear/template-sets.js",
   "/dashboard": "pages/dashboard.js",
-  "/api/direct-collection": "pages/api/direct-collection.js",
-  "/api/social/status": "pages/api/social/status.js"
+  "/properties": "pages/properties.js",
+  "/api/process": "pages/api/process.js"
 }

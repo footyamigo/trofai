@@ -11,81 +11,87 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Check if user is authenticated on initial load
+  // Run checkUser only once on initial mount
   useEffect(() => {
     if (isBrowser) {
-      // Add safety timeout to prevent infinite loading
       const loadingTimeout = setTimeout(() => {
-        console.log('Auth loading timeout triggered - forcing loading state to complete');
-        setLoading(false);
-      }, 5000); // 5 seconds timeout (reduced from 10)
+        if (loading) {
+          console.warn('[AuthContext] Auth check timed out after 5s.');
+          setLoading(false); // Prevent infinite loading state
+        }
+      }, 5000);
 
-      // Attempt to check user authentication
-      checkUser();
-      
-      return () => clearTimeout(loadingTimeout);
+      checkUser().finally(() => {
+          clearTimeout(loadingTimeout);
+      });
     } else {
       setLoading(false);
     }
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty dependency array ensures this runs only once
 
   // Check current authentication state
   const checkUser = async () => {
     if (!isBrowser) {
-      console.log('Skipping auth check - not in browser');
+      console.log('[AuthContext] Skipping auth check - not in browser');
       setLoading(false);
-      return null;
+      return;
     }
     
-    try {
-      console.log('Checking current authenticated user...');
-      setLoading(true);
-      
-      // Get session from local storage
-      const session = localStorage.getItem('session');
-      if (!session) {
-        console.log('No session found in local storage');
-        setUser(null);
-        setLoading(false);
-        return null;
-      }
+    console.log('[AuthContext] checkUser: Starting auth check...');
+    // setLoading(true); // Already set to true initially
+    
+    const session = localStorage.getItem('session');
+    if (!session) {
+      console.log('[AuthContext] checkUser: No session token found in localStorage.');
+      setUser(null);
+      setLoading(false);
+      return;
+    }
+    
+    console.log(`[AuthContext] checkUser: Found session token: ${session.substring(0, 10)}...`);
 
-      // Validate session with server
+    try {
+      console.log('[AuthContext] checkUser: Calling /api/auth/validate-session');
       const response = await fetch('/api/auth/validate-session', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session }),
       });
 
+      console.log(`[AuthContext] checkUser: /api/auth/validate-session responded with status: ${response.status}`);
+
       if (!response.ok) {
-        console.log('Session validation failed');
+        console.warn('[AuthContext] checkUser: Session validation failed, removing token.');
         localStorage.removeItem('session');
         setUser(null);
-        setLoading(false);
-        return null;
+        // setLoading(false); // Let finally handle this
+        return;
       }
 
       const userData = await response.json();
-      if (!userData || !userData.username) {
-        console.log('Invalid user data received');
+      
+      console.log('[AuthContext] checkUser: Received userData from API:', userData);
+
+      if (!userData || typeof userData !== 'object' || !userData.userId) {
+        console.warn('[AuthContext] checkUser: Invalid or missing userId in userData received from validation API.', userData);
         localStorage.removeItem('session');
         setUser(null);
-        setLoading(false);
-        return null;
+        // setLoading(false); // Let finally handle this
+        return;
       }
 
-      console.log('User authenticated successfully:', userData.username);
+      console.log(`[AuthContext] checkUser: Session validated successfully for user: ${userData.userId}`);
       setUser(userData);
       setError(null);
       
     } catch (err) {
-      console.error('Error checking authentication:', err);
+      console.error('[AuthContext] checkUser: Error during session validation API call:', err);
       setUser(null);
-      setError(err);
+      setError(err); // Store error state
       localStorage.removeItem('session');
     } finally {
+      console.log('[AuthContext] checkUser: Setting loading to false.');
       setLoading(false);
     }
   };
@@ -104,9 +110,7 @@ export const AuthProvider = ({ children }) => {
       
       const response = await fetch('/api/auth/signin', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       });
       
@@ -157,9 +161,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await fetch('/api/auth/signout', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session: localStorage.getItem('session') }),
       });
 
@@ -184,9 +186,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await fetch('/api/auth/create-user', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ fullName, email, password }),
       });
       
@@ -222,9 +222,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await fetch('/api/auth/confirm', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, code, password }),
       });
       
@@ -259,9 +257,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await fetch('/api/auth/forgot-password', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username }),
       });
 
@@ -286,9 +282,7 @@ export const AuthProvider = ({ children }) => {
       console.log('Attempting to send verification email via SES for:', username);
       const response = await fetch('/api/auth/send-verification-email', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: username }),
       });
       
@@ -315,9 +309,7 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await fetch('/api/auth/reset-password', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, code, newPassword }),
       });
 
@@ -336,6 +328,7 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  // Expose the loading state along with other values
   const value = {
     user,
     loading,

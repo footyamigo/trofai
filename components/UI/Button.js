@@ -27,7 +27,7 @@ const Button = ({
           display: inline-flex;
           align-items: center;
           justify-content: center;
-          padding: 0.75rem 1.5rem;
+          padding: 0.6rem 1.2rem;
           background: #62d76b;
           color: black;
           border: 2px solid black;

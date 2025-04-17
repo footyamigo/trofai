@@ -28,20 +28,35 @@ export default async function handler(req, res) {
       return res.status(500).json({ success: false, message: 'Failed to generate caption.' });
     }
 
-    if (result && result.raw && result.raw.property) {
-      // Normalize images for frontend compatibility
-      const images = result.raw.property.images || result.raw.property.gallery_images || [];
-      result.raw.property.galleryImages = images;
-      result.raw.property.allImages = images;
-      if (images.length > 0) {
-        result.raw.property.mainImage = images[0];
-      }
+    const responseProperty = result.raw?.property || {};
+    let finalImages = [];
+
+    // Prioritize allImages if it exists and has content
+    if (responseProperty.allImages && Array.isArray(responseProperty.allImages) && responseProperty.allImages.length > 0) {
+      finalImages = responseProperty.allImages;
+    } 
+    // Fallback to images
+    else if (responseProperty.images && Array.isArray(responseProperty.images) && responseProperty.images.length > 0) {
+      finalImages = responseProperty.images;
+    } 
+    // Fallback to gallery_images
+    else if (responseProperty.gallery_images && Array.isArray(responseProperty.gallery_images) && responseProperty.gallery_images.length > 0) {
+      finalImages = responseProperty.gallery_images;
     }
+
+    // Ensure mainImage is set if missing and images exist
+    if (!responseProperty.mainImage && finalImages.length > 0) {
+        responseProperty.mainImage = finalImages[0];
+    }
+
+    // Ensure galleryImages and allImages are consistently populated in the response object
+    responseProperty.galleryImages = finalImages;
+    responseProperty.allImages = finalImages;
 
     return res.status(200).json({
       success: true,
       caption: result.caption,
-      property: result.raw?.property || null,
+      property: responseProperty,
       agent: result.raw?.agent || null
     });
   } catch (error) {

@@ -8,6 +8,8 @@ import PropertyURLForm from '../components/Forms/PropertyURLForm';
 import Button from '../components/UI/Button';
 import { FiRefreshCw, FiCopy, FiMapPin, FiHome, FiUser } from 'react-icons/fi';
 import { FaBed, FaBath } from 'react-icons/fa';
+import Modal from '../components/UI/Modal';
+import { FiPlayCircle } from 'react-icons/fi';
 
 const CAPTION_STYLES = [
   { value: 'luxury', label: 'Luxury' },
@@ -29,6 +31,7 @@ export default function CaptionGenerator() {
   const [captionStyle, setCaptionStyle] = useState(CAPTION_STYLES[0].value);
   const [currentStep, setCurrentStep] = useState(0);
   const [agent, setAgent] = useState(null);
+  const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
 
   const handleSubmit = async (url) => {
     setError(null);
@@ -96,6 +99,9 @@ export default function CaptionGenerator() {
     }
   };
 
+  const openVideoModal = () => setIsVideoModalOpen(true);
+  const closeVideoModal = () => setIsVideoModalOpen(false);
+
   // Gallery logic
   const images =
     (property?.galleryImages && property.galleryImages.length > 0 && property.galleryImages) ||
@@ -110,6 +116,13 @@ export default function CaptionGenerator() {
     { label: 'Creating Caption', icon: '✍️', description: 'Generating engaging captions for your property' }
   ];
 
+  // --> START CHANGE: Add console logs for debugging images <--
+  console.log('Rendering CaptionGenerator...');
+  console.log('Property state:', property);
+  console.log('Calculated images array:', images);
+  console.log('Calculated images length:', images.length);
+  // --> END CHANGE <--
+
   return (
     <ProtectedRoute>
       <div className="dashboard">
@@ -123,10 +136,26 @@ export default function CaptionGenerator() {
           <main className="main">
             <div className="content">
               <div className="dashboard-header">
-                <h1 className="title">Caption Generator</h1>
-                <p className="subtitle">Paste a Rightmove or Zillow property link below to generate a social media caption.</p>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem' }}>
+                  <h1 className="title">Caption Generator</h1>
+                  <FiPlayCircle 
+                    onClick={openVideoModal}
+                    style={{ 
+                      fontSize: '1.5rem',
+                      color: '#62d76b',
+                      cursor: 'pointer',
+                      transition: 'color 0.2s ease'
+                    }}
+                    onMouseOver={(e) => e.currentTarget.style.color = '#56c15f'}
+                    onMouseOut={(e) => e.currentTarget.style.color = '#62d76b'}
+                    title="Watch How-To Video"
+                  />
+                </div>
+                <p className="subtitle">Paste a Rightmove, OnTheMarket or Zillow property link. Get a beautiful caption that sells.</p>
               </div>
-              <PropertyURLForm onSubmit={handleSubmit} buttonText={loading ? 'Generating...' : 'Make it Happen'} />
+              <div style={{ maxWidth: '700px', margin: '0 auto' }}>
+                <PropertyURLForm onSubmit={handleSubmit} buttonText={loading ? 'Generating...' : 'Make it Happen'} />
+              </div>
               {error && <div className="error-message">{error}</div>}
               {loading && (
                 <div className="cg-progress-inline">
@@ -256,6 +285,36 @@ export default function CaptionGenerator() {
             </div>
           </main>
         </div>
+        <Modal 
+          isOpen={isVideoModalOpen} 
+          onClose={closeVideoModal} 
+          title="How to Use the Caption Generator"
+        >
+          <div style={{ 
+            padding: 0, 
+            margin: '-1.5rem', 
+            overflow: 'hidden',
+            borderRadius: '0 0 12px 12px' 
+          }}>
+            <div style={{ 
+              position: 'relative', 
+              paddingBottom: '56.25%',
+              height: 0, 
+              overflow: 'hidden', 
+              maxWidth: '100%', 
+              background: '#000'
+            }}>
+              <iframe 
+                src="https://player.vimeo.com/video/1068879779?autoplay=1&title=0&byline=0&portrait=0" 
+                style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%' }} 
+                frameBorder="0" 
+                allow="autoplay; fullscreen; picture-in-picture" 
+                allowFullScreen
+                title="Caption Generator Tutorial"
+              ></iframe>
+            </div>
+          </div>
+        </Modal>
         <style jsx>{`
           .dashboard {
             min-height: 100vh;
@@ -282,14 +341,14 @@ export default function CaptionGenerator() {
           .title {
             margin: 0;
             line-height: 1.15;
-            font-size: 2.5rem;
+            font-size: 3.5rem;
             font-weight: 900;
             color: #111;
           }
           .subtitle {
             line-height: 1.5;
-            font-size: 1.1rem;
-            margin: 1rem 0 1.5rem;
+            font-size: 1.2rem;
+            margin: 1rem 0 0;
             color: #333;
           }
           .cg-row-layout {

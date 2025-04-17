@@ -6,6 +6,7 @@ import { RiTeamLine } from 'react-icons/ri';
 import { useAuth } from '../../src/context/AuthContext';
 import Link from 'next/link';
 import React from 'react';
+import Button from '../UI/Button';
 
 export default function DashboardHeader() {
   const { user, loading, signOut } = useAuth();
@@ -21,10 +22,23 @@ export default function DashboardHeader() {
   const getUserDisplayName = () => {
     if (!user) return 'User';
     
-    return user.email || 
-           user.username || 
-           user.attributes?.email || 
-           (typeof user === 'string' ? user : 'User');
+    // For debugging purposes
+    console.log('User object in getUserDisplayName:', user);
+    
+    // Based on the validate-session.js structure:
+    // The endpoint returns: { userId, username, email, attributes: { email, name } }
+    
+    // Try to get the name from attributes first (this is where fullName is stored)
+    if (user.attributes?.name && user.attributes.name !== 'User') {
+      return user.attributes.name;
+    }
+    
+    // Then try direct email or username fields (these are always set in validate-session response)
+    if (user.email) return user.email;
+    if (user.username) return user.username;
+    
+    // Finally fallback to User
+    return 'User';
   };
 
   const handleSignOut = async () => {
@@ -58,10 +72,10 @@ export default function DashboardHeader() {
                 <span>Profile</span>
               </button>
             </Link>
-            <button className="header-button auth" onClick={handleSignOut}>
-              <FiLogOut />
+            <Button onClick={handleSignOut} className="sign-out-btn">
+              <FiLogOut style={{ fontSize: '1.1rem' }}/>
               <span>Sign Out</span>
-            </button>
+            </Button>
           </div>
         ) : null}
       </div>
@@ -160,17 +174,6 @@ export default function DashboardHeader() {
           font-size: 0.9375rem;
           color: #4A5568;
           margin-right: 0.5rem;
-        }
-
-        .header-button.auth {
-          background: #62d76b;
-          color: #1a1a1a;
-          font-weight: 500;
-        }
-
-        .header-button.auth:hover {
-          background: #56c15f;
-          color: #000;
         }
 
         .header-button.profile {

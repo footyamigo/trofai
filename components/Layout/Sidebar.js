@@ -5,7 +5,7 @@ import { VscExtensions } from 'react-icons/vsc';
 import { TbActivityHeartbeat } from 'react-icons/tb';
 import { IoStatsChartOutline, IoEllipsisHorizontal } from 'react-icons/io5';
 import { IoSettingsOutline } from 'react-icons/io5';
-import { FiKey } from 'react-icons/fi';
+import { FiKey, FiCopy } from 'react-icons/fi';
 import { BsBuilding } from 'react-icons/bs';
 import { MdOutlineViewModule } from 'react-icons/md';
 import { RiText } from 'react-icons/ri';
@@ -14,7 +14,8 @@ export default function Sidebar({ activePage = 'home' }) {
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: AiOutlineHome, href: '/dashboard' },
     { id: 'properties', label: 'Properties', icon: BsBuilding, href: '/properties' },
-    { id: 'templates', label: 'Templates', icon: MdOutlineViewModule, href: '/templates' },
+    { id: 'templates', label: 'Template Gallery', icon: MdOutlineViewModule, href: '/templates' },
+    { id: 'my-templates', label: 'My Templates', icon: FiCopy, href: '/my-templates' },
     { id: 'caption', label: 'Caption Generator', icon: RiText, href: '/caption', isNew: false },
     { id: 'activity', label: 'Activity Logs', icon: TbActivityHeartbeat, href: '/activity' },
     { id: 'settings', label: 'Settings', icon: IoSettingsOutline, href: '/dashboard/settings' },
@@ -32,6 +33,10 @@ export default function Sidebar({ activePage = 'home' }) {
       <nav className="nav-menu">
         {navItems.map((item) => {
           const Icon = item.icon;
+          if (!Icon) {
+            console.warn(`Icon for nav item '${item.label}' (id: ${item.id}) is undefined.`);
+            return null;
+          }
           return (
             <Link 
               key={item.id}
@@ -246,4 +251,4 @@ export default function Sidebar({ activePage = 'home' }) {
       `}</style>
     </aside>
   );
-} 
+}
