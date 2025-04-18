@@ -18,6 +18,7 @@ import { useAuth } from '../../src/context/AuthContext';
 import ProtectedRoute from '../../src/components/ProtectedRoute';
 import { FiTrash2 } from 'react-icons/fi';
 import ConfirmationModal from '../../components/UI/ConfirmationModal';
+import confetti from 'canvas-confetti';
 
 export default function Dashboard() {
   const { user, loading, error: authError } = useAuth();
@@ -31,7 +32,7 @@ export default function Dashboard() {
   const [progressStep, setProgressStep] = useState(0);
   const [loadingUrl, setLoadingUrl] = useState('');
   const [showLoadingModal, setShowLoadingModal] = useState(false);
-  const [selectedTemplate, setSelectedTemplate] = useState('5AaLxyr4P8xrP8bDRG'); // Default to template set 1
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [generatedCaption, setGeneratedCaption] = useState('');
   const [editedCaption, setEditedCaption] = useState('');
   const [captionOptions, setCaptionOptions] = useState(null);
@@ -45,10 +46,31 @@ export default function Dashboard() {
   const [selectedProperties, setSelectedProperties] = useState([]);
   const [isBulkDelete, setIsBulkDelete] = useState(false);
   const [isContentFreshlyGenerated, setIsContentFreshlyGenerated] = useState(false);
+  const [templateSelectionError, setTemplateSelectionError] = useState(null);
   
   const pollIntervalRef = useRef(null);
 
   const [history, setHistory] = useState([]);
+
+  // --> START ADDITION: Function to handle loaded sets and set default <--
+  const handleSetsLoaded = (loadedSets) => {
+    console.log('Template sets loaded in dashboard:', loadedSets);
+    // Find the first user-specific template set (doesn't match standard name)
+    const firstUserSet = loadedSets.find(set => !/^Template Set \d+$/i.test(set.name));
+    
+    if (firstUserSet) {
+      console.log('Found user set, setting as default:', firstUserSet.id);
+      setSelectedTemplate(firstUserSet.id);
+    } else {
+      console.log('No user sets found, keeping default selection null.');
+      // Ensure it remains null if no user sets are found and nothing was previously selected
+      // If selectedTemplate already had a value (e.g., user manually selected one before load finished),
+      // we probably don't want to override it here. So, only set to null if it was already null.
+      // However, since it starts as null, this check might be redundant.
+      // Let's keep it simple: only set if a user set is found.
+    }
+  };
+  // <-- END ADDITION -->
 
   // Redirect to sign-in if not authenticated
   useEffect(() => {
@@ -134,6 +156,19 @@ export default function Dashboard() {
             
             // Set the flag to indicate freshly generated content
             setIsContentFreshlyGenerated(true);
+
+            // Trigger confetti!
+            console.log('Attempting to trigger confetti...');
+            try {
+              confetti({
+                particleCount: 150,
+                spread: 90,
+                origin: { y: 0.6 }
+              });
+              console.log('Confetti triggered successfully.');
+            } catch (error) {
+              console.error('Confetti failed:', error);
+            }
             
             // Open the modal automatically when processing completes
             setIsModalOpen(true);
@@ -179,13 +214,27 @@ export default function Dashboard() {
   }, [currentUid, currentType, isLoading, results?.metadata, selectedTemplate, editedCaption, generatedCaption, captionOptions]);
 
   const handleSubmit = async (url) => {
+    // Check if template is selected FIRST
+    if (!selectedTemplate) {
+      console.log('Validation failed: No template selected.');
+      setTemplateSelectionError('Please select a template set first.');
+      return; 
+    }
+    
+    console.log('Validation passed. Proceeding with submission for URL:', url, 'Template:', selectedTemplate);
+    
+    // Clear previous results and errors (including the specific template error) ONLY if validation passes
+    setResults(null);
+    setError(null);
+    setTemplateSelectionError(null);
+    
+    // Stop any previous polling ONLY if validation passes
     if (pollIntervalRef.current) {
       clearInterval(pollIntervalRef.current);
       pollIntervalRef.current = null;
     }
       
-    setResults(null);
-    setError(null);
+    // Reset state and show loading modal ONLY if validation passes
     setCurrentUid(null);
     setCurrentType(null);
     setIsLoading(true); 
@@ -434,6 +483,7 @@ export default function Dashboard() {
   
   const handleTemplateSelect = (templateId) => {
     setSelectedTemplate(templateId);
+    setTemplateSelectionError(null);
   };
   
   const handleCaptionEdit = (caption) => {
@@ -1231,6 +1281,7 @@ export default function Dashboard() {
                 <TemplateSelector 
                   selectedTemplate={selectedTemplate} 
                   onSelect={handleTemplateSelect} 
+                  onSetsLoaded={handleSetsLoaded}
                 />
                 
                 <PropertyURLForm 
@@ -1238,6 +1289,10 @@ export default function Dashboard() {
                   buttonText="Make it Happen"
                   placeholder="Paste a Rightmove, Zillow, or OnTheMarket property URL"
                 />
+                
+                {templateSelectionError && (
+                  <p className="template-error-message">{templateSelectionError}</p>
+                )}
               </Card>
 
               {/* Loading modal for processing steps */}
@@ -1468,6 +1523,14 @@ export default function Dashboard() {
             outline: none;
             border-color: #38a169;
             box-shadow: 0 0 0 3px rgba(56, 161, 105, 0.1);
+          }
+
+          .template-error-message {
+            color: #c53030; /* Dark red color */
+            font-size: 0.875rem;
+            margin-top: 0.5rem; /* Space above the message */
+            margin-left: 0.25rem; /* Align slightly with the input */
+            text-align: left; 
           }
         `}</style>
       </div>

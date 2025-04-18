@@ -1130,7 +1130,7 @@ export default function ResultsModal({ isOpen, onClose, results }) {
         .images-layout {
           display: flex;
           gap: 1rem;
-          align-items: flex-start;
+          align-items: stretch;
           height: 100%;
           max-width: 1200px;
           margin: 0 auto;
@@ -1142,6 +1142,7 @@ export default function ResultsModal({ isOpen, onClose, results }) {
           display: flex;
           flex-direction: column;
           align-items: center;
+          justify-content: flex-start;
           background: transparent;
           padding: 0;
         }
@@ -1152,11 +1153,15 @@ export default function ResultsModal({ isOpen, onClose, results }) {
           border: 1px solid #dbdbdb;
           border-radius: 8px;
           overflow: hidden;
+          display: flex;
+          flex-direction: column;
         }
         
         .instagram-frame.story-frame {
           aspect-ratio: 9/16;
-          max-width: 400px;
+          width: auto;
+          height: 100%;
+          max-height: 75vh;
           margin: 0 auto;
           background: black;
           position: relative;
@@ -1170,6 +1175,7 @@ export default function ResultsModal({ isOpen, onClose, results }) {
           align-items: center;
           justify-content: center;
           background: black;
+          overflow: hidden;
         }
         
         .story-image {

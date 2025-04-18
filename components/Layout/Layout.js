@@ -55,7 +55,6 @@ export default function Layout({ children, title = 'Trofai', description = 'Prop
           margin-left: 240px;
           min-height: 100vh;
           padding: 2rem;
-          max-width: 1200px;
         }
 
         @media (max-width: 768px) {

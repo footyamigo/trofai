@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { AiFillStar } from 'react-icons/ai';
 
-export default function TemplateSelector({ selectedTemplate, onSelect }) {
+export default function TemplateSelector({ selectedTemplate, onSelect, onSetsLoaded }) {
   const [templateSets, setTemplateSets] = useState([]);
   const [isLoadingSets, setIsLoadingSets] = useState(true);
   const [errorLoadingSets, setErrorLoadingSets] = useState(null);
+  const [displayTemplateSets, setDisplayTemplateSets] = useState([]);
   
   const [startIndex, setStartIndex] = useState(0);
   const [previewImage, setPreviewImage] = useState(null);
@@ -15,13 +17,42 @@ export default function TemplateSelector({ selectedTemplate, onSelect }) {
     const fetchSets = async () => {
       setIsLoadingSets(true);
       setErrorLoadingSets(null);
+      
+      let headers = {};
+      if (typeof window !== 'undefined') {
+        const sessionToken = localStorage.getItem('session');
+        if (sessionToken) {
+          headers['Authorization'] = `Bearer ${sessionToken}`;
+        } else {
+           console.warn('TemplateSelector: No session token found in localStorage.');
+        }
+      } else {
+        console.warn('TemplateSelector: Cannot access localStorage outside browser.');
+      }
+      
       try {
-        const response = await fetch('/api/bannerbear/template-sets');
+        const response = await fetch('/api/bannerbear/template-sets', { headers });
         const data = await response.json();
         if (!response.ok || !data.success) {
           throw new Error(data.message || 'Failed to fetch template sets');
         }
         setTemplateSets(data.sets || []);
+        
+        let userTemplateCounter = 1;
+        const processedSets = (data.sets || []).map(set => {
+          const isStandardSet = /^Template Set \d+$/i.test(set.name);
+          
+          if (isStandardSet) {
+            return { ...set, display_name: set.name };
+          } else {
+            return { ...set, display_name: `My Template ${userTemplateCounter++}` };
+          }
+        });
+        setDisplayTemplateSets(processedSets);
+        
+        if (onSetsLoaded) {
+          onSetsLoaded(processedSets);
+        }
       } catch (error) {
         console.error("Error fetching template sets:", error);
         setErrorLoadingSets(error.message || 'Could not load template sets.');
@@ -65,8 +96,8 @@ export default function TemplateSelector({ selectedTemplate, onSelect }) {
   }, [previewImage, currentImageIndex, currentTemplateId, templateSets]);
 
   const getSelectedTemplateName = () => {
-    const selected = templateSets.find(t => t.id === selectedTemplate);
-    return selected ? selected.name : 'Select a Template Set';
+    const selected = displayTemplateSets.find(t => t.id === selectedTemplate);
+    return selected ? selected.display_name : 'Select a Template Set';
   };
 
   const PreviewModal = () => {
@@ -162,7 +193,14 @@ export default function TemplateSelector({ selectedTemplate, onSelect }) {
       
       <div className="templates-grid">
         {isLoadingSets && (
-          <div className="loading-state">Loading Template Sets...</div>
+          <div className="loading-state">
+            <div className="loading-dots">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+            Loading Template Sets...
+          </div>
         )}
         {errorLoadingSets && (
           <div className="error-state">Error: {errorLoadingSets}</div>
@@ -170,14 +208,20 @@ export default function TemplateSelector({ selectedTemplate, onSelect }) {
         {!isLoadingSets && !errorLoadingSets && templateSets.length === 0 && (
           <div className="empty-state">No template sets found in your Bannerbear account.</div>
         )}
-        {!isLoadingSets && !errorLoadingSets && templateSets.slice(startIndex, startIndex + 4).map((template) => (
+        {!isLoadingSets && !errorLoadingSets && displayTemplateSets.slice(startIndex, startIndex + 4).map((template) => (
           <div 
             key={template.id} 
             className={`template-card ${selectedTemplate === template.id ? 'selected' : ''}`}
             onClick={() => onSelect(template.id)} 
           >
+            {!/^Template Set \d+$/i.test(template.name) && (
+              <div className="user-set-star-container">
+                <AiFillStar style={{ color: '#FFD700', fontSize: '1.2rem' }} />
+              </div>
+            )}
+            
             <div className="template-header">
-              <h4 className="template-name">{template.name}</h4>
+              <h4 className="template-name">{template.display_name}</h4>
               {selectedTemplate === template.id && (
                 <div className="selected-indicator">✓</div>
               )}
@@ -255,14 +299,22 @@ export default function TemplateSelector({ selectedTemplate, onSelect }) {
           gap: 1rem;
           padding: 1rem;
           position: relative;
+          min-height: 150px;
         }
         
         .loading-state, .error-state, .empty-state {
           width: 100%;
-          text-align: center;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
           padding: 2rem;
           color: #666;
           font-style: italic;
+        }
+        
+        .loading-state {
+          color: #62d76b;
         }
         
         .error-state {
@@ -270,6 +322,7 @@ export default function TemplateSelector({ selectedTemplate, onSelect }) {
           background-color: #fff5f5;
           border: 1px solid #fecaca;
           border-radius: 6px;
+          opacity: 1;
         }
         
         .template-card {
@@ -284,6 +337,7 @@ export default function TemplateSelector({ selectedTemplate, onSelect }) {
           display: flex;
           flex-direction: column;
           justify-content: space-between;
+          position: relative;
         }
         
         .template-card:hover {
@@ -437,6 +491,46 @@ export default function TemplateSelector({ selectedTemplate, onSelect }) {
           background: #f9f9f9;
         }
 
+        .loading-dots {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 5px;
+          margin-bottom: 0.75rem;
+        }
+
+        .loading-dots span {
+          width: 8px;
+          height: 8px;
+          background-color: #62d76b;
+          border-radius: 50%;
+          animation: pulse 1.4s infinite ease-in-out both;
+        }
+
+        .loading-dots span:nth-child(1) {
+          animation-delay: -0.32s;
+        }
+
+        .loading-dots span:nth-child(2) {
+          animation-delay: -0.16s;
+        }
+
+        @keyframes pulse {
+          0%, 80%, 100% {
+            transform: scale(0);
+          }
+          40% {
+            transform: scale(1.0);
+          }
+        }
+
+        .user-set-star-container {
+          position: absolute;
+          top: 10px;
+          right: 10px;
+          z-index: 1;
+        }
+        
         @media (max-width: 768px) {
           /* Keep mobile adjustments if needed */
         }
