@@ -135,7 +135,7 @@ async function retryWithBackoff(fn, maxAttempts = MAX_RETRY_ATTEMPTS) {
 /**
  * Scrape Zillow property data using the FirecrawlApp package
  */
-async function scrapeWithFirecrawlPackage(propertyUrl) {
+async function scrapeWithFirecrawlPackage(propertyUrl, agentProfile = null) {
     if (!FirecrawlApp) {
         throw new Error('FirecrawlApp package not available');
     }
@@ -211,7 +211,7 @@ Check in these specific areas:
 
         // Process the first item in the results (there should only be one)
         const data = extractResult.data[0];
-        return await processZillowData(data);
+        return await processZillowData(data, agentProfile);
     } catch (error) {
         console.error("Error using FirecrawlApp package:", error);
         throw error;
@@ -247,14 +247,14 @@ function extractPhoneNumbersFromText(text) {
     return null;
 }
 
-async function scrapeZillowProperty(propertyUrl) {
+async function scrapeZillowProperty(propertyUrl, agentProfile = null) {
     console.log(`Starting scrape for: ${propertyUrl}`);
 
     try {
         // First try using the FirecrawlApp package if available
         if (FirecrawlApp) {
             try {
-                return await scrapeWithFirecrawlPackage(propertyUrl);
+                return await scrapeWithFirecrawlPackage(propertyUrl, agentProfile);
             } catch (packageError) {
                 console.warn('Failed to use FirecrawlApp package, falling back to direct API:', packageError.message);
             }
@@ -432,7 +432,7 @@ Check in these specific areas:
                 }
             }
                     
-            return await processZillowData(processedData);
+            return await processZillowData(processedData, agentProfile);
         } catch (error) {
             console.error('Error using Firecrawl direct API:', error);
             throw error;
@@ -486,7 +486,7 @@ async function pollFirecrawlResults(extractId) {
     return await poll();
 }
 
-async function processZillowData(data) {
+async function processZillowData(data, agentProfile = null) {
     console.log('Processing Zillow data with keys:', Object.keys(data));
     
     if (!data) {
@@ -595,15 +595,14 @@ async function processZillowData(data) {
         hasLogo: !!formattedData.agent.logo
     });
     
-    return await createOutputData(formattedData);
+    return await createOutputData(formattedData, agentProfile);
 }
 
-async function createOutputData(formattedData) {
-    // Generate captions using existing function
+async function createOutputData(formattedData, agentProfile = null) {
+    // Generate captions using existing function, passing agentProfile
     let caption = null;
     try {
-        // Since generatePropertyCaptions returns a Promise, we need to await it
-        caption = await generatePropertyCaptions(formattedData, CAPTION_TYPES.INSTAGRAM);
+        caption = await generatePropertyCaptions(formattedData, CAPTION_TYPES.INSTAGRAM, agentProfile);
         console.log('Generated caption type:', typeof caption);
         
         // If caption is not a string, convert it or set to a default
@@ -694,10 +693,33 @@ async function createOutputData(formattedData) {
     };
 }
 
-async function generateBannerbearImage(propertyData) {
+async function generateBannerbearImage(propertyData, agentProfile = null) {
     try {
+        // Prepare base modifications from property data
+        const baseModifications = propertyData.bannerbear.modifications || [];
+
+        // Add agent modifications if profile is provided
+        const agentModifications = [];
+        if (agentProfile) {
+            console.log('Adding agent profile modifications for Zillow single image:', agentProfile);
+            if (agentProfile.name) {
+                agentModifications.push({ name: 'agent_name', text: agentProfile.name });
+            }
+            if (agentProfile.email) {
+                agentModifications.push({ name: 'agent_email', text: agentProfile.email });
+            }
+            if (agentProfile.phone) {
+                agentModifications.push({ name: 'agent_number', text: agentProfile.phone }); // Map to agent_number
+            }
+            if (agentProfile.photo_url) {
+                agentModifications.push({ name: 'agent_photo', image_url: agentProfile.photo_url }); // Map to agent_photo
+            }
+        }
+
         const bannerbearPayload = {
-            ...propertyData.bannerbear,
+            template: propertyData.bannerbear.template,
+            modifications: [...baseModifications, ...agentModifications],
+            ...BANNERBEAR_TEMPLATE_CONFIG.options, // Ensure options are included
             project_id: 'E56OLrMKYWnzwl3oQj'
         };
 
@@ -741,7 +763,7 @@ async function generateBannerbearImage(propertyData) {
     }
 }
 
-async function generateBannerbearCollection(propertyData, templateSetUid) {
+async function generateBannerbearCollection(propertyData, templateSetUid, agentProfile = null) {
     try {
         // Get all available property images
         const propertyImages = propertyData.raw.property.allImages;
@@ -787,6 +809,24 @@ async function generateBannerbearCollection(propertyData, templateSetUid) {
             }
         ];
 
+        // Add agent modifications if profile is provided
+        const agentModifications = [];
+        if (agentProfile) {
+            console.log('Adding agent profile modifications for Zillow collection:', agentProfile);
+            if (agentProfile.name) {
+                agentModifications.push({ name: 'agent_name', text: agentProfile.name });
+            }
+            if (agentProfile.email) {
+                agentModifications.push({ name: 'agent_email', text: agentProfile.email });
+            }
+            if (agentProfile.phone) {
+                agentModifications.push({ name: 'agent_number', text: agentProfile.phone }); // Map to agent_number
+            }
+            if (agentProfile.photo_url) {
+                agentModifications.push({ name: 'agent_photo', image_url: agentProfile.photo_url }); // Map to agent_photo
+            }
+        }
+
         // Add image modifications for each template
         // We'll cycle through available images if we have more templates than images
         const imageModifications = [];
@@ -803,7 +843,7 @@ async function generateBannerbearCollection(propertyData, templateSetUid) {
         // Prepare the collection payload
         const collectionPayload = {
             template_set: templateSetUid,
-            modifications: [...baseModifications, ...imageModifications],
+            modifications: [...baseModifications, ...agentModifications, ...imageModifications],
             project_id: 'E56OLrMKYWnzwl3oQj',
             metadata: {
                 source: "zillow",

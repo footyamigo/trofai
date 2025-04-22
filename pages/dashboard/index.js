@@ -266,7 +266,8 @@ export default function Dashboard() {
           },
           body: JSON.stringify({ 
             url,
-            templateId: selectedTemplate 
+            templateId: selectedTemplate,
+            isAgentFlow: true
           })
         });
         

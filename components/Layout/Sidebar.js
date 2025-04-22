@@ -1,11 +1,11 @@
 import Link from 'next/link';
 import { AiOutlineHome } from 'react-icons/ai';
-import { BiPlayCircle } from 'react-icons/bi';
+import { BiPlayCircle, BiImageAdd } from 'react-icons/bi';
 import { VscExtensions } from 'react-icons/vsc';
 import { TbActivityHeartbeat } from 'react-icons/tb';
 import { IoStatsChartOutline, IoEllipsisHorizontal } from 'react-icons/io5';
 import { IoSettingsOutline } from 'react-icons/io5';
-import { FiKey, FiCopy } from 'react-icons/fi';
+import { FiKey, FiCopy, FiZap, FiStar, FiActivity, FiSettings } from 'react-icons/fi';
 import { BsBuilding } from 'react-icons/bs';
 import { MdOutlineViewModule } from 'react-icons/md';
 import { RiText } from 'react-icons/ri';
@@ -17,8 +17,10 @@ export default function Sidebar({ activePage = 'home' }) {
     { id: 'templates', label: 'Template Gallery', icon: MdOutlineViewModule, href: '/templates' },
     { id: 'my-templates', label: 'My Templates', icon: FiCopy, href: '/my-templates' },
     { id: 'caption', label: 'Caption Generator', icon: RiText, href: '/caption', isNew: false },
-    { id: 'activity', label: 'Activity Logs', icon: TbActivityHeartbeat, href: '/activity' },
-    { id: 'settings', label: 'Settings', icon: IoSettingsOutline, href: '/dashboard/settings' },
+    { id: 'reviews', label: 'Review Generator', icon: FiStar, href: '/review-generator' },
+    { id: 'tips-generator', label: 'Tip Generator', icon: FiZap, href: '/tips-generator', isNew: true },
+    { id: 'activity', label: 'Activity Feed', icon: FiActivity, href: '/activity-feed' },
+    { id: 'settings', label: 'Settings', icon: FiSettings, href: '/dashboard/settings' },
   ];
 
   return (

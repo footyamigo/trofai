@@ -1,8 +1,19 @@
-import OpenAI from 'openai';
+const { GoogleGenerativeAI } = require('@google/generative-ai');
+const AWS = require('aws-sdk'); // Added AWS SDK
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
+// Configure AWS SDK (use environment variables)
+AWS.config.update({
+  accessKeyId: process.env.ACCESS_KEY_ID,
+  secretAccessKey: process.env.SECRET_ACCESS_KEY,
+  region: process.env.REGION || 'us-east-1'
 });
+
+// Initialize DynamoDB
+const dynamoDb = new AWS.DynamoDB.DocumentClient();
+const USERS_TABLE = 'trofai-users'; // Define user table name
+
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" }); // Updated model
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -10,60 +21,94 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { currentCaption, currentOption, style } = req.body;
-
-    if (!currentCaption) {
-      return res.status(400).json({ error: 'Current caption is required' });
+    // 1. Get session token from headers
+    const session = req.headers.authorization?.replace('Bearer ', '');
+    if (!session) {
+      return res.status(401).json({ message: 'Unauthorized - No session provided' });
     }
 
-    let styleInstruction = '';
-    if (style) {
-      styleInstruction = `\n\nRewrite the caption in a "${style.charAt(0).toUpperCase() + style.slice(1)}" style.`;
-    }
-
-    const prompt = `As a professional real estate copywriter, please rewrite this property listing caption in a more engaging and sophisticated way. Maintain the key information while making it more appealing and human-centric. Keep the emojis and hashtags, but feel free to enhance their placement.${styleInstruction}
-
-Important: Do not use any asterisks (*) or markdown formatting in your response. Write the text as plain text with emojis.
-
-Original Caption:
-${currentCaption.replace(/\*/g, '')}
-
-Requirements:
-1. Keep all the key property information from the original
-2. Write with sophistication and warmth, focusing on lifestyle and emotional appeal
-3. Use emojis thoughtfully to complement the narrative
-4. Keep relevant hashtags but arrange them elegantly
-5. Create a distinctly different version that tells a compelling story
-6. Keep it concise yet evocative (similar length to original)
-7. Do not use any asterisks or special formatting characters
-
-Please write the new caption:`;
-
-    const completion = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL || "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content: "You are a highly experienced real estate copywriter who specializes in crafting sophisticated, emotionally resonant property descriptions. You excel at highlighting the lifestyle appeal and unique character of each property while maintaining professionalism and authenticity. Write in plain text with emojis, without using any markdown formatting or asterisks."
+    // 2. Fetch user data from DynamoDB using session
+    let userData;
+    try {
+      const userResponse = await dynamoDb.query({
+        TableName: USERS_TABLE,
+        IndexName: 'SessionIndex',
+        KeyConditionExpression: '#sess = :session',
+        ExpressionAttributeNames: {
+          '#sess': 'session'
         },
-        {
-          role: "user",
-          content: prompt
+        ExpressionAttributeValues: {
+          ':session': session
         }
-      ],
-      temperature: 0.7,
-      max_tokens: 500
-    });
+      }).promise();
 
-    // Remove any remaining asterisks from the generated caption
-    const generatedCaption = completion.choices[0].message.content.trim().replace(/\*/g, '');
+      if (!userResponse.Items || userResponse.Items.length === 0) {
+        return res.status(401).json({ message: 'Unauthorized - Invalid session' });
+      }
+      userData = userResponse.Items[0];
+    } catch (dbError) {
+      console.error('Error fetching user data from DynamoDB:', dbError);
+      return res.status(500).json({ error: 'Failed to retrieve user data' });
+    }
+
+    // 3. Extract data from request body (excluding agentProfile/isAgentFlow)
+    const { propertyDetails, currentCaption } = req.body;
+
+    if (!propertyDetails) {
+      return res.status(400).json({ error: 'Property details are required for regeneration' });
+    }
+    
+    // 4. Extract agent details directly from fetched userData
+    const agentName = userData.agent_name || userData.name || "Your Name"; // Fallback to user name then placeholder
+    const agentEmail = userData.agent_email || userData.email || "your.email@example.com"; // Fallback to user email then placeholder
+    const agentPhone = userData.agent_phone || "Your Phone Number"; // Fallback to placeholder
+    
+    console.log(`Regenerating caption for agent: ${agentName}`); // Log the fetched agent name
+    
+    // 5. Construct the prompt using fetched agent details
+    const fullPrompt = `You are ${agentName}, an expert real estate copywriter. Rewrite the following social media post for YOUR listing to make it more compelling, detailed, and professional, while reducing emoji usage.
+
+Your tone should be:
+- Professional, knowledgeable, and enthusiastic.
+- Focused on highlighting the unique value proposition and lifestyle appeal.
+- Evocative, painting a picture of living in the property and neighborhood.
+
+Property Details (For Context):
+- Location: ${propertyDetails.address}
+- Price: ${propertyDetails.price}
+- Layout: ${propertyDetails.bedrooms} bedrooms, ${propertyDetails.bathrooms} bathrooms
+- Key Features: ${propertyDetails.keyFeatures}
+
+Original Post (Rewrite this):
+${currentCaption || ''}
+
+Your Contact Info (Use these details):
+- Name: ${agentName} 
+- Email: ${agentEmail}
+- Phone: ${agentPhone}
+
+Rewrite Requirements:
+- Improve the hook and overall narrative flow.
+- Incorporate more specific details about the property's Key Features and the lifestyle they offer.
+- Briefly mention specific nearby amenities or the neighborhood vibe based on the Location (${propertyDetails.address}).
+- Maintain a sophisticated and aspirational tone.
+- Use only 2-4 relevant emojis sparingly.
+- Ensure 3-5 relevant and specific hashtags are present.
+- End with a clear, professional call-to-action inviting interested buyers to contact YOU directly. Format it like this: 'Contact me for details: 📧 ${agentEmail} 📞 ${agentPhone}'. Do not include your name in the CTA.
+- Structure for readability (short paragraphs).
+- Strictly NO ASTERISKS or markdown formatting.`;
+
+    const result = await model.generateContent(fullPrompt);
+    const response = await result.response;
+    const generatedCaption = response.text().trim().replace(/\*/g, '');
 
     return res.status(200).json({ caption: generatedCaption });
   } catch (error) {
-    console.error('Error generating caption:', error);
-    if (error.code === 'OPENAI_API_ERROR') {
-      return res.status(500).json({ error: 'OpenAI API error. Please try again later.' });
+    console.error('Error regenerating caption with Google Gemini:', error);
+    // Add more specific error handling if desired
+    if (error.message && error.message.includes('API key not valid')) {
+      return res.status(500).json({ error: 'Google API key error. Please check configuration.' });
     }
-    return res.status(500).json({ error: 'Failed to generate caption. Please try again.' });
+    return res.status(500).json({ error: 'Failed to regenerate caption. Please try again.' });
   }
 } 

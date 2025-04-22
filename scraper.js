@@ -95,10 +95,12 @@ function getScraper(url) {
 /**
  * Scrape property data from a URL, automatically routing to the right scraper
  * @param {string} propertyUrl - The URL to scrape
+ * @param {object} [agentProfile=null] - Optional agent profile data
  * @returns {Promise<object>} The scraped property data
  */
-async function scrapeProperty(propertyUrl) {
+async function scrapeProperty(propertyUrl, agentProfile = null) {
   console.log(`Scraping property data from: ${propertyUrl}`);
+  console.log(`[Scraper] Received agentProfile:`, JSON.stringify(agentProfile));
   
   try {
     // Get the appropriate scraper for this URL
@@ -112,8 +114,8 @@ async function scrapeProperty(propertyUrl) {
       if (typeof scraper.scrapeRightmoveProperty !== 'function') {
         throw new Error('scrapeRightmoveProperty is not a function in the rightmove scraper module');
       }
-      console.log('Calling scraper.scrapeRightmoveProperty()');
-      return await scraper.scrapeRightmoveProperty(propertyUrl);
+      console.log('Calling scraper.scrapeRightmoveProperty() with agentProfile');
+      return await scraper.scrapeRightmoveProperty(propertyUrl, agentProfile);
     } else if (ZILLOW_URL_PATTERN.test(propertyUrl)) {
       console.log('Detected Zillow URL pattern. Checking for scrapeZillowProperty function...');
       
@@ -124,9 +126,9 @@ async function scrapeProperty(propertyUrl) {
         throw new Error('scrapeZillowProperty is not a function in the zillow scraper module');
       }
       
-      console.log('Calling scraper.scrapeZillowProperty()');
+      console.log('Calling scraper.scrapeZillowProperty() with agentProfile');
       try {
-        const result = await scraper.scrapeZillowProperty(propertyUrl);
+        const result = await scraper.scrapeZillowProperty(propertyUrl, agentProfile);
         console.log('scrapeZillowProperty completed successfully', result ? 'with data' : 'no data returned');
         return result;
       } catch (zillowError) {
@@ -135,11 +137,11 @@ async function scrapeProperty(propertyUrl) {
       }
     } else if (ONTHEMARKET_URL_PATTERN.test(propertyUrl)) {
       if (typeof scraper === 'function' || typeof scraper.default === 'function') {
-        console.log('Calling OnTheMarket scraper (default export)');
-        return await (scraper.default || scraper)(propertyUrl);
+        console.log('Calling OnTheMarket scraper (default export) with agentProfile');
+        return await (scraper.default || scraper)(propertyUrl, agentProfile);
       } else if (typeof scraper.scrapeOnTheMarketProperty === 'function') {
-        console.log('Calling scraper.scrapeOnTheMarketProperty()');
-        return await scraper.scrapeOnTheMarketProperty(propertyUrl);
+        console.log('Calling scraper.scrapeOnTheMarketProperty() with agentProfile');
+        return await scraper.scrapeOnTheMarketProperty(propertyUrl, agentProfile);
       } else {
         throw new Error('No valid function found in OnTheMarket scraper module');
       }
@@ -155,18 +157,22 @@ async function scrapeProperty(propertyUrl) {
 /**
  * Generate a Bannerbear image from property data
  * @param {object} propertyData - The property data
+ * @param {object} [agentProfile=null] - Optional agent profile data
  * @returns {Promise<object>} The Bannerbear response
  */
-async function generateBannerbearImage(propertyData) {
+async function generateBannerbearImage(propertyData, agentProfile = null) {
   // Determine which scraper to use based on the metadata
   const source = propertyData.bannerbear.metadata.source;
+  console.log(`Routing Bannerbear image generation for source: ${source}`);
   if (source === 'rightmove') {
-    return await rightmoveScraper.generateBannerbearImage(propertyData);
+    return await rightmoveScraper.generateBannerbearImage(propertyData, agentProfile);
   } else if (source === 'zillow') {
-    return await zillowScraper.generateBannerbearImage(propertyData);
+    return await zillowScraper.generateBannerbearImage(propertyData, agentProfile);
   } else if (source === 'onthemarket') {
-    return await onthemarketScraper.generateBannerbearImage(propertyData);
+    // Assuming onthemarket scraper also follows the same pattern
+    return await onthemarketScraper.generateBannerbearImage(propertyData, agentProfile);
   } else {
+    console.error(`Cannot generate image: Unknown property source: ${source}`);
     throw new Error(`Unknown property source: ${source}`);
   }
 }
@@ -175,18 +181,22 @@ async function generateBannerbearImage(propertyData) {
  * Generate a Bannerbear collection from property data
  * @param {object} propertyData - The property data
  * @param {string} templateSetUid - The Bannerbear template set UID
+ * @param {object} [agentProfile=null] - Optional agent profile data
  * @returns {Promise<object>} The Bannerbear response
  */
-async function generateBannerbearCollection(propertyData, templateSetUid) {
+async function generateBannerbearCollection(propertyData, templateSetUid, agentProfile = null) {
   // Determine which scraper to use based on the metadata
   const source = propertyData.bannerbear.metadata.source;
+  console.log(`Routing Bannerbear collection generation for source: ${source}`);
   if (source === 'rightmove') {
-    return await rightmoveScraper.generateBannerbearCollection(propertyData, templateSetUid);
+    return await rightmoveScraper.generateBannerbearCollection(propertyData, templateSetUid, agentProfile);
   } else if (source === 'zillow') {
-    return await zillowScraper.generateBannerbearCollection(propertyData, templateSetUid);
+    return await zillowScraper.generateBannerbearCollection(propertyData, templateSetUid, agentProfile);
   } else if (source === 'onthemarket') {
-    return await onthemarketScraper.generateBannerbearCollection(propertyData, templateSetUid);
+     // Assuming onthemarket scraper also follows the same pattern
+    return await onthemarketScraper.generateBannerbearCollection(propertyData, templateSetUid, agentProfile);
   } else {
+    console.error(`Cannot generate collection: Unknown property source: ${source}`);
     throw new Error(`Unknown property source: ${source}`);
   }
 }

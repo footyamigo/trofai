@@ -33,6 +33,9 @@ const tables = {
       username: 'S',
       session: 'S',
       properties: 'L',
+      agent_name: 'S',
+      agent_phone: 'S',
+      agent_photo_url: 'S',
       createdAt: 'S',
       updatedAt: 'S'
     }

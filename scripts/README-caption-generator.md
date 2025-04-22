@@ -8,16 +8,18 @@ This script allows you to test the generation of Instagram captions for property
 - Removes any asterisks or unwanted markers from captions
 - Supports loading property data from JSON files
 - Can save the generated captions to an output file
-- Works with the same OpenAI model configured in your .env file
+- Works with the Google Gemini model configured in your .env file
 
 ## Requirements
 
 - Node.js installed
-- Valid OpenAI API key in .env file
+- Valid Google API key in .env file
+- `@google/generative-ai` package installed (`npm install @google/generative-ai`)
 - Configuration in .env file:
   ```
-  OPENAI_API_KEY=your_openai_api_key
-  OPENAI_MODEL=gpt-4o-mini
+  GOOGLE_API_KEY=your_google_api_key
+  # Optional: Specify a different Gemini model if needed
+  # GOOGLE_GEMINI_MODEL=gemini-pro
   ```
 
 ## Usage
@@ -97,8 +99,8 @@ The output JSON file will contain two captions:
 
 If you encounter issues:
 
-1. Check that your OpenAI API key is valid in the .env file
-2. Ensure the OPENAI_MODEL in .env is set to a model your account has access to
+1. Check that your Google API key is valid in the .env file
+2. Ensure the `@google/generative-ai` package is installed
 3. Verify that your input JSON file has the correct format
 4. Check for errors in the console output
 

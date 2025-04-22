@@ -28,6 +28,14 @@ export default function SettingsPage() {
   const [instagramUsername, setInstagramUsername] = useState(null);
   const [igConnectData, setIgConnectData] = useState(null);
 
+  // Agent Profile State
+  const [agentName, setAgentName] = useState('');
+  const [agentEmail, setAgentEmail] = useState('');
+  const [agentPhone, setAgentPhone] = useState('');
+  const [agentPhotoFile, setAgentPhotoFile] = useState(null);
+  const [agentPhotoPreview, setAgentPhotoPreview] = useState(null);
+  const [isSavingAgentInfo, setIsSavingAgentInfo] = useState(false);
+
   useEffect(() => {
     let isMounted = true; 
     const fetchStatus = async () => {
@@ -84,6 +92,51 @@ export default function SettingsPage() {
     return () => { isMounted = false; };
 
   }, []);
+
+  // Add useEffect to load existing agent data
+  useEffect(() => {
+    let isMounted = true;
+    const fetchAgentProfile = async () => {
+      const sessionToken = localStorage.getItem('session');
+      if (!sessionToken) {
+        console.log('Agent Profile: No session token, cannot fetch data.');
+        return; // Don't try to fetch if not logged in
+      }
+
+      try {
+        console.log('Fetching agent profile data...');
+        const response = await fetch('/api/agent/profile', {
+          headers: { 'Authorization': `Bearer ${sessionToken}` }
+        });
+
+        if (!isMounted) return;
+
+        const data = await response.json();
+
+        if (response.ok && data.success && data.profile) {
+          console.log('Agent profile data received:', data.profile);
+          setAgentName(data.profile.agentName || '');
+          setAgentEmail(data.profile.agentEmail || '');
+          setAgentPhone(data.profile.agentPhone || '');
+          setAgentPhotoPreview(data.profile.agentPhotoUrl || null);
+          // Note: We don't set agentPhotoFile here, only the preview URL
+        } else {
+          console.error('Failed to fetch agent profile:', data.message || 'Unknown error');
+          // Optionally show a toast error, but might be annoying on load
+          // toast.error('Could not load your agent profile data.'); 
+        }
+      } catch (error) {
+        if (!isMounted) return;
+        console.error('Error fetching agent profile:', error);
+        // toast.error('Error loading agent profile data.');
+      }
+    };
+
+    fetchAgentProfile();
+
+    return () => { isMounted = false; };
+
+  }, []); // Run this effect once when the component mounts
 
   const handleConnectFacebook = () => {
     if (typeof FB === 'undefined') {
@@ -429,6 +482,71 @@ export default function SettingsPage() {
       }
   };
 
+  const handleAgentPhotoChange = (event) => {
+    const file = event.target.files[0];
+    if (file && file.type.startsWith('image/')) {
+      setAgentPhotoFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setAgentPhotoPreview(reader.result);
+      };
+      reader.readAsDataURL(file);
+    } else {
+      setAgentPhotoFile(null);
+      setAgentPhotoPreview(null);
+      if (file) {
+        toast.error('Please select a valid image file.');
+      }
+    }
+  };
+
+  const handleSaveAgentInfo = async () => {
+    const sessionToken = localStorage.getItem('session');
+    if (!sessionToken) {
+      toast.error('Authentication error. Please log in again.');
+      return;
+    }
+
+    setIsSavingAgentInfo(true);
+    const toastId = toast.loading('Saving agent information...');
+
+    // Use FormData to handle file upload along with text fields
+    const formData = new FormData();
+    formData.append('agentName', agentName);
+    formData.append('agentEmail', agentEmail);
+    formData.append('agentPhone', agentPhone);
+    if (agentPhotoFile) {
+      formData.append('agentPhoto', agentPhotoFile);
+    }
+
+    try {
+      // TODO: Create and call the API endpoint '/api/agent/profile'
+      const response = await fetch('/api/agent/profile', { // Changed endpoint
+        method: 'POST',
+        headers: {
+          // 'Content-Type': 'application/json', // Don't set Content-Type when using FormData
+          'Authorization': `Bearer ${sessionToken}`
+        },
+        body: formData, // Send FormData directly
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || 'Failed to save agent information.');
+      }
+
+      toast.success('Agent information saved successfully!', { id: toastId });
+      // Optionally update user context or refetch data if needed
+
+    } catch (error) {
+      console.error('Error saving agent info:', error);
+      toast.error(error.message || 'Failed to save agent information.', { id: toastId });
+    } finally {
+      setIsSavingAgentInfo(false);
+    }
+  };
+
   if (isLoadingStatus) {
     return (
       <ProtectedRoute>
@@ -543,7 +661,89 @@ export default function SettingsPage() {
                 </div>
               </Card>
 
-              {/* TODO: Add other settings sections (e.g., Profile, Billing) */}
+              {/* --- Agent Profile Section --- */}
+              <Card title="Agent Profile" className="agent-profile-card">
+                <p className="card-subtitle">Update your details shown on generated property images.</p>
+                
+                <div className="form-group">
+                  <label htmlFor="agentName">Agent Name</label>
+                  <input 
+                    type="text" 
+                    id="agentName" 
+                    value={agentName}
+                    onChange={(e) => setAgentName(e.target.value)}
+                    placeholder="Your full name"
+                    disabled={isSavingAgentInfo}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="agentEmail">Contact Email</label>
+                  <input 
+                    type="email" 
+                    id="agentEmail" 
+                    value={agentEmail}
+                    onChange={(e) => setAgentEmail(e.target.value)}
+                    placeholder="your.email@example.com"
+                    disabled={isSavingAgentInfo}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="agentPhone">Phone Number</label>
+                  <input 
+                    type="tel" 
+                    id="agentPhone" 
+                    value={agentPhone}
+                    onChange={(e) => setAgentPhone(e.target.value)}
+                    placeholder="+447123456789"
+                    disabled={isSavingAgentInfo}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label htmlFor="agentPhoto">Profile Photo</label>
+                  <div className="photo-upload-area">
+                    {agentPhotoPreview && (
+                      <img src={agentPhotoPreview} alt="Agent photo preview" className="photo-preview" />
+                    )}
+                    <input 
+                      type="file" 
+                      id="agentPhoto" 
+                      accept="image/png, image/jpeg, image/webp" 
+                      onChange={handleAgentPhotoChange}
+                      disabled={isSavingAgentInfo}
+                      className="file-input"
+                    />
+                    <label htmlFor="agentPhoto" className="button file-upload-button">
+                      {agentPhotoPreview ? 'Change Photo' : 'Upload Photo'}
+                    </label>
+                    {agentPhotoPreview && (
+                      <button 
+                        className="button secondary remove-photo-button" 
+                        onClick={() => { setAgentPhotoFile(null); setAgentPhotoPreview(null); /* TODO: Add API call to remove photo */ }}
+                        disabled={isSavingAgentInfo}
+                      >
+                        Remove Photo
+                      </button>
+                    )}
+                  </div>
+                  <p className="small-text">Recommended size: 200x200px. Max 2MB.</p>
+                </div>
+
+                <div className="form-actions">
+                  <button 
+                    className="button primary save-button" 
+                    onClick={handleSaveAgentInfo}
+                    disabled={isSavingAgentInfo}
+                  >
+                    {isSavingAgentInfo ? 'Saving...' : 'Save Agent Info'}
+                  </button>
+                </div>
+
+              </Card>
+
+              {/* TODO: Add other settings sections (e.g., Billing) */}
 
             </div>
           </main>
@@ -689,6 +889,92 @@ export default function SettingsPage() {
         }
         .connected-account-info strong {
             color: #2e7d32;
+        }
+        .agent-profile-card {
+          margin-top: 2rem; /* Add space above the new card */
+        }
+        .card-subtitle {
+          font-size: 0.95rem;
+          color: #6b7280;
+          margin-bottom: 1.5rem;
+          margin-top: -0.5rem; /* Adjust spacing relative to Card title */
+        }
+        .form-group {
+          margin-bottom: 1.5rem;
+        }
+        .form-group label {
+          display: block;
+          font-weight: 500;
+          margin-bottom: 0.5rem;
+          color: #374151;
+        }
+        .form-group input[type="text"],
+        .form-group input[type="email"],
+        .form-group input[type="tel"] {
+          width: 100%;
+          padding: 0.75rem;
+          border: 1px solid #d1d5db;
+          border-radius: 6px;
+          font-size: 0.95rem;
+          transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .form-group input:focus {
+          outline: none;
+          border-color: #62d76b;
+          box-shadow: 0 0 0 2px rgba(98, 215, 107, 0.3);
+        }
+        .form-group input:disabled {
+          background-color: #f3f4f6;
+          cursor: not-allowed;
+        }
+        .photo-upload-area {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+        }
+        .photo-preview {
+          width: 60px;
+          height: 60px;
+          border-radius: 50%;
+          object-fit: cover;
+          border: 2px solid #e5e7eb;
+        }
+        .file-input {
+          /* Hide the default file input */
+          width: 0.1px;
+          height: 0.1px;
+          opacity: 0;
+          overflow: hidden;
+          position: absolute;
+          z-index: -1;
+        }
+        .file-upload-button {
+          /* Style the custom button */
+          padding: 0.6rem 1.2rem;
+          border: 1px solid #d1d5db;
+          border-radius: 6px;
+          cursor: pointer;
+          font-weight: 500;
+          background-color: white;
+          color: #374151;
+          transition: background-color 0.2s ease;
+        }
+        .file-upload-button:hover {
+          background-color: #f9fafb;
+        }
+        .remove-photo-button {
+           padding: 0.6rem 1.0rem; /* Slightly smaller padding */
+           min-width: auto;
+           font-size: 0.9rem;
+        }
+        .form-actions {
+          margin-top: 2rem;
+          padding-top: 1.5rem;
+          border-top: 1px solid #e5e7eb;
+          text-align: right;
+        }
+        .save-button {
+          min-width: 160px;
         }
         @media (max-width: 768px) {
           .dashboard-container {

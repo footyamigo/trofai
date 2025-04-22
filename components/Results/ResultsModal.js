@@ -108,7 +108,7 @@ export default function ResultsModal({ isOpen, onClose, results }) {
       
       // Make sure we check for empty strings too, not just null/undefined
       const mainCaption = results.caption || '';
-      const altCaption = results.captionOptions?.alternative || '';
+      const altCaption = (results.propertyData?.property?.address || results.propertyData?.address) && results.captionOptions?.alternative || '';
       
       console.log('Setting edited captions:', { main: mainCaption, alternative: altCaption });
       
@@ -294,6 +294,7 @@ export default function ResultsModal({ isOpen, onClose, results }) {
   
   // Handle caption editing
   const handleCaptionChange = (e) => {
+    if (!results.propertyData?.property?.address || !results.propertyData?.address) return; // Don't allow editing for testimonials
     const newCaption = e.target.value;
     setEditedCaptions({
       ...editedCaptions,
@@ -357,15 +358,48 @@ export default function ResultsModal({ isOpen, onClose, results }) {
   
   // Add regenerate handler
   const handleRegenerateCaption = async () => {
+    if (!results.propertyData?.property?.address || !results.propertyData?.address) return; // Don't regenerate for testimonials
     setIsRegenerating(true);
     try {
+      // --- Start: Prepare context for regeneration --- 
+      const propertyContext = results?.propertyData?.property || {};
+      const agentContext = results?.data?.agentProfile || null; 
+      const isAgentFlow = !!agentContext; // Determine if it was an agent flow originally
+
+      // Prepare property details for the prompt
+      const detailsForPrompt = {
+        address: propertyContext.address || 'N/A',
+        price: propertyContext.price || 'N/A',
+        bedrooms: propertyContext.bedrooms || 'N/A',
+        bathrooms: propertyContext.bathrooms || 'N/A',
+        keyFeatures: Array.isArray(propertyContext.keyFeatures) ? propertyContext.keyFeatures.join(', ') : 'N/A',
+        description: propertyContext.description || 'N/A',
+        facts: propertyContext.facts || 'N/A',
+        // Use original agent details from scrape if not in agent mode, or agent profile if available
+        originalAgentName: isAgentFlow ? '' : (results?.propertyData?.agent?.name || 'Unknown Agent'), 
+      };
+      // --- End: Prepare context --- 
+
+      // Get session token for authorization
+      const sessionToken = localStorage.getItem('session');
+      if (!sessionToken) {
+        toast.error('Authentication error. Please log in again.');
+        setIsRegenerating(false);
+        return;
+      }
+
       const response = await fetch('/api/regenerate-caption', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionToken}`
         },
         body: JSON.stringify({
-          currentCaption: currentCaption,
+          // Pass the structured context instead of just the old caption
+          propertyDetails: detailsForPrompt,
+          agentProfile: agentContext,
+          isAgentFlow: isAgentFlow,
+          currentCaption: currentCaption, // Still useful maybe for the AI?
           currentOption: selectedCaptionOption
         }),
       });
@@ -661,11 +695,17 @@ export default function ResultsModal({ isOpen, onClose, results }) {
     }
   };
 
+  // --- Determine Content Type --- 
+  const isProperty = results?.propertyData?.property?.address || results?.propertyData?.address; // Check both structures
+  const modalTitle = isProperty ? "Your Generated Property Content" : "Your Generated Testimonial Content";
+  const captionTitle = isProperty ? "Instagram Caption" : "Review Text";
+  // --- End Determine Content Type ---
+
   return (
     <Modal 
       isOpen={isOpen} 
       onClose={onClose} 
-      title="Your Generated Property Content"
+      title={modalTitle}
     >
       <div className="content-container">
         <div className="tabs">
@@ -679,7 +719,7 @@ export default function ResultsModal({ isOpen, onClose, results }) {
             className={`tab ${activeTab === 'caption' ? 'active' : ''}`}
             onClick={() => setActiveTab('caption')}
           >
-            Caption
+            {captionTitle}
           </button>
           <button 
             className={`tab ${activeTab === 'social' ? 'active' : ''}`}
@@ -761,7 +801,7 @@ export default function ResultsModal({ isOpen, onClose, results }) {
                       {bannerbear.zip_url && (
                         <button 
                           className="download-all-button" 
-                          onClick={downloadZip}
+                          onClick={() => downloadImage(bannerbear.zip_url, 'property-designs.zip')}
                           disabled={isDownloading}
                         >
                           <FiDownload className="icon" />
@@ -795,8 +835,9 @@ export default function ResultsModal({ isOpen, onClose, results }) {
           <div className="caption-tab">
             <div className="caption-container">
               <div className="caption-header">
-                <h3 className="section-title">Instagram Caption</h3>
+                <h3 className="section-title">{captionTitle}</h3>
                 <div className="caption-actions">
+                  {isProperty && (
                   <button 
                     className="caption-action regenerate" 
                     onClick={handleRegenerateCaption}
@@ -805,6 +846,7 @@ export default function ResultsModal({ isOpen, onClose, results }) {
                     <FiRefreshCw className={`icon ${isRegenerating ? 'spinning' : ''}`} />
                     <span>{isRegenerating ? 'Regenerating...' : 'Regenerate'}</span>
                   </button>
+                  )}
                 <button 
                   className="caption-action" 
                   onClick={copyCaption}
@@ -815,7 +857,7 @@ export default function ResultsModal({ isOpen, onClose, results }) {
                 </div>
               </div>
               
-              {hasAlternativeCaption && (
+              {hasAlternativeCaption && isProperty && (
                 <div className="caption-options">
                   <button 
                     className={`caption-option-btn ${selectedCaptionOption === 'main' ? 'active' : ''}`}
@@ -838,7 +880,8 @@ export default function ResultsModal({ isOpen, onClose, results }) {
                   value={currentCaption}
                   onChange={handleCaptionChange}
                   rows={12}
-                  placeholder="Your caption will appear here for editing..."
+                  placeholder={isProperty ? "Your caption will appear here for editing..." : "Review text extracted from image..."}
+                  readOnly={!isProperty}
                 />
               </div>
             </div>
@@ -983,7 +1026,7 @@ export default function ResultsModal({ isOpen, onClose, results }) {
                       </button>
                     </div>
 
-                    {hasAlternativeCaption && (
+                    {hasAlternativeCaption && isProperty && (
                       <div className="caption-options">
                         <button 
                           className={`caption-option-btn ${selectedCaptionOption === 'main' ? 'active' : ''}`}

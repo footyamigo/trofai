@@ -154,14 +154,15 @@ async function retryWithBackoff(fn, maxAttempts = MAX_RETRY_ATTEMPTS) {
     throw lastError;
 }
 
-async function scrapeRightmoveProperty(propertyUrl) {
+async function scrapeRightmoveProperty(propertyUrl, agentProfile = null) {
+    console.log(`[RightmoveScraper] scrapeRightmoveProperty received agentProfile:`, JSON.stringify(agentProfile));
     console.log(`Starting scrape for: ${propertyUrl}`);
 
     try {
         // First try using the FirecrawlApp package if available
         if (FirecrawlApp) {
             try {
-                return await scrapeWithFirecrawlPackage(propertyUrl);
+                return await scrapeWithFirecrawlPackage(propertyUrl, agentProfile);
             } catch (packageError) {
                 console.warn('Failed to use FirecrawlApp package, falling back to direct API:', packageError.message);
             }
@@ -212,7 +213,7 @@ async function scrapeRightmoveProperty(propertyUrl) {
                 if (extractData.data && extractData.data.length > 0) {
                     // Process immediate data response
                     console.log('Got immediate data response');
-                    return await processFirecrawlResults(extractData.data[0]);
+                    return await processFirecrawlResults(extractData.data[0], agentProfile);
                 } else if (extractData.id) {
                     // If it's an async job, poll for results
                     console.log(`Firecrawl extraction initiated with ID: ${extractData.id}`);
@@ -224,10 +225,9 @@ async function scrapeRightmoveProperty(propertyUrl) {
                     if (pollResult) {
                         // Handle different response formats
                         if (Array.isArray(pollResult) && pollResult.length > 0) {
-                            return await processFirecrawlResults(pollResult[0]);
+                            return await processFirecrawlResults(pollResult[0], agentProfile);
                         } else if (typeof pollResult === 'object' && (pollResult.property || pollResult.estate_agent)) {
-                            // This is likely the object itself, not an array
-                            return await processFirecrawlResults(pollResult);
+                            return await processFirecrawlResults(pollResult, agentProfile);
                         } else {
                             console.log('No property data in poll result');
                             // Don't throw here, try again in the next main attempt
@@ -274,7 +274,7 @@ async function scrapeRightmoveProperty(propertyUrl) {
  * Scrape Rightmove property data using the FirecrawlApp package
  * This uses the approach shown in the Firecrawl documentation
  */
-async function scrapeWithFirecrawlPackage(propertyUrl) {
+async function scrapeWithFirecrawlPackage(propertyUrl, agentProfile = null) {
     if (!FirecrawlApp) {
         throw new Error('FirecrawlApp package not available');
     }
@@ -305,7 +305,7 @@ async function scrapeWithFirecrawlPackage(propertyUrl) {
 
         // Process the first item in the results (there should only be one)
         const data = extractResult.data[0];
-        return processFirecrawlResults(data);
+        return processFirecrawlResults(data, agentProfile);
     } catch (error) {
         console.error("Error using FirecrawlApp package:", error);
         throw error;
@@ -380,7 +380,8 @@ async function pollFirecrawlResults(extractId) {
     return await poll();
 }
 
-async function processFirecrawlResults(data) {
+async function processFirecrawlResults(data, agentProfile = null) {
+    console.log(`[RightmoveScraper] processFirecrawlResults received agentProfile:`, JSON.stringify(agentProfile));
     console.log('Processing data:', JSON.stringify(data, null, 2));
     
     // If the data is null or undefined, throw an error
@@ -395,7 +396,7 @@ async function processFirecrawlResults(data) {
     // For structured data with property and estate_agent keys
     if (data.property && data.estate_agent) {
         console.log('Data format: property and estate_agent');
-        return await processStructuredData(data);
+        return await processStructuredData(data, agentProfile);
     }
     
     // For data with different key names (camelCase variations)
@@ -406,15 +407,16 @@ async function processFirecrawlResults(data) {
             property: data.property,
             estate_agent: data.estateAgent
         };
-        return await processStructuredData(normalizedData);
+        return await processStructuredData(normalizedData, agentProfile);
     }
     
     // For unstructured data, try to extract by field mapping
     console.log('Data format: unstructured, attempting to extract fields');
-    return await processUnstructuredData(data);
+    return await processUnstructuredData(data, agentProfile);
 }
 
-async function processStructuredData(data) {
+async function processStructuredData(data, agentProfile = null) {
+    console.log(`[RightmoveScraper] processStructuredData received agentProfile:`, JSON.stringify(agentProfile));
     console.log('Processing structured data with keys:', Object.keys(data.property));
     
     // Normalize the property images field
@@ -472,10 +474,11 @@ async function processStructuredData(data) {
     };
     
     console.log('Formatted data created successfully');
-    return await createOutputData(formattedData);
+    return await createOutputData(formattedData, agentProfile);
 }
 
-async function processUnstructuredData(data) {
+async function processUnstructuredData(data, agentProfile = null) {
+    console.log(`[RightmoveScraper] processUnstructuredData received agentProfile:`, JSON.stringify(agentProfile));
     console.log('Processing unstructured data:', JSON.stringify(data, null, 2));
     
     // Try to find property information in the unstructured data
@@ -570,7 +573,7 @@ async function processUnstructuredData(data) {
         }
     };
     
-    return await createOutputData(formattedData);
+    return await createOutputData(formattedData, agentProfile);
 }
 
 // Helper function to find a value by checking multiple possible keys
@@ -583,12 +586,14 @@ function findValueByPossibleKeys(obj, possibleKeys) {
     return null;
 }
 
-async function createOutputData(formattedData) {
-    // Generate captions using existing function
+async function createOutputData(formattedData, agentProfile = null) {
+    console.log(`[RightmoveScraper] createOutputData received agentProfile:`, JSON.stringify(agentProfile));
+    // Generate captions using existing function, passing agentProfile
     let caption = null;
     try {
-        // Since generatePropertyCaptions returns a Promise, we need to await it
-        caption = await generatePropertyCaptions(formattedData, CAPTION_TYPES.INSTAGRAM);
+        // Log agentProfile right before calling the caption generator
+        console.log(`[RightmoveScraper] BEFORE generatePropertyCaptions call. agentProfile:`, JSON.stringify(agentProfile)); 
+        caption = await generatePropertyCaptions(formattedData, CAPTION_TYPES.INSTAGRAM, agentProfile);
         console.log('Generated caption type:', typeof caption);
         
         // If caption is not a string, convert it or set to a default
@@ -661,20 +666,35 @@ async function createOutputData(formattedData) {
     };
 }
 
-async function generateBannerbearImage(propertyData) {
+async function generateBannerbearImage(propertyData, agentProfile = null) {
     try {
+        // Prepare base modifications from property data
+        const baseModifications = propertyData.bannerbear.modifications || [];
+
+        // Add agent modifications if profile is provided
+        const agentModifications = [];
+        if (agentProfile) {
+            console.log('Adding agent profile modifications for single image:', agentProfile);
+            if (agentProfile.name) {
+                agentModifications.push({ name: 'agent_name', text: agentProfile.name });
+            }
+            if (agentProfile.email) {
+                agentModifications.push({ name: 'agent_email', text: agentProfile.email });
+            }
+            if (agentProfile.phone) {
+                agentModifications.push({ name: 'agent_number', text: agentProfile.phone }); // Map to agent_number
+            }
+            if (agentProfile.photo_url) {
+                agentModifications.push({ name: 'agent_photo', image_url: agentProfile.photo_url }); // Map to agent_photo
+            }
+        }
+
         const bannerbearPayload = {
-            ...propertyData.bannerbear,
+            template: propertyData.bannerbear.template,
+            modifications: [...baseModifications, ...agentModifications],
+            ...BANNERBEAR_TEMPLATE_CONFIG.options, // Ensure options are included
             project_id: 'E56OLrMKYWnzwl3oQj'
         };
-
-        // Add webhook configuration
-        if (serverRuntimeConfig.BANNERBEAR_WEBHOOK_URL) {
-            bannerbearPayload.webhook_url = serverRuntimeConfig.BANNERBEAR_WEBHOOK_URL;
-            bannerbearPayload.webhook_headers = {
-                'Authorization': `Bearer ${serverRuntimeConfig.BANNERBEAR_WEBHOOK_SECRET}`
-            };
-        }
 
         console.log('Sending Bannerbear request with payload:', JSON.stringify(bannerbearPayload, null, 2));
 
@@ -708,7 +728,7 @@ async function generateBannerbearImage(propertyData) {
     }
 }
 
-async function generateBannerbearCollection(propertyData, templateSetUid) {
+async function generateBannerbearCollection(propertyData, templateSetUid, agentProfile = null) {
     try {
         // Get all available property images
         const propertyImages = propertyData.raw.property.allImages;
@@ -742,6 +762,24 @@ async function generateBannerbearCollection(propertyData, templateSetUid) {
             }
         ];
 
+        // Add agent modifications if profile is provided
+        const agentModifications = [];
+        if (agentProfile) {
+            console.log('Adding agent profile modifications for collection:', agentProfile);
+            if (agentProfile.name) {
+                agentModifications.push({ name: 'agent_name', text: agentProfile.name });
+            }
+            if (agentProfile.email) {
+                agentModifications.push({ name: 'agent_email', text: agentProfile.email });
+            }
+            if (agentProfile.phone) {
+                agentModifications.push({ name: 'agent_number', text: agentProfile.phone }); // Map to agent_number
+            }
+            if (agentProfile.photo_url) {
+                agentModifications.push({ name: 'agent_photo', image_url: agentProfile.photo_url }); // Map to agent_photo
+            }
+        }
+
         // Add image modifications for each template
         // We'll cycle through available images if we have more templates than images
         const imageModifications = [];
@@ -758,7 +796,7 @@ async function generateBannerbearCollection(propertyData, templateSetUid) {
         // Prepare the collection payload
         const collectionPayload = {
             template_set: templateSetUid,
-            modifications: [...baseModifications, ...imageModifications],
+            modifications: [...baseModifications, ...agentModifications, ...imageModifications],
             project_id: 'E56OLrMKYWnzwl3oQj',
             metadata: {
                 source: "rightmove",

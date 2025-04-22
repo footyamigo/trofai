@@ -2,88 +2,23 @@ import { useState, useEffect } from 'react';
 import Modal from './Modal';
 
 const STEPS = [
-  { 
-    key: 'scraping', 
-    label: 'Scraping Property Details', 
-    emoji: '🏠', 
-    icon: '🏠',
-    description: 'Fetching all property information and images from the listing'
-  },
-  { 
-    key: 'extracting', 
-    label: 'Extracting information', 
-    emoji: '📊', 
-    icon: '📊',
-    description: 'Processing and organizing the property data'
-  },
-  { 
-    key: 'generating', 
-    label: 'Designing Social MediaImages', 
-    emoji: '🖼️', 
-    icon: '🖼️',
-    description: 'Creating beautiful social media ready images'
-  },
-  { 
-    key: 'creating', 
-    label: 'Creating Caption', 
-    emoji: '✍️', 
-    icon: '✍️',
-    description: 'Generating engaging captions for your property'
-  }
+  { key: 'scraping', label: 'Scraping Property Details', icon: '🏠', description: 'Fetching all property information and images from the listing' },
+  { key: 'extracting', label: 'Extracting information', icon: '📊', description: 'Processing and organizing the property data' },
+  { key: 'generating', label: 'Designing Social Media Images', icon: '🖼️', description: 'Creating beautiful social media ready images' },
+  { key: 'creating', label: 'Creating Caption', icon: '✍️', description: 'Generating engaging captions for your property' }
 ];
 
 export default function LoadingModal({ 
   isOpen, 
   onClose, 
   url = '', 
-  currentStep = 0,
-  caption = '',
-  captionOptions = null,
-  onCaptionEdit = () => {}
+  currentStepIndex = 0,
+  steps,
+  error = null
 }) {
-  // Initialize states for both caption options
-  const [mainCaption, setMainCaption] = useState(caption);
-  const [altCaption, setAltCaption] = useState("");
-  const [selectedCaption, setSelectedCaption] = useState("main");
-  
-  // Update local state when the caption prop changes
-  useEffect(() => {
-    if (captionOptions) {
-      setMainCaption(captionOptions.main || caption);
-      setAltCaption(captionOptions.alternative || "");
-    } else {
-      setMainCaption(caption);
-    }
-  }, [caption, captionOptions]);
-  
-  // Get current step info
-  const getCurrentStep = () => {
-    return STEPS[currentStep] || STEPS[0];
-  };
-  
-  // Handle caption changes
-  const handleMainCaptionChange = (e) => {
-    const newCaption = e.target.value;
-    setMainCaption(newCaption);
-    if (selectedCaption === "main") {
-      onCaptionEdit(newCaption);
-    }
-  };
-  
-  const handleAltCaptionChange = (e) => {
-    const newCaption = e.target.value;
-    setAltCaption(newCaption);
-    if (selectedCaption === "alt") {
-      onCaptionEdit(newCaption);
-    }
-  };
-  
-  // Handle caption selection
-  const handleSelectCaption = (type) => {
-    setSelectedCaption(type);
-    onCaptionEdit(type === "main" ? mainCaption : altCaption);
-  };
-  
+  const currentSteps = steps || STEPS;
+  const currentStepData = currentSteps[currentStepIndex] || currentSteps[0];
+
   return (
     <Modal
       isOpen={isOpen}
@@ -91,29 +26,33 @@ export default function LoadingModal({
       title="Processing Your Request"
     >
       <div className="loading-container">
-        <div className="url-section">
-          <div className="url-label">
-            <span className="url-icon">🔗</span>
-            Property URL
+        {url && (
+          <div className="url-section">
+            <div className="url-label">
+              <span className="url-icon">🔗</span>
+              Property URL
+            </div>
+            <div className="url-value">{url}</div>
           </div>
-          <div className="url-value">{url}</div>
-        </div>
+        )}
+
+        {error && <div className="error-message">Error: {error}</div>}
 
         <div className="current-step-animation">
-          <div className="step-icon">{getCurrentStep().icon}</div>
+          <div className="step-icon">{currentStepData.icon}</div>
         </div>
 
         <div className="steps-container">
-          {STEPS.map((step, index) => (
+          {currentSteps.map((step, index) => (
             <div 
               key={step.key} 
-              className={`step ${index === currentStep ? 'active' : ''} ${index < currentStep ? 'completed' : ''}`}
+              className={`step ${index === currentStepIndex ? 'active' : ''} ${index < currentStepIndex ? 'completed' : ''}`}
             >
               <div className="step-number">
-                {index < currentStep ? (
+                {index < currentStepIndex ? (
                   <div className="step-completed">✓</div>
                 ) : (
-                  <div className={index === currentStep ? 'step-active' : 'step-inactive'}>
+                  <div className={index === currentStepIndex ? 'step-active' : 'step-inactive'}>
                     {index + 1}
                   </div>
                 )}
@@ -121,71 +60,19 @@ export default function LoadingModal({
               <div className="step-content">
                 <div className="step-info">
                   <div className="step-header">
-                    <span className="step-emoji">{step.icon}</span>
                     <span className="step-label">{step.label}</span>
                   </div>
                   <div className="step-description">{step.description}</div>
+                  {index === currentStepIndex && (
+                    <div className="progress-bar">
+                      <div className="progress-fill"></div>
+                    </div>
+                  )}
                 </div>
-                {index === currentStep && (
-                  <div className="progress-bar">
-                    <div className="progress-fill"></div>
-                  </div>
-                )}
               </div>
             </div>
           ))}
         </div>
-        
-        {currentStep === 3 && (
-          <div className="caption-editor">
-            <h4 className="caption-title">Choose and Edit Caption</h4>
-            
-            <div className="caption-tabs">
-              <button 
-                className={`tab-button ${selectedCaption === 'main' ? 'active' : ''}`}
-                onClick={() => handleSelectCaption('main')}
-              >
-                Option 1
-              </button>
-              {captionOptions && captionOptions.alternative && (
-                <button 
-                  className={`tab-button ${selectedCaption === 'alt' ? 'active' : ''}`}
-                  onClick={() => handleSelectCaption('alt')}
-                >
-                  Option 2
-                </button>
-              )}
-            </div>
-            
-            <div className="caption-options">
-              <div className={`caption-option ${selectedCaption === 'main' ? 'active' : ''}`}>
-                <textarea
-                  className="caption-textarea"
-                  value={mainCaption}
-                  onChange={handleMainCaptionChange}
-                  placeholder="Your caption will appear here for editing..."
-                  rows={10}
-                />
-              </div>
-              
-              {captionOptions && captionOptions.alternative && (
-                <div className={`caption-option ${selectedCaption === 'alt' ? 'active' : ''}`}>
-                  <textarea
-                    className="caption-textarea"
-                    value={altCaption}
-                    onChange={handleAltCaptionChange}
-                    placeholder="Alternative caption option..."
-                    rows={10}
-                  />
-                </div>
-              )}
-            </div>
-            
-            <div className="caption-tips">
-              <p>💡 <strong>Tip:</strong> Edit the caption to highlight key features and benefits of the property.</p>
-            </div>
-          </div>
-        )}
       </div>
       
       <style jsx>{`
@@ -344,78 +231,15 @@ export default function LoadingModal({
           100% { width: 0%; margin-left: 100%; }
         }
 
-        .caption-editor {
-          width: 100%;
-          padding: 1rem;
-          background-color: #f9f9f9;
-          border-radius: 8px;
-          border: 1px solid #eaeaea;
-        }
-        
-        .caption-title {
-          margin-top: 0;
-          margin-bottom: 0.5rem;
-          font-size: 1rem;
-          color: #333;
-        }
-        
-        .caption-tabs {
-          display: flex;
+        .error-message {
+          text-align: center;
           margin-bottom: 1rem;
-          border-bottom: 1px solid #eaeaea;
-        }
-        
-        .tab-button {
-          padding: 0.5rem 1rem;
-          background: none;
-          border: none;
-          border-bottom: 3px solid transparent;
-          cursor: pointer;
-          font-weight: 500;
-          color: #666;
-          transition: all 0.2s ease;
-        }
-        
-        .tab-button.active {
-          color: #62d76b;
-          border-bottom-color: #62d76b;
-        }
-        
-        .caption-options {
-          position: relative;
-        }
-        
-        .caption-option {
-          display: none;
-          width: 100%;
-        }
-        
-        .caption-option.active {
-          display: block;
-        }
-        
-        .caption-textarea {
-          width: 100%;
-          padding: 0.8rem;
-          border: 1px solid #ddd;
-          border-radius: 4px;
-          font-family: inherit;
+          padding: 0.75rem 1rem;
+          background-color: #fff5f5;
+          color: #c53030;
+          border: 1px solid #fed7d7;
+          border-radius: 6px;
           font-size: 0.9rem;
-          resize: vertical;
-        }
-        
-        .caption-textarea:focus {
-          outline: none;
-          border-color: #62d76b;
-          box-shadow: 0 0 0 2px rgba(98, 215, 107, 0.2);
-        }
-        
-        .caption-tips {
-          margin-top: 0.5rem;
-          padding: 0.5rem;
-          background-color: #f0f0f0;
-          border-radius: 4px;
-          border: 1px solid #ddd;
         }
       `}</style>
     </Modal>

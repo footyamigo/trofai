@@ -2,7 +2,6 @@
 const AWS = require('aws-sdk');
 const fetch = require('node-fetch');
 const getConfig = require('next/config').default;
-const { OpenAI } = require('openai');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
@@ -22,25 +21,11 @@ const BANNERBEAR_WEBHOOK_SECRET = serverRuntimeConfig.BANNERBEAR_WEBHOOK_SECRET 
 const AWS_ACCESS_KEY_ID = serverRuntimeConfig.AWS_ACCESS_KEY_ID || process.env.ACCESS_KEY_ID;
 const AWS_SECRET_ACCESS_KEY = serverRuntimeConfig.AWS_SECRET_ACCESS_KEY || process.env.SECRET_ACCESS_KEY;
 const AWS_REGION = serverRuntimeConfig.AWS_REGION || process.env.REGION || 'us-east-1';
-const OPENAI_API_KEY = serverRuntimeConfig.OPENAI_API_KEY || process.env.OPENAI_API_KEY;
-const OPENAI_MODEL = serverRuntimeConfig.OPENAI_MODEL || process.env.OPENAI_MODEL || 'gpt-4o-mini';
 const FIRECRAWL_API_KEY = serverRuntimeConfig.FIRECRAWL_API_KEY || process.env.FIRECRAWL_API_KEY;
 
 // Add this after the other constants
 const BANNERBEAR_POLLING_INTERVAL = 2000; // 2 seconds
 const BANNERBEAR_MAX_POLLING_ATTEMPTS = 30; // 1 minute total polling time 
-
-// Initialize OpenAI client
-const openai = new OpenAI({
-  apiKey: OPENAI_API_KEY,
-});
-
-// Configure AWS SDK
-AWS.config.update({
-  accessKeyId: AWS_ACCESS_KEY_ID,
-  secretAccessKey: AWS_SECRET_ACCESS_KEY,
-  region: AWS_REGION
-});
 
 // Initialize DynamoDB
 const dynamoDb = new AWS.DynamoDB.DocumentClient();
@@ -134,122 +119,6 @@ function isValidUrl(url) {
     console.log(`URL validation error: ${error.message} for URL: ${url}`);
     return false;
   }
-}
-
-// Now directly using the imported generateCaption function from the scraper
-async function generateCaption(propertyData) {
-  try {
-    // If we don't have OpenAI configured, fall back to a basic caption
-  if (!OPENAI_API_KEY) {
-      console.warn('No OpenAI API key found, using fallback caption');
-    return { 
-        main: generateFallbackCaption(propertyData),
-        alt: generateAlternativeFallbackCaption(propertyData)
-      };
-    }
-    
-    // For simplicity, we'll just make sure we have some key fields populated
-    const systemPrompt = `You are a luxury real estate copywriter known for creating compelling, sophisticated property listings. Your captions:
-- Have a captivating hook that creates curiosity
-- Use vivid, descriptive language that paints a picture of living in the property
-- Highlight key features and luxury aspects
-- Include subtle references to the property's investment potential
-- End with a clear call-to-action
-- Include appropriate emojis for visual breaks (but not excessively)
-- Include 3-5 relevant hashtags`;
-
-    const userPrompt = `Create a luxury real estate caption for this property:
-- Location: ${propertyData.location_name || 'Not specified'}
-- Price: ${propertyData.price || 'Not specified'}
-- Bedrooms: ${propertyData.bedroom || 'Not specified'}
-- Bathrooms: ${propertyData.bathrooms || 'Not specified'}
-- Description: ${propertyData.description || 'Not available'}
-- Agent: ${propertyData.estate_agent_name || 'Property Agent'}
-
-Write in a sophisticated, aspirational style with 2-3 paragraphs. Include 3-5 relevant hashtags at the end. Maximum 2000 characters.`;
-
-    const response = await openai.chat.completions.create({
-      model: OPENAI_MODEL,
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt }
-      ],
-      max_tokens: 1000,
-      temperature: 0.7,
-      presence_penalty: 0.3,
-      frequency_penalty: 0.3
-    });
-    
-    const caption = response.choices[0].message.content.trim();
-    console.log('Generated caption length:', caption.length);
-    
-    return {
-      main: caption,
-      alt: generateAlternativeFallbackCaption(propertyData) // Always provide a fallback as alt
-    };
-    
-  } catch (error) {
-    console.error('Error generating caption with OpenAI:', error);
-    console.warn('Falling back to basic caption');
-    return { 
-      main: generateFallbackCaption(propertyData),
-      alt: generateAlternativeFallbackCaption(propertyData)
-    };
-  }
-}
-
-// Simple caption generation for fallback
-function generateFallbackCaption(propertyData) {
-  const price = propertyData.price || 'Contact for price';
-  const location = propertyData.location_name || 'Prime location';
-  const bedroomCount = propertyData.bedroom || '';
-  const bathroomCount = propertyData.bathrooms || '';
-  
-  let bedroomPhrase = '';
-  if (bedroomCount) {
-    bedroomPhrase = `${bedroomCount} bedroom${bedroomCount === 1 ? '' : 's'}`;
-  }
-  
-  let bathroomPhrase = '';
-  if (bathroomCount) {
-    bathroomPhrase = `${bathroomCount} bathroom${bathroomCount === 1 ? '' : 's'}`;
-  }
-  
-  let sizePhrase = '';
-  if (bedroomPhrase && bathroomPhrase) {
-    sizePhrase = `${bedroomPhrase}, ${bathroomPhrase}`;
-  } else if (bedroomPhrase) {
-    sizePhrase = bedroomPhrase;
-  } else if (bathroomPhrase) {
-    sizePhrase = bathroomPhrase;
-  }
-  
-  const agent = propertyData.estate_agent_name || 'Contact us';
-  const locationTag = location.split(',')[0].trim().replace(/\s+/g, '');
-  
-  return `✨ **Luxury Living** ✨
-
-${sizePhrase ? `Stunning ${sizePhrase} property available in ` : 'Exceptional property in '}${location}. Offered at ${price}.
-
-Contact ${agent} today to arrange a viewing of this highly desirable property before it's gone!
-
-#LuxuryProperty #${locationTag} #RealEstateLondon`;
-}
-
-function generateAlternativeFallbackCaption(propertyData) {
-  const price = propertyData.price || 'Contact for price';
-  const location = propertyData.location_name || 'Prime location';
-  const bedroomCount = propertyData.bedroom || '';
-  const agent = propertyData.estate_agent_name || 'us';
-  const locationTag = location.split(',')[0].trim().replace(/\s+/g, '');
-  
-  let bedroomPhrase = bedroomCount ? `${bedroomCount}-bedroom ` : '';
-  
-  return `🏠 Discover this ${bedroomPhrase}property in ${location} at ${price}!
-
-Arrange a viewing with ${agent} today to secure this exceptional living space in a prime location.
-
-#LuxuryLiving #${locationTag} #VertusHomes #LondonRentals`;
 }
 
 // Add this new function before the main handler 
@@ -357,7 +226,31 @@ export default async function handler(req, res) {
       return res.status(401).json({ message: 'Unauthorized - Invalid session' });
     }
 
-    const userId = userResponse.Items[0].userId;
+    const userData = userResponse.Items[0]; // Get the full user item
+    const userId = userData.userId;
+
+    // Extract Agent Profile Data (with fallbacks)
+    const agentProfile = {
+      name: userData.agent_name || userData.name || '' , // Fallback to user's name if agent name not set
+      email: userData.agent_email || userData.email || '', // Fallback to user's email
+      phone: userData.agent_phone || '',
+      photo_url: userData.agent_photo_url || null, // Use null if not set
+    };
+    // Only fetch and log agent profile if it's explicitly an agent flow
+    let agentProfileForBannerbear = null;
+    const isAgentFlow = req.body.isAgentFlow === true || String(req.body.isAgentFlow).toLowerCase() === 'true';
+
+    if (isAgentFlow) {
+        agentProfileForBannerbear = {
+            name: userData.agent_name || userData.name || '' ,
+            email: userData.agent_email || userData.email || '',
+            phone: userData.agent_phone || '',
+            photo_url: userData.agent_photo_url || null,
+        };
+        console.log(`Agent Flow detected. Profile for Bannerbear:`, agentProfileForBannerbear);
+    } else {
+        console.log('Standard flow detected, not passing agent profile to Bannerbear.');
+    }
 
     // Get parameters from either query or body for backward compatibility
     const params = { ...req.query, ...req.body };
@@ -373,7 +266,6 @@ export default async function handler(req, res) {
       BANNERBEAR_TEMPLATE_UID: BANNERBEAR_TEMPLATE_UID ? '✓ Set' : '✗ Missing',
       AWS_ACCESS_KEY_ID: AWS_ACCESS_KEY_ID ? '✓ Set' : '✗ Missing',
       AWS_SECRET_ACCESS_KEY: AWS_SECRET_ACCESS_KEY ? '✓ Set' : '✗ Missing',
-      OPENAI_API_KEY: OPENAI_API_KEY ? '✓ Set' : '✗ Missing',
       FIRECRAWL_API_KEY: FIRECRAWL_API_KEY ? '✓ Set' : '✗ Missing',
       USE_FIRECRAWL: serverRuntimeConfig.USE_FIRECRAWL || process.env.USE_FIRECRAWL
     });
@@ -427,7 +319,7 @@ export default async function handler(req, res) {
         
         // Perform the actual scraping using our unified scraper
         console.log('Calling scraper.scrapeProperty()...');
-        propertyData = await scrapeProperty(cleanedUrl);
+        propertyData = await scrapeProperty(cleanedUrl, agentProfile);
         
         if (!propertyData) {
           console.error('scrapeProperty returned null or undefined');
@@ -456,11 +348,11 @@ export default async function handler(req, res) {
     
     if (templateSetToUse) {
       console.log('Using template set for collection generation:', templateSetToUse);
-      bannerbearResponse = await generateBannerbearCollection(propertyData, templateSetToUse);
+      bannerbearResponse = await generateBannerbearCollection(propertyData, templateSetToUse, agentProfileForBannerbear);
       console.log('Bannerbear response received:', JSON.stringify(bannerbearResponse, null, 2));
     } else {
       console.log('Using single template for image generation');
-      bannerbearResponse = await generateBannerbearImage(propertyData);
+      bannerbearResponse = await generateBannerbearImage(propertyData, agentProfileForBannerbear);
     }
     
     if (!bannerbearResponse) {
@@ -613,6 +505,8 @@ export default async function handler(req, res) {
           propertyId,
           bannerbear: bannerbearResponse,
           caption: propertyData.caption || '',
+          captionOptions: propertyData.captionOptions,
+          agentProfile: agentProfileForBannerbear,
           property: {
             address: propertyData.raw?.property?.address || '',
             price: propertyData.raw?.property?.price || '',

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { AiFillStar } from 'react-icons/ai';
 
-export default function TemplateSelector({ selectedTemplate, onSelect, onSetsLoaded }) {
+export default function TemplateSelector({ selectedTemplate, onSelect, onSetsLoaded, apiEndpoint = '/api/bannerbear/template-sets' }) {
   const [templateSets, setTemplateSets] = useState([]);
   const [isLoadingSets, setIsLoadingSets] = useState(true);
   const [errorLoadingSets, setErrorLoadingSets] = useState(null);
@@ -31,7 +31,8 @@ export default function TemplateSelector({ selectedTemplate, onSelect, onSetsLoa
       }
       
       try {
-        const response = await fetch('/api/bannerbear/template-sets', { headers });
+        console.log(`TemplateSelector fetching from: ${apiEndpoint}`);
+        const response = await fetch(apiEndpoint, { headers });
         const data = await response.json();
         if (!response.ok || !data.success) {
           throw new Error(data.message || 'Failed to fetch template sets');
@@ -45,7 +46,11 @@ export default function TemplateSelector({ selectedTemplate, onSelect, onSetsLoa
           if (isStandardSet) {
             return { ...set, display_name: set.name };
           } else {
-            return { ...set, display_name: `My Template ${userTemplateCounter++}` };
+            if (apiEndpoint !== '/api/bannerbear/template-sets') {
+                 return { ...set, display_name: set.name }; 
+            } else {
+                return { ...set, display_name: `My Template ${userTemplateCounter++}` };
+            }
           }
         });
         setDisplayTemplateSets(processedSets);
@@ -63,7 +68,7 @@ export default function TemplateSelector({ selectedTemplate, onSelect, onSetsLoa
     };
 
     fetchSets();
-  }, []);
+  }, [apiEndpoint]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -214,7 +219,7 @@ export default function TemplateSelector({ selectedTemplate, onSelect, onSetsLoa
             className={`template-card ${selectedTemplate === template.id ? 'selected' : ''}`}
             onClick={() => onSelect(template.id)} 
           >
-            {!/^Template Set \d+$/i.test(template.name) && (
+            {template.isUserOwned && (
               <div className="user-set-star-container">
                 <AiFillStar style={{ color: '#FFD700', fontSize: '1.2rem' }} />
               </div>

@@ -2,8 +2,9 @@
   "/_app": "pages/_app.js",
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
-  "/caption": "pages/caption.js",
-  "/properties": "pages/properties.js",
+  "/tips-generator": "pages/tips-generator.js",
+  "/api/reviews/fetch-history": "pages/api/reviews/fetch-history.js",
+  "/api/list-testimonial-templates": "pages/api/list-testimonial-templates.js",
   "/dashboard": "pages/dashboard.js",
-  "/api/social/post-instagram": "pages/api/social/post-instagram.js"
+  "/review-generator": "pages/review-generator.js"
 }

@@ -1,9 +1,9 @@
 require('dotenv').config();
-const OpenAI = require('openai');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 const fs = require('fs');
 const path = require('path');
 
-console.log('OpenAI API Key available:', !!process.env.OPENAI_API_KEY);
+console.log('Google API Key available:', !!process.env.GOOGLE_API_KEY);
 console.log('OpenAI Model configured:', process.env.OPENAI_MODEL);
 
 // Sample property data for testing - similar to what would be scraped from RoboRabbit
@@ -17,60 +17,55 @@ const samplePropertyData = {
   estate_agent_name: "Vertus Homes"
 };
 
-// Initialize OpenAI
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
+// Initialize Google Generative AI
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" }); // Updated model
 
 // Function to generate captions
 async function generateCaptions(propertyData) {
-  console.log('Generating captions with OpenAI...');
+  console.log('Generating captions with Google Gemini...');
   
   try {
-    // Format the prompt for OpenAI
-    const prompt = `Create two different Instagram captions for a real estate property listing with the following details:
+    // Format the prompt for Gemini
+    const prompt = `You are an expert real estate copywriter tasked with creating two distinct social media post options for the following property. Your goal is to generate engaging posts that attract serious buyers.
 
-Location: ${propertyData.location_name}
-Bedrooms: ${propertyData.bedroom}
-Bathrooms: ${propertyData.bathrooms}
-Price: ${propertyData.price}
-Key Features: ${propertyData.key_features}
-Description: ${propertyData.listing_description}
+Your tone should be:
+- Professional, knowledgeable, and enthusiastic.
+- Focused on highlighting the unique value proposition and lifestyle appeal.
+- Evocative, painting a picture of living in the property and neighborhood.
 
-Each caption should be:
-1. Professional and compelling to attract potential buyers/renters
-2. Include just 2-3 relevant emojis (not excessive)
-3. Highlight key selling points of the property
-4. Include a clear call to action
-5. End with 3-4 relevant hashtags 
-6. Be optimized for Instagram, around 100-150 words
-7. Have a luxurious, sophisticated tone
-8. Be formatted with proper spacing and line breaks
-9. DO NOT include any asterisks (***) or similar markers at the beginning or end of the caption
+Property Details:
+- Location: ${propertyData.location_name}
+- Bedrooms: ${propertyData.bedroom}
+- Bathrooms: ${propertyData.bathrooms}
+- Price: ${propertyData.price}
+- Key Features: ${propertyData.key_features}
+- Description: ${propertyData.listing_description}
 
-Please format your response as two distinct captions labeled "CAPTION 1:" and "CAPTION 2:"`;
+Requirements for EACH caption:
+1.  Write from the perspective of a listing agent (first person).
+2.  Start with a strong, attention-grabbing hook specific to the property.
+3.  Weave together the Description and Key Features into a compelling narrative, explaining benefits.
+4.  Based on the Location (${propertyData.location_name}), briefly mention specific nearby amenities, landmarks, or the neighborhood vibe.
+5.  Maintain a sophisticated and aspirational tone.
+6.  Use only 2-4 relevant emojis sparingly.
+7.  Include 3-5 relevant and specific hashtags (e.g., #LuxuryCanaryWharf, #LondonE14Living).
+8.  End with a clear, professional call-to-action inviting contact (e.g., "Contact me today for details!"). You don't need to include specific email/phone here, as this is a general test script.
+9.  Ensure good structure and readability (short paragraphs).
+10. Strictly NO ASTERISKS or markdown formatting. Plain text only.
+11. Make sure the two captions are distinct in their angle, focus, or opening hook.
 
-    console.log('Using model:', process.env.OPENAI_MODEL);
-    
-    // Call OpenAI API
-    console.log('Sending request to OpenAI...');
-    const response = await openai.chat.completions.create({
-      model: process.env.OPENAI_MODEL,
-      messages: [
-        { 
-          role: "system", 
-          content: "You are a professional real estate marketer who writes compelling property listings that generate leads. Your captions are clean and professional without any asterisks or markers." 
-        },
-        { role: "user", content: prompt }
-      ],
-      max_tokens: 800,
-      temperature: 0.7,
-    });
-    
-    console.log('Received response from OpenAI');
+Please format your response clearly labeling the two options as "CAPTION 1:" and "CAPTION 2:".`;
+
+    // Call Google Gemini API
+    console.log('Sending request to Google Gemini...');
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const generatedText = response.text();
+
+    console.log('Received response from Google Gemini');
     
     // Extract and process the generated captions
-    const generatedText = response.choices[0]?.message?.content.trim();
     console.log('Raw generated text length:', generatedText?.length || 0);
     console.log('First 50 characters:', generatedText?.substring(0, 50));
     
@@ -114,10 +109,14 @@ Please format your response as two distinct captions labeled "CAPTION 1:" and "C
     return captionOptions;
     
   } catch (error) {
-    console.error('Error generating caption with OpenAI:', error);
-    return { 
-      main: "Failed to generate caption", 
-      alternative: "Failed to generate alternative caption" 
+    console.error('Error generating caption with Google Gemini:', error);
+    // Add more specific error handling if desired
+    if (error.message && error.message.includes('API key not valid')) {
+        console.error("Check your GOOGLE_API_KEY in the .env file.");
+    }
+    return {
+      main: "Failed to generate caption",
+      alternative: "Failed to generate alternative caption"
     };
   }
 }

@@ -57,7 +57,7 @@ function formatOnTheMarketData(data) {
   };
 }
 
-async function processOnTheMarketResult(extractResult) {
+async function processOnTheMarketResult(extractResult, agentProfile = null) {
   if (!extractResult || !extractResult.success || !extractResult.data) {
     return {
       raw: {},
@@ -66,11 +66,11 @@ async function processOnTheMarketResult(extractResult) {
       error: extractResult?.error || 'Failed to extract property data'
     };
   }
-  // Generate caption using the same logic as Rightmove
+  // Generate caption using the same logic as Rightmove, passing agentProfile
   const formattedData = formatOnTheMarketData(extractResult.data);
   let caption = '';
   try {
-    caption = await generatePropertyCaptions(formattedData, CAPTION_TYPES.INSTAGRAM);
+    caption = await generatePropertyCaptions(formattedData, CAPTION_TYPES.INSTAGRAM, agentProfile);
     if (!caption) {
       caption = `${formattedData.property.bedrooms} bedroom, ${formattedData.property.bathrooms} bathroom property in ${formattedData.property.address}`;
     }
@@ -84,20 +84,43 @@ async function processOnTheMarketResult(extractResult) {
   };
 }
 
-async function scrapeOnTheMarketProperty(propertyUrl) {
+async function scrapeOnTheMarketProperty(propertyUrl, agentProfile = null) {
   const extractResult = await app.extract([
     propertyUrl
   ], {
     prompt: `Extract the property address, price (if rental, only the pcm value), number of bedrooms, number of bathrooms, square footage, description, all gallery images, key features, estate agent name, estate agent address, and estate agent logo image.\n\nReturn the result in this schema: { property: { address, price, bedrooms, bathrooms, square_ft, description, images, key_features }, estate_agent: { name, address, logo } }`,
     schema,
   });
-  return processOnTheMarketResult(extractResult);
+  return processOnTheMarketResult(extractResult, agentProfile);
 }
 
-async function generateBannerbearImage(propertyData) {
+async function generateBannerbearImage(propertyData, agentProfile = null) {
   try {
+    // Prepare base modifications from property data
+    const baseModifications = propertyData.bannerbear.modifications || [];
+
+    // Add agent modifications if profile is provided
+    const agentModifications = [];
+    if (agentProfile) {
+      console.log('Adding agent profile modifications for OTM single image:', agentProfile);
+      if (agentProfile.name) {
+        agentModifications.push({ name: 'agent_name', text: agentProfile.name });
+      }
+      if (agentProfile.email) {
+        agentModifications.push({ name: 'agent_email', text: agentProfile.email });
+      }
+      if (agentProfile.phone) {
+        agentModifications.push({ name: 'agent_number', text: agentProfile.phone }); // Map to agent_number
+      }
+      if (agentProfile.photo_url) {
+        agentModifications.push({ name: 'agent_photo', image_url: agentProfile.photo_url }); // Map to agent_photo
+      }
+    }
+
     const bannerbearPayload = {
-      ...propertyData.bannerbear,
+      template: propertyData.bannerbear.template,
+      modifications: [...baseModifications, ...agentModifications],
+      ...(propertyData.bannerbear.options || {}), // Ensure options are included
       project_id: 'E56OLrMKYWnzwl3oQj'
     };
     if (serverRuntimeConfig.BANNERBEAR_WEBHOOK_URL) {
@@ -129,7 +152,7 @@ async function generateBannerbearImage(propertyData) {
   }
 }
 
-async function generateBannerbearCollection(propertyData, templateSetUid) {
+async function generateBannerbearCollection(propertyData, templateSetUid, agentProfile = null) {
   try {
     const property = propertyData.raw.property;
     const agent = propertyData.raw.estate_agent;
@@ -142,6 +165,25 @@ async function generateBannerbearCollection(propertyData, templateSetUid) {
       { name: "logo", image_url: agent.logo },
       { name: "estate_agent_address", text: agent.address }
     ];
+
+    // Add agent modifications if profile is provided
+    const agentModifications = [];
+    if (agentProfile) {
+      console.log('Adding agent profile modifications for OTM collection:', agentProfile);
+      if (agentProfile.name) {
+        agentModifications.push({ name: 'agent_name', text: agentProfile.name });
+      }
+      if (agentProfile.email) {
+        agentModifications.push({ name: 'agent_email', text: agentProfile.email });
+      }
+      if (agentProfile.phone) {
+        agentModifications.push({ name: 'agent_number', text: agentProfile.phone }); // Map to agent_number
+      }
+      if (agentProfile.photo_url) {
+        agentModifications.push({ name: 'agent_photo', image_url: agentProfile.photo_url }); // Map to agent_photo
+      }
+    }
+
     const imageModifications = [];
     // Use each unique image for each slot, cycle only if fewer than 24
     for (let i = 0; i <= 23; i++) {
@@ -154,7 +196,7 @@ async function generateBannerbearCollection(propertyData, templateSetUid) {
     }
     const collectionPayload = {
       template_set: templateSetUid,
-      modifications: [...baseModifications, ...imageModifications],
+      modifications: [...baseModifications, ...agentModifications, ...imageModifications],
       project_id: 'E56OLrMKYWnzwl3oQj',
       metadata: {
         source: "onthemarket",

@@ -19,30 +19,15 @@ self.__BUILD_MANIFEST = {
       "static/chunks/main.js",
       "static/chunks/pages/_error.js"
     ],
-    "/caption": [
+    "/review-generator": [
       "static/chunks/webpack.js",
       "static/chunks/main.js",
-      "static/chunks/pages/caption.js"
+      "static/chunks/pages/review-generator.js"
     ],
-    "/dashboard": [
+    "/tips-generator": [
       "static/chunks/webpack.js",
       "static/chunks/main.js",
-      "static/chunks/pages/dashboard.js"
-    ],
-    "/my-templates": [
-      "static/chunks/webpack.js",
-      "static/chunks/main.js",
-      "static/chunks/pages/my-templates.js"
-    ],
-    "/properties": [
-      "static/chunks/webpack.js",
-      "static/chunks/main.js",
-      "static/chunks/pages/properties.js"
-    ],
-    "/templates": [
-      "static/chunks/webpack.js",
-      "static/chunks/main.js",
-      "static/chunks/pages/templates.js"
+      "static/chunks/pages/tips-generator.js"
     ]
   },
   "ampFirstPages": []

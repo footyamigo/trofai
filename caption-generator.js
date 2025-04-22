@@ -1,9 +1,8 @@
-const OpenAI = require('openai');
+const { GoogleGenerativeAI } = require('@google/generative-ai');
 require('dotenv').config();
 
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY
-});
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
+const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro"}); // Updated model
 
 const CAPTION_TYPES = {
     INSTAGRAM: 'instagram',
@@ -17,71 +16,63 @@ const CAPTION_LENGTHS = {
     [CAPTION_TYPES.LINKEDIN]: 3000    // LinkedIn optimal
 };
 
-async function generatePropertyCaptions(propertyData, type = CAPTION_TYPES.INSTAGRAM) {
+async function generatePropertyCaptions(propertyData, type = CAPTION_TYPES.INSTAGRAM, agentProfile = null) {
     try {
-        const systemPrompt = `You are a highly experienced real estate copywriter who specializes in crafting sophisticated, emotionally resonant property descriptions. Your writing:
+        // Always use agent-focused prompts
+        const agentName = agentProfile?.name || "Your Name"; // Use placeholder if not available
+        const agentEmail = agentProfile?.email || "your.email@example.com";
+        const agentPhone = agentProfile?.phone || "Your Phone Number";
 
-1. Creates an immediate emotional connection with the reader
-2. Paints a vivid picture of the lifestyle the property offers
-3. Weaves in property features naturally within a compelling narrative
-4. Uses elegant, refined language that appeals to discerning buyers
-5. Maintains warmth and authenticity while being professional
-6. Tells a story about the home and its potential
+        console.log(`Generating caption in AGENT mode (defaulted) for: ${agentName}`);
+        
+        // Combine system and user prompt for Gemini
+        const fullPrompt = `You are ${agentName}, an expert real estate copywriter known for crafting compelling and sophisticated property narratives for social media. Your goal is to generate an engaging post that attracts serious buyers for YOUR new listing.
 
-Important: Write in plain text with emojis only. Do not use any asterisks (*), markdown formatting, or other special characters.
-
-Style guidelines:
-- Write with sophistication and emotional intelligence
-- Focus on the experience of living in the property
-- Use emojis thoughtfully to complement the narrative
-- Include relevant hashtags elegantly
-- Keep descriptions evocative yet concise
-- Highlight unique character and potential`;
-
-        const maxTokens = Math.floor(CAPTION_LENGTHS[type] * 1.5);
-
-        const userPrompt = `Create a sophisticated and emotionally resonant property description that tells a compelling story. Write in plain text with emojis only, no special formatting or asterisks.
+Your tone should be:
+- Professional, knowledgeable, and enthusiastic.
+- Focused on highlighting the unique value proposition and lifestyle appeal.
+- Evocative, painting a picture of living in the property and neighborhood.
 
 Property Details:
 - Location: ${propertyData.property.address}
 - Price: ${propertyData.property.price}
 - Layout: ${propertyData.property.bedrooms} bedrooms, ${propertyData.property.bathrooms} bathrooms
 - Key Features: ${propertyData.property.keyFeatures}
-- Additional Information: ${propertyData.property.facts || 'None provided'}
+- Additional Information/Facts: ${propertyData.property.facts || 'Not specified'}
+- Property Story/Description: ${propertyData.property.description}
 
-Property Story:
-${propertyData.property.description}
+Your Contact Info:
+- Name: ${agentName}
+- Email: ${agentEmail}
+- Phone: ${agentPhone}
 
-Agent Details:
-${propertyData.agent.name}
-${propertyData.agent.about || ''}
+Draft a detailed and captivating social media post about YOUR new listing, writing in the first person (as ${agentName}).
 
 Requirements:
-- Maximum length: ${CAPTION_LENGTHS[type]} characters
-- Create 3-5 engaging paragraphs that flow naturally
-- Use emojis thoughtfully to enhance the narrative
-- Include 3-5 relevant hashtags elegantly placed
-- Focus on lifestyle and emotional appeal
-- End with a warm call-to-action featuring the agent
-- Do not use any asterisks or special formatting characters`;
+- Start with a strong, attention-grabbing hook about this specific property.
+- Weave together the Property Story/Description, Key Features, and Additional Information/Facts into a compelling narrative. Don't just list features; explain their benefits and contribution to the lifestyle.
+- Based on the property's location (${propertyData.property.address}), briefly mention specific nearby amenities, landmarks, transport links, or the general lifestyle appeal of the neighborhood to add local context.
+- Maintain a sophisticated and aspirational tone throughout.
+- Use 2-4 relevant emojis sparingly to enhance readability, not clutter the text.
+- Include 3-5 relevant and specific hashtags (e.g., #LuxuryChelseaLiving, #CanaryWharfView, #Zone1Apartment).
+- End with a clear and professional call-to-action inviting interested buyers to contact YOU directly. Format it like this: 'Contact me for details: 📧 ${agentEmail} 📞 ${agentPhone}'. Do not include your name in the CTA.
+- Ensure the final caption is well-structured and easy to read, potentially using short paragraphs.
+- Maximum length: ${CAPTION_LENGTHS[type]} characters.
+- Strictly NO ASTERISKS or other markdown/special formatting. Plain text only.`;
 
-        const response = await openai.chat.completions.create({
-            model: process.env.OPENAI_MODEL,
-            messages: [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: userPrompt }
-            ],
-            max_tokens: maxTokens,
-            temperature: 0.7,
-            presence_penalty: 0.3,
-            frequency_penalty: 0.3
-        });
+        const result = await model.generateContent(fullPrompt);
+        const response = await result.response;
+        const text = response.text();
 
         // Remove any asterisks or markdown formatting from the generated caption
-        return response.choices[0].message.content.trim().replace(/\*/g, '');
+        return text.trim().replace(/\*/g, '');
     } catch (error) {
-        console.error('Error generating caption:', error);
-        return null;
+        console.error('Error generating caption with Google Gemini:', error);
+        // Consider more specific error handling if needed
+        if (error.message.includes('API key not valid')) {
+             console.error("Check your GOOGLE_API_KEY in the .env file.");
+        }
+        return null; // Return null or throw error as appropriate
     }
 }
 
