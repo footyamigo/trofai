@@ -9,6 +9,7 @@ import ErrorDisplay from '../../components/UI/ErrorDisplay';
 import ProgressIndicator from '../../components/UI/ProgressIndicator';
 import LoadingModal from '../../components/UI/LoadingModal';
 import TemplateSelector from '../../components/UI/TemplateSelector';
+import ListingTypeSelector from '../../components/UI/ListingTypeSelector';
 import Head from 'next/head';
 import Sidebar from '../../components/Layout/Sidebar';
 import DashboardHeader from '../../components/Dashboard/DashboardHeader';
@@ -33,6 +34,7 @@ export default function Dashboard() {
   const [loadingUrl, setLoadingUrl] = useState('');
   const [showLoadingModal, setShowLoadingModal] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState(null);
+  const [selectedListingType, setSelectedListingType] = useState(null);
   const [generatedCaption, setGeneratedCaption] = useState('');
   const [editedCaption, setEditedCaption] = useState('');
   const [captionOptions, setCaptionOptions] = useState(null);
@@ -124,17 +126,32 @@ export default function Dashboard() {
         }
         
         if (data.status === 'completed') {
-          // Set the final step before completion
           setProgressStep(3);
-          
-          // Small delay to show the final step before completion
-          setTimeout(async () => {
-            console.log('Processing completed!');
-            setShowLoadingModal(false);
-            
-            // Use the edited caption if available, otherwise use the original
-            const finalCaption = editedCaption || generatedCaption;
-            
+
+          // Show the results modal immediately
+          const finalCaption = editedCaption || generatedCaption;
+          setResults({
+            bannerbear: data,
+            caption: finalCaption || "Caption generated earlier",
+            captionOptions: captionOptions
+          });
+          setIsModalOpen(true);
+          setShowLoadingModal(false);
+          setIsContentFreshlyGenerated(true);
+
+          // Trigger confetti!
+          try {
+            confetti({
+              particleCount: 150,
+              spread: 90,
+              origin: { y: 0.6 }
+            });
+          } catch (error) {
+            console.error('Confetti failed:', error);
+          }
+
+          // Move the rest to the background
+          (async () => {
             // Add the new property to the existing properties list
             const newProperty = {
               ...data,
@@ -142,37 +159,13 @@ export default function Dashboard() {
               captionOptions: captionOptions
             };
             setProperties(prevProperties => [newProperty, ...prevProperties]);
-            
-            setResults({
-              bannerbear: data,
-              caption: finalCaption || "Caption generated earlier",
-              captionOptions: captionOptions
-            });
             setIsLoading(false);
             setCurrentUid(null);
             setCurrentType(null);
             clearInterval(pollIntervalRef.current);
             pollIntervalRef.current = null;
-            
-            // Set the flag to indicate freshly generated content
-            setIsContentFreshlyGenerated(true);
-
-            // Trigger confetti!
-            console.log('Attempting to trigger confetti...');
-            try {
-              confetti({
-                particleCount: 150,
-                spread: 90,
-                origin: { y: 0.6 }
-              });
-              console.log('Confetti triggered successfully.');
-            } catch (error) {
-              console.error('Confetti failed:', error);
-            }
-            
-            // Open the modal automatically when processing completes
-            setIsModalOpen(true);
-          }, 1000);
+            // Any other DB or analytics updates can go here
+          })();
         } else if (data.status === 'failed') {
           console.error('Processing failed:', data);
           setShowLoadingModal(false);
@@ -221,7 +214,14 @@ export default function Dashboard() {
       return; 
     }
     
-    console.log('Validation passed. Proceeding with submission for URL:', url, 'Template:', selectedTemplate);
+    // Check if listing type is selected
+    if (!selectedListingType) {
+      console.log('Validation failed: No listing type selected.');
+      setTemplateSelectionError('Please select a listing type.');
+      return;
+    }
+    
+    console.log('Validation passed. Proceeding with submission for URL:', url, 'Template:', selectedTemplate, 'Listing Type:', selectedListingType);
     
     // Clear previous results and errors (including the specific template error) ONLY if validation passes
     setResults(null);
@@ -267,6 +267,7 @@ export default function Dashboard() {
           body: JSON.stringify({ 
             url,
             templateId: selectedTemplate,
+            listing_type: selectedListingType,
             isAgentFlow: true
           })
         });
@@ -679,11 +680,20 @@ export default function Dashboard() {
 
     if (properties.length === 0) {
       return (
-        <div className="empty-state">
-          <div className="empty-icon">🏠</div>
-          <h3>No properties yet</h3>
-          <p>Convert your first property listing to see it here.</p>
+        <div className="history-section">
+          <div className="empty-state">
+            <div className="empty-icon">🏠</div>
+            <h3>No properties yet</h3>
+            <p>Convert your first property listing to see it here.</p>
+          </div>
           <style jsx>{`
+            .history-section {
+              margin-top: 2rem;
+              padding: 2rem;
+              background: white;
+              border-radius: 12px;
+              box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            }
             .empty-state {
               text-align: center;
               padding: 4rem 1rem;
@@ -694,10 +704,12 @@ export default function Dashboard() {
             .empty-icon {
               font-size: 3rem;
               margin-bottom: 1rem;
+              color: #9ca3af;
             }
             h3 {
               margin: 0 0 0.5rem 0;
               font-size: 1.25rem;
+              font-weight: 600;
               color: #334155;
             }
             p {
@@ -1217,6 +1229,11 @@ export default function Dashboard() {
     );
   };
 
+  // Add function to handle listing type selection
+  const handleListingTypeSelect = (typeId) => {
+    setSelectedListingType(typeId);
+  };
+
   // Check for errors at render time
   if (authError) {
     return (
@@ -1283,6 +1300,12 @@ export default function Dashboard() {
                   selectedTemplate={selectedTemplate} 
                   onSelect={handleTemplateSelect} 
                   onSetsLoaded={handleSetsLoaded}
+                  apiEndpoint="/api/list-listing-templates"
+                />
+                
+                <ListingTypeSelector
+                  selectedType={selectedListingType}
+                  onSelect={handleListingTypeSelect}
                 />
                 
                 <PropertyURLForm 
@@ -1301,7 +1324,7 @@ export default function Dashboard() {
                 isOpen={showLoadingModal}
                 onClose={closeLoadingModal}
                 url={loadingUrl}
-                currentStep={progressStep}
+                currentStepIndex={progressStep}
                 caption={generatedCaption}
                 captionOptions={captionOptions}
                 onCaptionEdit={handleCaptionEdit}

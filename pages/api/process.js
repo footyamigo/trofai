@@ -254,10 +254,15 @@ export default async function handler(req, res) {
 
     // Get parameters from either query or body for backward compatibility
     const params = { ...req.query, ...req.body };
-    const { url } = params;
+    const { url, listing_type } = params;
 
     if (!url) {
       return res.status(400).json({ message: 'URL parameter is required' });
+    }
+
+    // Log if listing type is provided
+    if (listing_type) {
+      console.log(`Listing type provided: ${listing_type}`);
     }
 
     // Log environment variables (without exposing full keys)
@@ -319,7 +324,7 @@ export default async function handler(req, res) {
         
         // Perform the actual scraping using our unified scraper
         console.log('Calling scraper.scrapeProperty()...');
-        propertyData = await scrapeProperty(cleanedUrl, agentProfile);
+        propertyData = await scrapeProperty(cleanedUrl, listing_type, agentProfile);
         
         if (!propertyData) {
           console.error('scrapeProperty returned null or undefined');
@@ -348,7 +353,13 @@ export default async function handler(req, res) {
     
     if (templateSetToUse) {
       console.log('Using template set for collection generation:', templateSetToUse);
-      bannerbearResponse = await generateBannerbearCollection(propertyData, templateSetToUse, agentProfileForBannerbear);
+      // Pass the listing_type to the Bannerbear generation function
+      bannerbearResponse = await generateBannerbearCollection(
+        propertyData, 
+        templateSetToUse, 
+        agentProfileForBannerbear, 
+        listing_type
+      );
       console.log('Bannerbear response received:', JSON.stringify(bannerbearResponse, null, 2));
     } else {
       console.log('Using single template for image generation');

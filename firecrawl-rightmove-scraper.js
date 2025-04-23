@@ -63,6 +63,7 @@ const BANNERBEAR_TEMPLATE_CONFIG = {
         bedroomIcon: 'bedroom_icon',
         bathrooms: 'bathrooms',
         bathroomIcon: 'bathroom_icon',
+        squareFt: 'sq_ft',
         agentLogo: 'logo',
         agentAddress: 'estate_agent_address'
     },
@@ -129,6 +130,30 @@ function formatPrice(price) {
     return `${formattedAmount} ${period || ''}`.trim();
 }
 
+// Add utility function to format square footage
+function formatSquareFt(sqft) {
+    if (!sqft) return "";
+    
+    // If already formatted with sq ft, return as is
+    if (typeof sqft === 'string' && sqft.toLowerCase().includes('sq ft')) {
+        return sqft;
+    }
+    
+    // Convert to number if it's a string
+    const numericValue = typeof sqft === 'string' ? parseInt(sqft.replace(/[^0-9]/g, ''), 10) : sqft;
+    
+    // If not a valid number, return empty string
+    if (isNaN(numericValue) || numericValue <= 0) {
+        return "";
+    }
+    
+    // Format the number with commas for thousands if needed
+    const formattedValue = numericValue.toLocaleString();
+    
+    // Return with sq ft appended
+    return `${formattedValue} sq ft`;
+}
+
 async function retryWithBackoff(fn, maxAttempts = MAX_RETRY_ATTEMPTS) {
     let lastError;
     
@@ -154,15 +179,17 @@ async function retryWithBackoff(fn, maxAttempts = MAX_RETRY_ATTEMPTS) {
     throw lastError;
 }
 
-async function scrapeRightmoveProperty(propertyUrl, agentProfile = null) {
-    console.log(`[RightmoveScraper] scrapeRightmoveProperty received agentProfile:`, JSON.stringify(agentProfile));
+// Modify function signature to accept listingType
+async function scrapeRightmoveProperty(propertyUrl, listingType, agentProfile = null) {
+    console.log(`[RightmoveScraper] scrapeRightmoveProperty received agentProfile:`, JSON.stringify(agentProfile), `Listing Type: ${listingType}`);
     console.log(`Starting scrape for: ${propertyUrl}`);
 
     try {
         // First try using the FirecrawlApp package if available
         if (FirecrawlApp) {
             try {
-                return await scrapeWithFirecrawlPackage(propertyUrl, agentProfile);
+                // Pass listingType to the package-based scraper
+                return await scrapeWithFirecrawlPackage(propertyUrl, listingType, agentProfile);
             } catch (packageError) {
                 console.warn('Failed to use FirecrawlApp package, falling back to direct API:', packageError.message);
             }
@@ -213,7 +240,8 @@ async function scrapeRightmoveProperty(propertyUrl, agentProfile = null) {
                 if (extractData.data && extractData.data.length > 0) {
                     // Process immediate data response
                     console.log('Got immediate data response');
-                    return await processFirecrawlResults(extractData.data[0], agentProfile);
+                    // Pass listingType to processing function
+                    return await processFirecrawlResults(extractData.data[0], listingType, agentProfile);
                 } else if (extractData.id) {
                     // If it's an async job, poll for results
                     console.log(`Firecrawl extraction initiated with ID: ${extractData.id}`);
@@ -225,9 +253,11 @@ async function scrapeRightmoveProperty(propertyUrl, agentProfile = null) {
                     if (pollResult) {
                         // Handle different response formats
                         if (Array.isArray(pollResult) && pollResult.length > 0) {
-                            return await processFirecrawlResults(pollResult[0], agentProfile);
+                            // Pass listingType to processing function
+                            return await processFirecrawlResults(pollResult[0], listingType, agentProfile);
                         } else if (typeof pollResult === 'object' && (pollResult.property || pollResult.estate_agent)) {
-                            return await processFirecrawlResults(pollResult, agentProfile);
+                            // Pass listingType to processing function
+                            return await processFirecrawlResults(pollResult, listingType, agentProfile);
                         } else {
                             console.log('No property data in poll result');
                             // Don't throw here, try again in the next main attempt
@@ -274,12 +304,13 @@ async function scrapeRightmoveProperty(propertyUrl, agentProfile = null) {
  * Scrape Rightmove property data using the FirecrawlApp package
  * This uses the approach shown in the Firecrawl documentation
  */
-async function scrapeWithFirecrawlPackage(propertyUrl, agentProfile = null) {
+// Modify function signature to accept listingType
+async function scrapeWithFirecrawlPackage(propertyUrl, listingType, agentProfile = null) {
     if (!FirecrawlApp) {
         throw new Error('FirecrawlApp package not available');
     }
 
-    console.log(`Scraping with FirecrawlApp package: ${propertyUrl}`);
+    console.log(`Scraping with FirecrawlApp package: ${propertyUrl}, Listing Type: ${listingType}`);
     validateRightmoveUrl(propertyUrl);
     const cleanUrl = cleanRightmoveUrl(propertyUrl);
 
@@ -305,7 +336,8 @@ async function scrapeWithFirecrawlPackage(propertyUrl, agentProfile = null) {
 
         // Process the first item in the results (there should only be one)
         const data = extractResult.data[0];
-        return processFirecrawlResults(data, agentProfile);
+        // Pass listingType to processing function
+        return processFirecrawlResults(data, listingType, agentProfile);
     } catch (error) {
         console.error("Error using FirecrawlApp package:", error);
         throw error;
@@ -380,8 +412,9 @@ async function pollFirecrawlResults(extractId) {
     return await poll();
 }
 
-async function processFirecrawlResults(data, agentProfile = null) {
-    console.log(`[RightmoveScraper] processFirecrawlResults received agentProfile:`, JSON.stringify(agentProfile));
+// Modify function signature to accept listingType
+async function processFirecrawlResults(data, listingType, agentProfile = null) {
+    console.log(`[RightmoveScraper] processFirecrawlResults received agentProfile:`, JSON.stringify(agentProfile), `Listing Type: ${listingType}`);
     console.log('Processing data:', JSON.stringify(data, null, 2));
     
     // If the data is null or undefined, throw an error
@@ -396,7 +429,8 @@ async function processFirecrawlResults(data, agentProfile = null) {
     // For structured data with property and estate_agent keys
     if (data.property && data.estate_agent) {
         console.log('Data format: property and estate_agent');
-        return await processStructuredData(data, agentProfile);
+        // Pass listingType to processing function
+        return await processStructuredData(data, listingType, agentProfile);
     }
     
     // For data with different key names (camelCase variations)
@@ -407,16 +441,19 @@ async function processFirecrawlResults(data, agentProfile = null) {
             property: data.property,
             estate_agent: data.estateAgent
         };
-        return await processStructuredData(normalizedData, agentProfile);
+        // Pass listingType to processing function
+        return await processStructuredData(normalizedData, listingType, agentProfile);
     }
     
     // For unstructured data, try to extract by field mapping
     console.log('Data format: unstructured, attempting to extract fields');
-    return await processUnstructuredData(data, agentProfile);
+    // Pass listingType to processing function
+    return await processUnstructuredData(data, listingType, agentProfile);
 }
 
-async function processStructuredData(data, agentProfile = null) {
-    console.log(`[RightmoveScraper] processStructuredData received agentProfile:`, JSON.stringify(agentProfile));
+// Modify function signature to accept listingType
+async function processStructuredData(data, listingType, agentProfile = null) {
+    console.log(`[RightmoveScraper] processStructuredData received agentProfile:`, JSON.stringify(agentProfile), `Listing Type: ${listingType}`);
     console.log('Processing structured data with keys:', Object.keys(data.property));
     
     // Normalize the property images field
@@ -474,11 +511,13 @@ async function processStructuredData(data, agentProfile = null) {
     };
     
     console.log('Formatted data created successfully');
-    return await createOutputData(formattedData, agentProfile);
+    // Pass listingType to output function
+    return await createOutputData(formattedData, listingType, agentProfile);
 }
 
-async function processUnstructuredData(data, agentProfile = null) {
-    console.log(`[RightmoveScraper] processUnstructuredData received agentProfile:`, JSON.stringify(agentProfile));
+// Modify function signature to accept listingType
+async function processUnstructuredData(data, listingType, agentProfile = null) {
+    console.log(`[RightmoveScraper] processUnstructuredData received agentProfile:`, JSON.stringify(agentProfile), `Listing Type: ${listingType}`);
     console.log('Processing unstructured data:', JSON.stringify(data, null, 2));
     
     // Try to find property information in the unstructured data
@@ -573,7 +612,8 @@ async function processUnstructuredData(data, agentProfile = null) {
         }
     };
     
-    return await createOutputData(formattedData, agentProfile);
+    // Pass listingType to output function
+    return await createOutputData(formattedData, listingType, agentProfile);
 }
 
 // Helper function to find a value by checking multiple possible keys
@@ -586,14 +626,16 @@ function findValueByPossibleKeys(obj, possibleKeys) {
     return null;
 }
 
-async function createOutputData(formattedData, agentProfile = null) {
-    console.log(`[RightmoveScraper] createOutputData received agentProfile:`, JSON.stringify(agentProfile));
-    // Generate captions using existing function, passing agentProfile
+// Modify function signature to accept listingType
+async function createOutputData(formattedData, listingType, agentProfile = null) {
+    console.log(`[RightmoveScraper] createOutputData received agentProfile:`, JSON.stringify(agentProfile), `Listing Type: ${listingType}`);
+    // Generate captions using existing function, passing agentProfile and listingType
     let caption = null;
     try {
         // Log agentProfile right before calling the caption generator
-        console.log(`[RightmoveScraper] BEFORE generatePropertyCaptions call. agentProfile:`, JSON.stringify(agentProfile)); 
-        caption = await generatePropertyCaptions(formattedData, CAPTION_TYPES.INSTAGRAM, agentProfile);
+        console.log(`[RightmoveScraper] BEFORE generatePropertyCaptions call. agentProfile:`, JSON.stringify(agentProfile), `Listing Type: ${listingType}`); 
+        // Pass listingType to the caption generator
+        caption = await generatePropertyCaptions(formattedData, CAPTION_TYPES.INSTAGRAM, agentProfile, listingType);
         console.log('Generated caption type:', typeof caption);
         
         // If caption is not a string, convert it or set to a default
@@ -634,6 +676,10 @@ async function createOutputData(formattedData, agentProfile = null) {
             {
                 name: BANNERBEAR_TEMPLATE_CONFIG.layers.bathrooms,
                 text: formattedData.property.bathrooms
+            },
+            {
+                name: BANNERBEAR_TEMPLATE_CONFIG.layers.squareFt,
+                text: formatSquareFt(formattedData.property.square_ft)
             },
             {
                 name: BANNERBEAR_TEMPLATE_CONFIG.layers.agentLogo,
@@ -728,7 +774,7 @@ async function generateBannerbearImage(propertyData, agentProfile = null) {
     }
 }
 
-async function generateBannerbearCollection(propertyData, templateSetUid, agentProfile = null) {
+async function generateBannerbearCollection(propertyData, templateSetUid, agentProfile = null, listing_type = null) {
     try {
         // Get all available property images
         const propertyImages = propertyData.raw.property.allImages;
@@ -751,6 +797,10 @@ async function generateBannerbearCollection(propertyData, templateSetUid, agentP
             {
                 name: "bathrooms",
                 text: propertyData.raw.property.bathrooms
+            },
+            {
+                name: "sq_ft",
+                text: formatSquareFt(propertyData.raw.property.square_ft)
             },
             {
                 name: "logo",
@@ -780,6 +830,15 @@ async function generateBannerbearCollection(propertyData, templateSetUid, agentP
             }
         }
 
+        // Add listing type modification if provided
+        if (listing_type) {
+            console.log(`Adding listing_type modification with value: "${listing_type}"`);
+            baseModifications.push({
+                name: "listing_type",
+                text: listing_type
+            });
+        }
+
         // Add image modifications for each template
         // We'll cycle through available images if we have more templates than images
         const imageModifications = [];
@@ -805,6 +864,11 @@ async function generateBannerbearCollection(propertyData, templateSetUid, agentP
                 total_images: propertyImages.length
             }
         };
+
+        // Add listing_type to metadata if provided
+        if (listing_type) {
+            collectionPayload.metadata.listing_type = listing_type;
+        }
 
         // Add webhook configuration if available
         if (serverRuntimeConfig.BANNERBEAR_WEBHOOK_URL) {

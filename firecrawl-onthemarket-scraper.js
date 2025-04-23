@@ -57,7 +57,7 @@ function formatOnTheMarketData(data) {
   };
 }
 
-async function processOnTheMarketResult(extractResult, agentProfile = null) {
+async function processOnTheMarketResult(extractResult, listingType, agentProfile = null) {
   if (!extractResult || !extractResult.success || !extractResult.data) {
     return {
       raw: {},
@@ -66,11 +66,11 @@ async function processOnTheMarketResult(extractResult, agentProfile = null) {
       error: extractResult?.error || 'Failed to extract property data'
     };
   }
-  // Generate caption using the same logic as Rightmove, passing agentProfile
+  // Generate caption using the same logic, passing listingType and agentProfile
   const formattedData = formatOnTheMarketData(extractResult.data);
   let caption = '';
   try {
-    caption = await generatePropertyCaptions(formattedData, CAPTION_TYPES.INSTAGRAM, agentProfile);
+    caption = await generatePropertyCaptions(formattedData, CAPTION_TYPES.INSTAGRAM, agentProfile, listingType);
     if (!caption) {
       caption = `${formattedData.property.bedrooms} bedroom, ${formattedData.property.bathrooms} bathroom property in ${formattedData.property.address}`;
     }
@@ -84,14 +84,38 @@ async function processOnTheMarketResult(extractResult, agentProfile = null) {
   };
 }
 
-async function scrapeOnTheMarketProperty(propertyUrl, agentProfile = null) {
+async function scrapeOnTheMarketProperty(propertyUrl, listingType, agentProfile = null) {
   const extractResult = await app.extract([
     propertyUrl
   ], {
     prompt: `Extract the property address, price (if rental, only the pcm value), number of bedrooms, number of bathrooms, square footage, description, all gallery images, key features, estate agent name, estate agent address, and estate agent logo image.\n\nReturn the result in this schema: { property: { address, price, bedrooms, bathrooms, square_ft, description, images, key_features }, estate_agent: { name, address, logo } }`,
     schema,
   });
-  return processOnTheMarketResult(extractResult, agentProfile);
+  return processOnTheMarketResult(extractResult, listingType, agentProfile);
+}
+
+// Add utility function to format square footage
+function formatSquareFt(sqft) {
+    if (!sqft) return "";
+    
+    // If already formatted with sq ft, return as is
+    if (typeof sqft === 'string' && sqft.toLowerCase().includes('sq ft')) {
+        return sqft;
+    }
+    
+    // Convert to number if it's a string
+    const numericValue = typeof sqft === 'string' ? parseInt(sqft.replace(/[^0-9]/g, ''), 10) : sqft;
+    
+    // If not a valid number, return empty string
+    if (isNaN(numericValue) || numericValue <= 0) {
+        return "";
+    }
+    
+    // Format the number with commas for thousands if needed
+    const formattedValue = numericValue.toLocaleString();
+    
+    // Return with sq ft appended
+    return `${formattedValue} sq ft`;
 }
 
 async function generateBannerbearImage(propertyData, agentProfile = null) {
@@ -152,7 +176,7 @@ async function generateBannerbearImage(propertyData, agentProfile = null) {
   }
 }
 
-async function generateBannerbearCollection(propertyData, templateSetUid, agentProfile = null) {
+async function generateBannerbearCollection(propertyData, templateSetUid, agentProfile = null, listing_type = null) {
   try {
     const property = propertyData.raw.property;
     const agent = propertyData.raw.estate_agent;
@@ -162,9 +186,19 @@ async function generateBannerbearCollection(propertyData, templateSetUid, agentP
       { name: "property_location", text: property.address },
       { name: "bedrooms", text: property.bedrooms },
       { name: "bathrooms", text: property.bathrooms },
+      { name: "sq_ft", text: formatSquareFt(property.square_ft) },
       { name: "logo", image_url: agent.logo },
       { name: "estate_agent_address", text: agent.address }
     ];
+
+    // Add listing type modification if provided
+    if (listing_type) {
+      console.log(`Adding listing_type modification with value: "${listing_type}"`);
+      baseModifications.push({
+        name: "listing_type",
+        text: listing_type
+      });
+    }
 
     // Add agent modifications if profile is provided
     const agentModifications = [];
@@ -205,6 +239,12 @@ async function generateBannerbearCollection(propertyData, templateSetUid, agentP
         total_images: propertyImages.length
       }
     };
+
+    // Add listing_type to metadata if provided
+    if (listing_type) {
+      collectionPayload.metadata.listing_type = listing_type;
+    }
+
     if (serverRuntimeConfig.BANNERBEAR_WEBHOOK_URL) {
       collectionPayload.webhook_url = serverRuntimeConfig.BANNERBEAR_WEBHOOK_URL;
       collectionPayload.webhook_headers = {
@@ -246,7 +286,7 @@ if (isMain) {
   (async () => {
     const url = process.argv[2] || 'https://www.onthemarket.com/details/16925924/';
     try {
-      const result = await scrapeOnTheMarketProperty(url);
+      const result = await scrapeOnTheMarketProperty(url, 'residential');
       console.log(JSON.stringify(result, null, 2));
     } catch (err) {
       console.error('Error scraping property:', err);

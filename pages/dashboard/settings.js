@@ -11,6 +11,27 @@ import InstagramConnectInfoModal from '../../components/UI/InstagramConnectInfoM
 import InstagramAccountSelectModal from '../../components/UI/InstagramAccountSelectModal';
 import FacebookPageSelectModal from '../../components/UI/FacebookPageSelectModal';
 
+// Loading spinner component
+const LoadingView = () => (
+  <div style={{ 
+    display: 'flex', 
+    flexDirection: 'column',
+    alignItems: 'center', 
+    justifyContent: 'center',
+    padding: '3rem 1rem'
+  }}>
+    <div style={{ 
+      width: '40px', 
+      height: '40px', 
+      border: '4px solid rgba(0, 0, 0, 0.1)',
+      borderRadius: '50%',
+      borderTop: '4px solid #62d76b',
+      animation: 'spinAnimation 1s ease infinite'
+    }}></div>
+    <p style={{ color: '#555', fontWeight: '500', marginTop: '1rem' }}>Loading settings...</p>
+  </div>
+);
+
 export default function SettingsPage() {
   const { user } = useAuth();
   const [isFacebookConnected, setIsFacebookConnected] = useState(false);
@@ -551,25 +572,50 @@ export default function SettingsPage() {
     return (
       <ProtectedRoute>
         <div className="dashboard">
-          <Head><title>Loading Settings... - Trofai</title></Head>
+          <Head><title>Settings - Trofai</title></Head>
           <MobileMenu activePage="settings" />
           <Sidebar activePage="settings" />
-          <div className="dashboard-container flex-center">
-            <div className="loading-indicator">Loading settings...</div>
+          <div className="dashboard-container">
+            <DashboardHeader />
+            <main className="main">
+              <div className="content">
+                <LoadingView />
+              </div>
+            </main>
           </div>
+          <style jsx>{`
+            .dashboard {
+              min-height: 100vh;
+              background: linear-gradient(to top, rgba(98, 215, 107, 0.15) 0%, rgba(255, 255, 255, 0) 100%);
+            }
+            .dashboard-container {
+              margin-left: 240px;
+              min-height: 100vh;
+              display: flex;
+              flex-direction: column;
+            }
+            .main {
+              flex: 1;
+              padding: 2rem;
+            }
+            .content {
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              min-height: 60vh;
+            }
+            @media (max-width: 768px) {
+              .dashboard-container {
+                margin-left: 0;
+                padding-top: 64px;
+              }
+            }
+            @keyframes spinAnimation {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+          `}</style>
         </div>
-        <style jsx>{`
-          .dashboard-container.flex-center {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-grow: 1;
-          }
-          .loading-indicator {
-            font-size: 1.2rem;
-            color: #6b7280;
-          }
-        `}</style>
       </ProtectedRoute>
     );
   }

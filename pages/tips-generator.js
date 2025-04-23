@@ -566,17 +566,25 @@ export default function QuoteGeneratorPage() {
                                 {templateSelectionError && <div className="error-inline" style={{marginTop: '1rem'}}>{templateSelectionError}</div>}
 
                                 {/* --- Moved Tip Category Selection Here --- */}
-                                <div className="form-group" style={{ marginTop: '1.5rem', marginBottom: '1.5rem' }}>
-                                     <label htmlFor="tip-category-select">Select Tip Category:</label>
-                                     <Select
-                                         id="tip-category-select"
-                                         instanceId="tip-category-select-instance"
-                                         options={TIP_CATEGORIES}
-                                         value={selectedTipCategory}
-                                         onChange={setSelectedTipCategory}
-                                         styles={selectStyles}
-                                     />
-                                 </div>
+                                <div className="listing-type-section">
+                                    {/* Wrap the title in a header div */}
+                                    <div className="selector-header"> 
+                                        <h3 className="listing-type-title">
+                                            Tip Category: <span className="select-type">{selectedTipCategory ? selectedTipCategory.label : 'Select Type'}</span>
+                                        </h3>
+                                    </div>
+                                    <div className="listing-options">
+                                        {TIP_CATEGORIES.map((category) => (
+                                            <div 
+                                                key={category.value}
+                                                className={`listing-option ${selectedTipCategory.value === category.value ? 'selected' : ''}`}
+                                                onClick={() => setSelectedTipCategory(category)}
+                                            >
+                                                {category.label}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
 
                                 {/* --- Moved Generate Button Here --- */}
                                 <div className="generate-button-container">
@@ -594,7 +602,9 @@ export default function QuoteGeneratorPage() {
 
                             {/* --- Generated Advice History Section --- */}
                             <div className="history-section">
-                                <div className="history-header">
+                                {/* Conditionally render the header only if there's history */}
+                                {adviceHistory.length > 0 && (
+                                  <div className="history-header">
                                     <h2 className="history-title">History</h2>
                                     {selectedTips.length > 0 && (
                                         <button
@@ -612,7 +622,8 @@ export default function QuoteGeneratorPage() {
                                             )}
                                         </button>
                                     )}
-                                </div>
+                                  </div>
+                                )}
                                 
                                 {isLoadingHistory && (
                                     <div className="loading-placeholder">
@@ -840,6 +851,112 @@ export default function QuoteGeneratorPage() {
                          margin-bottom: 0.5rem;
                          font-weight: 500;
                          color: #374151;
+                     }
+
+                     /* Listing Type Section Styles - Copied from Dashboard */
+                     .listing-type-section {
+                         margin-top: 1.5rem;
+                         margin-bottom: 1.5rem;
+                         border: 1px solid #e2e8f0;
+                         border-radius: 8px;
+                         padding: 1rem;
+                     }
+                     
+                     .listing-type-title {
+                         font-size: 1rem;
+                         margin: 0 0 1rem 0;
+                         color: #333;
+                         font-weight: 600;
+                     }
+                     
+                     .select-type {
+                         color: #62d76b;
+                         font-weight: 700;
+                     }
+                     
+                     .listing-options {
+                         display: flex;
+                         flex-wrap: nowrap;
+                         gap: 0.75rem;
+                     }
+                     
+                     .listing-option {
+                         background: white;
+                         border: 1px solid #e2e8f0;
+                         border-radius: 6px;
+                         padding: 0.75rem 1rem;
+                         text-align: center;
+                         cursor: pointer;
+                         transition: all 0.2s ease;
+                         font-weight: 500;
+                         flex: 1;
+                     }
+                     
+                     .listing-option:hover {
+                         border-color: #62d76b;
+                         transform: translateY(-1px);
+                         box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+                     }
+                     
+                     .listing-option.selected {
+                         border-color: #62d76b;
+                         background: rgba(98, 215, 107, 0.05);
+                     }
+                     
+                     .selector-header {
+                         display: flex;
+                         justify-content: space-between; /* Or 'flex-start' if preferred */
+                         align-items: center;
+                         padding: 0.8rem 0; /* Padding top/bottom, adjust as needed */
+                         border-bottom: 1px solid #eaeaea; /* The dividing line */
+                         margin-bottom: 1rem; /* Space below the line/header */
+                     }
+
+                     .listing-type-title {
+                         font-size: 1rem;
+                         margin: 0; /* Remove default margin from h3 */
+                         color: #333;
+                         font-weight: 600;
+                     }
+                     
+                     .select-type {
+                         color: #62d76b;
+                         font-weight: 700;
+                     }
+                     
+                     .listing-options {
+                         display: flex;
+                         flex-wrap: nowrap;
+                         gap: 0.75rem;
+                     }
+                     
+                     .listing-option {
+                         background: white;
+                         border: 1px solid #e2e8f0;
+                         border-radius: 6px;
+                         padding: 0.75rem 1rem;
+                         text-align: center;
+                         cursor: pointer;
+                         transition: all 0.2s ease;
+                         font-weight: 500;
+                         flex: 1;
+                     }
+                     
+                     .listing-option:hover {
+                         border-color: #62d76b;
+                         transform: translateY(-1px);
+                         box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+                     }
+                     
+                     .listing-option.selected {
+                         border-color: #62d76b;
+                         background: rgba(98, 215, 107, 0.05);
+                     }
+                     
+                     @media (max-width: 768px) {
+                         .listing-options {
+                             grid-template-columns: repeat(2, 1fr);
+                         }
                      }
 
                      .generate-button-container {

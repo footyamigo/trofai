@@ -7,19 +7,35 @@ export default async function handler(req, res) {
     return res.status(405).json({ success: false, message: 'Method not allowed' });
   }
 
-  const { url } = req.body;
+  // Get url and listingType from the request body
+  const { url, listingType } = req.body;
+  
   if (!url || typeof url !== 'string') {
     return res.status(400).json({ success: false, message: 'Missing or invalid property URL' });
+  }
+  
+  // Validate listingType (optional but recommended)
+  const validListingTypes = ['Just Listed', 'Just Sold', 'For Rent', 'Let Agreed'];
+  if (!listingType || !validListingTypes.includes(listingType)) {
+    // Default to 'Just Listed' or return an error if listingType is strictly required
+    console.warn(`Missing or invalid listingType: ${listingType}. Defaulting or erroring might be needed.`);
+    // For now, let's proceed without it, but the scrapers might need adjustment
+    // return res.status(400).json({ success: false, message: 'Missing or invalid listing type' });
   }
 
   try {
     let result;
+    console.log(`Generating caption for URL: ${url} with Listing Type: ${listingType}`); // Log listing type
+    
     if (url.includes('rightmove.co.uk')) {
-      result = await scrapeRightmoveProperty(url);
+      // Pass listingType to the scraper function
+      result = await scrapeRightmoveProperty(url, listingType);
     } else if (url.includes('zillow.com')) {
-      result = await scrapeZillowProperty(url);
+      // Pass listingType to the scraper function
+      result = await scrapeZillowProperty(url, listingType);
     } else if (url.includes('onthemarket.com')) {
-      result = await scrapeOnTheMarketProperty(url);
+      // Pass listingType to the scraper function
+      result = await scrapeOnTheMarketProperty(url, listingType);
     } else {
       return res.status(400).json({ success: false, message: 'Unsupported property URL. Only Rightmove, Zillow, and OnTheMarket are supported.' });
     }

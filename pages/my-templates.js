@@ -12,6 +12,27 @@ import Link from 'next/link';
 import Modal from '../components/UI/Modal';
 import { FiPlayCircle } from 'react-icons/fi';
 
+// Loading spinner component to avoid duplication
+const LoadingView = () => (
+  <div style={{ 
+    display: 'flex', 
+    flexDirection: 'column',
+    alignItems: 'center', 
+    justifyContent: 'center',
+    padding: '3rem 1rem'
+  }}>
+    <div style={{ 
+      width: '40px', 
+      height: '40px', 
+      border: '4px solid rgba(0, 0, 0, 0.1)',
+      borderRadius: '50%',
+      borderTop: '4px solid #62d76b',
+      animation: 'spinAnimation 1s ease infinite'
+    }}></div>
+    <p style={{ color: '#555', fontWeight: '500', marginTop: '1rem' }}>Loading your templates...</p>
+  </div>
+);
+
 // No longer paginated, so PAGE_LIMIT is not needed here
 
 // This page displays all templates, similar to the gallery but without selection/duplication
@@ -164,7 +185,7 @@ function MyTemplatesPage() {
   // --- Render Logic (Simplified) ---
   let pageContent;
   if (isLoading) {
-    pageContent = <div>Loading your templates...</div>;
+    pageContent = <LoadingView />;
   } else if (error) {
     pageContent = <div>Error loading your templates: {error}</div>;
   } else if (templates.length === 0) {
@@ -400,6 +421,12 @@ function MyTemplatesPage() {
             .subtitle {
               font-size: 1rem;
             }
+          }
+          
+          /* Global animation for spinner */
+          @keyframes spinAnimation {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
           }
         `}</style>
       </div>

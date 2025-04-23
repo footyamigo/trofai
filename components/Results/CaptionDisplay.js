@@ -16,7 +16,7 @@ export default function CaptionDisplay({ caption }) {
 
   return (
     <div className="caption-container">
-      <h3>Instagram Caption</h3>
+      <h3>Caption</h3>
       <textarea 
         value={caption} 
         readOnly 

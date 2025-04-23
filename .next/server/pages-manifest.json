@@ -2,9 +2,16 @@
   "/_app": "pages/_app.js",
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
-  "/tips-generator": "pages/tips-generator.js",
-  "/api/reviews/fetch-history": "pages/api/reviews/fetch-history.js",
-  "/api/list-testimonial-templates": "pages/api/list-testimonial-templates.js",
   "/dashboard": "pages/dashboard.js",
-  "/review-generator": "pages/review-generator.js"
+  "/templates": "pages/templates.js",
+  "/api/list-testimonial-templates": "pages/api/list-testimonial-templates.js",
+  "/api/list-listing-templates": "pages/api/list-listing-templates.js",
+  "/api/list-quote-templates": "pages/api/list-quote-templates.js",
+  "/my-templates": "pages/my-templates.js",
+  "/api/my-templates": "pages/api/my-templates.js",
+  "/review-generator": "pages/review-generator.js",
+  "/api/reviews/fetch-history": "pages/api/reviews/fetch-history.js",
+  "/api/social/status": "pages/api/social/status.js",
+  "/api/reviews/fetch-history-item": "pages/api/reviews/fetch-history-item.js",
+  "/caption": "pages/caption.js"
 }

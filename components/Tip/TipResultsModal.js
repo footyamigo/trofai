@@ -463,7 +463,6 @@ export default function TipResultsModal({ isOpen, onClose, results, selectedTip 
                   onChange={handleCaptionChange}
                   rows={10}
                   placeholder={captionError ? "Caption unavailable." : "Generated tip caption text..."}
-                  readOnly={!!captionError}
                 />
               </div>
             </div>

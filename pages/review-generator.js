@@ -556,8 +556,8 @@ export default function ReviewGenerator() {
         <Head>
           <title>Review Screenshot Generator - Trofai</title>
         </Head>
-        <MobileMenu activePage="review-generator" />
-        <Sidebar activePage="review-generator" />
+        <MobileMenu activePage="reviews" />
+        <Sidebar activePage="reviews" />
         <div className="dashboard-container">
            <DashboardHeader /> 
           <main className="main">
@@ -672,25 +672,28 @@ export default function ReviewGenerator() {
 
               {/* --- Review History Section --- */}
               <div className="history-section">
-                <div className="history-header">
-                  <h2 className="history-title">History</h2>
-                  {selectedReviews.length > 0 && (
-                    <button
-                      className={`bulk-delete-button ${isDeletingReview ? 'loading' : ''}`}
-                      onClick={handleBulkDelete}
-                      disabled={isDeletingReview}
-                    >
-                      {isDeletingReview && isBulkDelete ? (
-                        <>
-                          <span className="delete-spinner"></span>
-                          Deleting...
-                        </>
-                      ) : (
-                        <>Delete Selected ({selectedReviews.length})</>
-                      )}
-                    </button>
-                  )}
-                </div>
+                {/* Conditionally render the header only if there's history */}
+                {reviewHistory.length > 0 && (
+                  <div className="history-header">
+                    <h2 className="history-title">History</h2>
+                    {selectedReviews.length > 0 && (
+                      <button
+                        className={`bulk-delete-button ${isDeletingReview ? 'loading' : ''}`}
+                        onClick={handleBulkDelete}
+                        disabled={isDeletingReview}
+                      >
+                        {isDeletingReview && isBulkDelete ? (
+                          <>
+                            <span className="delete-spinner"></span>
+                            Deleting...
+                          </>
+                        ) : (
+                          <>Delete Selected ({selectedReviews.length})</>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                )}
                 
                 {isLoadingHistory && (
                   <div className="loading-placeholder">

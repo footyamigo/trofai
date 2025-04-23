@@ -869,6 +869,31 @@ async function generateBannerbearImage(propertyData) {
     }
 }
 
+// Add the formatSquareFt function
+function formatSquareFt(sqft) {
+    if (!sqft) return "";
+    
+    // If already formatted with sq ft, return as is
+    if (typeof sqft === 'string' && sqft.toLowerCase().includes('sq ft')) {
+        return sqft;
+    }
+    
+    // Convert to number if it's a string
+    const numericValue = typeof sqft === 'string' ? parseInt(sqft.replace(/[^0-9]/g, ''), 10) : sqft;
+    
+    // If not a valid number, return empty string
+    if (isNaN(numericValue) || numericValue <= 0) {
+        return "";
+    }
+    
+    // Format the number with commas for thousands if needed
+    const formattedValue = numericValue.toLocaleString();
+    
+    // Return with sq ft appended
+    return `${formattedValue} sq ft`;
+}
+
+// Update the generateBannerbearCollection function to include the formatted square footage
 async function generateBannerbearCollection(propertyData, templateSetUid) {
     try {
         // Get all available property images
@@ -892,6 +917,10 @@ async function generateBannerbearCollection(propertyData, templateSetUid) {
             {
                 name: "bathrooms",
                 text: propertyData.raw.property.bathrooms
+            },
+            {
+                name: "sq_ft",
+                text: formatSquareFt(propertyData.raw.property.square_ft)
             },
             {
                 name: "logo",

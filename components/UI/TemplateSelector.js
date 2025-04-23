@@ -236,7 +236,82 @@ export default function TemplateSelector({ selectedTemplate, onSelect, onSetsLoa
             <div className="template-previews-container"> 
                <div className="template-previews">
                   {template.previews?.length > 0 ? (
-                    template.previews.map((preview, index) => (
+                    [...template.previews]
+                      .sort((a, b) => {
+                        // Helper function to categorize preview type
+                        const getTemplateType = (preview) => {
+                          // Pre-defined types:
+                          // 0 = Feed/Post (square, highest priority)
+                          // 1 = Design (medium priority)
+                          // 2 = Story (lowest priority)
+                          
+                          const name = (preview.name || '').toLowerCase();
+                          const uid = (preview.uid || '').toLowerCase();
+                          
+                          // Check for story indicators
+                          if (name.includes('story') || 
+                              name.includes('vertical') || 
+                              name.includes('portrait') || 
+                              uid.includes('story') || 
+                              /_story\d+$/i.test(name)) {
+                            return 2; // Story
+                          }
+                          
+                          // Check for feed/post indicators
+                          if (name.includes('feed') || 
+                              name.includes('post') || 
+                              name.includes('square') ||
+                              uid.includes('feed') || 
+                              uid.includes('post') ||
+                              /_design\d+$/i.test(name) ||
+                              /_feed\d+$/i.test(name) ||
+                              /_post\d+$/i.test(name)) {
+                            return 0; // Feed/Post
+                          }
+                          
+                          // Default to design
+                          return 1; // Design
+                        };
+                        
+                        // Helper function to extract the numeric order from the name
+                        const getTemplateOrder = (preview) => {
+                          const name = (preview.name || '').toLowerCase();
+                          const uid = (preview.uid || '').toLowerCase();
+                          
+                          // Try to extract number from design/story/feed pattern like _design1, _story2, etc.
+                          const nameMatch = name.match(/_(design|story|post|feed)(\d+)$/i);
+                          if (nameMatch && nameMatch[2]) {
+                            return parseInt(nameMatch[2], 10);
+                          }
+                          
+                          // Try to extract any number at the end of name
+                          const numberMatch = name.match(/(\d+)$/);
+                          if (numberMatch && numberMatch[1]) {
+                            return parseInt(numberMatch[1], 10);
+                          }
+                          
+                          // Try uid as fallback
+                          const uidMatch = uid.match(/(\d+)$/);
+                          if (uidMatch && uidMatch[1]) {
+                            return parseInt(uidMatch[1], 10);
+                          }
+                          
+                          // Fallback for items without numeric indicators
+                          return 999; // Put unnumbered items last within their category
+                        };
+                        
+                        const aType = getTemplateType(a);
+                        const bType = getTemplateType(b);
+                        
+                        // Primary sort by type (feed/post first, story last)
+                        if (aType !== bType) {
+                          return aType - bType;
+                        }
+                        
+                        // Secondary sort by numeric order within the same type
+                        return getTemplateOrder(a) - getTemplateOrder(b);
+                      })
+                      .map((preview, index) => (
                       <div key={preview.uid || index} className="preview-item">
                         <div 
                           className="preview-thumbnail"

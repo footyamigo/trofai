@@ -138,7 +138,8 @@ async function generateBannerbearCollection(propertyData, templateSetUid) {
       { name: "bedrooms", text: property.bedrooms },
       { name: "bathrooms", text: property.bathrooms },
       { name: "logo", image_url: agent.logo },
-      { name: "estate_agent_address", text: agent.address }
+      { name: "estate_agent_address", text: agent.address },
+      { name: 'sq_ft', text: formatSquareFt(property.square_ft) }
     ];
     const imageModifications = [];
     for (let i = 0; i <= 23; i++) {
@@ -188,6 +189,30 @@ async function generateBannerbearCollection(propertyData, templateSetUid) {
   } catch (error) {
     throw error;
   }
+}
+
+// Add utility function to format square footage
+function formatSquareFt(sqft) {
+    if (!sqft) return "";
+    
+    // If already formatted with sq ft, return as is
+    if (typeof sqft === 'string' && sqft.toLowerCase().includes('sq ft')) {
+        return sqft;
+    }
+    
+    // Convert to number if it's a string
+    const numericValue = typeof sqft === 'string' ? parseInt(sqft.replace(/[^0-9]/g, ''), 10) : sqft;
+    
+    // If not a valid number, return empty string
+    if (isNaN(numericValue) || numericValue <= 0) {
+        return "";
+    }
+    
+    // Format the number with commas for thousands if needed
+    const formattedValue = numericValue.toLocaleString();
+    
+    // Return with sq ft appended
+    return `${formattedValue} sq ft`;
 }
 
 module.exports = {

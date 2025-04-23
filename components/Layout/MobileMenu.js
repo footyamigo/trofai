@@ -19,10 +19,11 @@ export default function MobileMenu({ activePage }) {
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: AiOutlineHome, href: '/dashboard' },
-    { id: 'properties', label: 'Properties', icon: BsBuilding, href: '/properties' },
-    { id: 'templates', label: 'Templates', icon: MdOutlineViewModule, href: '/templates' },
-    { id: 'caption', label: 'Caption Generator', icon: RiText, href: '/caption', isNew: true },
-    { id: 'activity', label: 'Activity Logs', icon: TbActivityHeartbeat, href: '/activity' },
+    { id: 'caption', label: 'Caption Generator', icon: RiText, href: '/caption', isNew: false },
+    { id: 'reviews', label: 'Review Generator', icon: VscExtensions, href: '/review-generator' },
+    { id: 'tips-generator', label: 'Tip Generator', icon: BiPlayCircle, href: '/tips-generator', isNew: true },
+    { id: 'templates', label: 'Template Gallery', icon: MdOutlineViewModule, href: '/templates' },
+    { id: 'my-templates', label: 'My Templates', icon: BsBuilding, href: '/my-templates' },
     { id: 'settings', label: 'Settings', icon: IoSettingsOutline, href: '/dashboard/settings' },
   ];
 
@@ -151,23 +152,26 @@ export default function MobileMenu({ activePage }) {
           display: flex;
           align-items: center;
           gap: 0.75rem;
-          padding: 0.75rem;
+          padding: 0.75rem 1rem;
           color: #4a5568;
           text-decoration: none;
-          border-radius: 6px;
+          border-radius: 8px;
           transition: all 0.2s ease;
           font-size: 1rem;
           position: relative;
+          font-weight: 400;
         }
 
         .nav-item:hover {
-          background: rgba(0, 0, 0, 0.04);
+          background: rgba(0, 0, 0, 0.05);
+          color: #000;
         }
 
         .nav-item.active {
-          background: rgba(255, 165, 0, 0.1);
-          color: #1a1a1a;
-          font-weight: 500;
+          background: rgba(98, 215, 107, 0.2);
+          color: #0d6b20;
+          font-weight: 600;
+          box-shadow: 0 1px 3px rgba(98, 215, 107, 0.2);
         }
 
         :global(.nav-icon) {

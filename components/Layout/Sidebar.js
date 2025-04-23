@@ -1,27 +1,48 @@
 import Link from 'next/link';
+import { useState } from 'react';
 import { AiOutlineHome } from 'react-icons/ai';
 import { BiPlayCircle, BiImageAdd } from 'react-icons/bi';
 import { VscExtensions } from 'react-icons/vsc';
 import { TbActivityHeartbeat } from 'react-icons/tb';
 import { IoStatsChartOutline, IoEllipsisHorizontal } from 'react-icons/io5';
 import { IoSettingsOutline } from 'react-icons/io5';
-import { FiKey, FiCopy, FiZap, FiStar, FiActivity, FiSettings } from 'react-icons/fi';
+import { FiKey, FiCopy, FiZap, FiStar, FiActivity, FiSettings, FiLogOut, FiHelpCircle, FiBookOpen } from 'react-icons/fi';
 import { BsBuilding } from 'react-icons/bs';
 import { MdOutlineViewModule } from 'react-icons/md';
 import { RiText } from 'react-icons/ri';
+import { useAuth } from '../../src/context/AuthContext';
 
 export default function Sidebar({ activePage = 'home' }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const { user, signOut } = useAuth();
+  
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: AiOutlineHome, href: '/dashboard' },
-    { id: 'properties', label: 'Properties', icon: BsBuilding, href: '/properties' },
-    { id: 'templates', label: 'Template Gallery', icon: MdOutlineViewModule, href: '/templates' },
-    { id: 'my-templates', label: 'My Templates', icon: FiCopy, href: '/my-templates' },
     { id: 'caption', label: 'Caption Generator', icon: RiText, href: '/caption', isNew: false },
     { id: 'reviews', label: 'Review Generator', icon: FiStar, href: '/review-generator' },
     { id: 'tips-generator', label: 'Tip Generator', icon: FiZap, href: '/tips-generator', isNew: true },
-    { id: 'activity', label: 'Activity Feed', icon: FiActivity, href: '/activity-feed' },
+    { id: 'templates', label: 'Template Gallery', icon: MdOutlineViewModule, href: '/templates' },
+    { id: 'my-templates', label: 'My Templates', icon: FiCopy, href: '/my-templates' },
     { id: 'settings', label: 'Settings', icon: FiSettings, href: '/dashboard/settings' },
   ];
+  
+  const profileMenuItems = [
+    { id: 'blog', label: 'Blog', icon: FiBookOpen, href: '/blog' },
+    { id: 'contact', label: 'Contact Us', icon: FiHelpCircle, href: '/contact' },
+    { id: 'account', label: 'Account Settings', icon: FiSettings, href: '/dashboard/settings' },
+    { id: 'signout', label: 'Sign Out', icon: FiLogOut, action: signOut },
+  ];
+  
+  const toggleMenu = () => {
+    setMenuOpen(!menuOpen);
+  };
+  
+  // Close menu when clicking outside
+  const handleClickOutside = () => {
+    if (menuOpen) {
+      setMenuOpen(false);
+    }
+  };
 
   return (
     <aside className="sidebar">
@@ -60,12 +81,55 @@ export default function Sidebar({ activePage = 'home' }) {
         </div>
       </div>
 
-      <div className="user-profile">
-        <div className="avatar">P</div>
-        <span className="username">presidentialideas</span>
-        <button className="menu-button">
-          <IoEllipsisHorizontal />
-        </button>
+      <div className="user-profile-container">
+        <div className="user-profile" onClick={toggleMenu}>
+          <div className="avatar">{user?.email?.[0]?.toUpperCase() || 'P'}</div>
+          <span className="username">{user?.email || 'presidentialideas'}</span>
+          <button className="menu-button">
+            <IoEllipsisHorizontal />
+          </button>
+        </div>
+        
+        {menuOpen && (
+          <>
+            <div className="profile-menu-backdrop" onClick={handleClickOutside}></div>
+            <div className="profile-menu">
+              <div className="profile-menu-header">
+                <span className="menu-username">{user?.email || 'No user logged in'}</span>
+              </div>
+              {profileMenuItems.map((item) => {
+                const Icon = item.icon;
+                if (item.action) {
+                  return (
+                    <button
+                      key={item.id}
+                      className="profile-menu-item"
+                      onClick={() => {
+                        item.action();
+                        setMenuOpen(false);
+                      }}
+                    >
+                      <Icon className="profile-menu-icon" />
+                      <span>{item.label}</span>
+                    </button>
+                  );
+                } else {
+                  return (
+                    <Link 
+                      key={item.id}
+                      href={item.href}
+                      className="profile-menu-item"
+                      onClick={() => setMenuOpen(false)}
+                    >
+                      <Icon className="profile-menu-icon" />
+                      <span>{item.label}</span>
+                    </Link>
+                  );
+                }
+              })}
+            </div>
+          </>
+        )}
       </div>
 
       <style jsx>{`
@@ -115,7 +179,7 @@ export default function Sidebar({ activePage = 'home' }) {
         .nav-menu {
           display: flex;
           flex-direction: column;
-          gap: 0.25rem;
+          gap: 0.4rem;
           padding: 0 0.75rem;
           flex: 1;
         }
@@ -124,24 +188,28 @@ export default function Sidebar({ activePage = 'home' }) {
           display: flex;
           align-items: center;
           gap: 0.75rem;
-          padding: 0.625rem 0.75rem;
+          padding: 0.75rem 1rem;
           color: #4a5568;
           text-decoration: none;
-          border-radius: 6px;
+          border-radius: 8px;
           transition: all 0.2s ease;
-          font-size: 0.9375rem;
+          font-size: 0.95rem;
           position: relative;
+          font-weight: 400;
         }
 
         :global(.nav-item:hover) {
-          background: rgba(0, 0, 0, 0.04);
-          color: #1a1a1a;
+          background: rgba(0, 0, 0, 0.05);
+          color: #000;
+          transform: translateX(2px);
+          box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }
 
         :global(.nav-item.active) {
-          background: rgba(255, 165, 0, 0.1);
-          color: #1a1a1a;
-          font-weight: 500;
+          background: rgba(98, 215, 107, 0.2);
+          color: #0d6b20;
+          font-weight: 600;
+          box-shadow: 0 1px 3px rgba(98, 215, 107, 0.2);
         }
 
         :global(.nav-icon) {
@@ -194,6 +262,11 @@ export default function Sidebar({ activePage = 'home' }) {
         .feedback-link:hover {
           text-decoration: underline;
         }
+        
+        .user-profile-container {
+          position: relative;
+          margin-top: 0.75rem;
+        }
 
         .user-profile {
           margin: 0.75rem;
@@ -202,12 +275,19 @@ export default function Sidebar({ activePage = 'home' }) {
           align-items: center;
           gap: 0.75rem;
           border-top: 1px solid rgba(0, 0, 0, 0.06);
-          margin-top: 0.75rem;
+          margin-top: 0;
+          cursor: pointer;
+          border-radius: 8px;
+          transition: all 0.2s ease;
+        }
+
+        .user-profile:hover {
+          background: rgba(0, 0, 0, 0.05);
         }
 
         .avatar {
-          width: 24px;
-          height: 24px;
+          width: 28px;
+          height: 28px;
           background: #E2E8F0;
           border-radius: 50%;
           display: flex;
@@ -231,15 +311,16 @@ export default function Sidebar({ activePage = 'home' }) {
           background: none;
           border: none;
           padding: 0;
-          width: 24px;
-          height: 24px;
+          width: 28px;
+          height: 28px;
           display: flex;
           align-items: center;
           justify-content: center;
           color: #4A5568;
-          cursor: pointer;
           opacity: 0.75;
           transition: opacity 0.2s ease;
+          border-radius: 50%;
+          cursor: pointer;
         }
 
         .menu-button:hover {
@@ -249,6 +330,81 @@ export default function Sidebar({ activePage = 'home' }) {
         :global(.menu-button svg) {
           width: 16px;
           height: 16px;
+        }
+        
+        .profile-menu-backdrop {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          z-index: 10;
+        }
+        
+        .profile-menu {
+          position: absolute;
+          bottom: 100%;
+          right: 0.75rem;
+          width: 200px;
+          background: white;
+          border-radius: 8px;
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+          z-index: 20;
+          overflow: hidden;
+          margin-bottom: 0.5rem;
+          border: 1px solid rgba(0, 0, 0, 0.08);
+        }
+        
+        .profile-menu-header {
+          padding: 0.75rem 1rem;
+          border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+          background-color: #f8f9fa;
+        }
+        
+        .menu-username {
+          font-size: 0.875rem;
+          color: #4a5568;
+          font-weight: 500;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          display: block;
+        }
+        
+        :global(.profile-menu-item) {
+          display: flex;
+          width: 100%;
+          align-items: center;
+          padding: 0.75rem 1rem;
+          color: #4a5568;
+          text-decoration: none;
+          gap: 0.75rem;
+          transition: all 0.2s;
+          font-size: 0.875rem;
+          background: none;
+          border: none;
+          text-align: left;
+          cursor: pointer;
+        }
+        
+        :global(.profile-menu-item:hover) {
+          background: rgba(0, 0, 0, 0.05);
+          color: #000;
+        }
+        
+        :global(.profile-menu-item:last-child) {
+          border-top: 1px solid rgba(0, 0, 0, 0.08);
+          color: #e53e3e;
+        }
+        
+        :global(.profile-menu-item:last-child:hover) {
+          background: rgba(229, 62, 62, 0.05);
+        }
+        
+        :global(.profile-menu-icon) {
+          width: 1rem;
+          height: 1rem;
+          opacity: 0.9;
         }
       `}</style>
     </aside>

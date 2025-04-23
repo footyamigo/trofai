@@ -239,7 +239,7 @@ export default function CaptionGenerator() {
                   <div className="cg-caption-section">
                     <div className="caption-edit-box">
                       <div className="caption-header-row">
-                        <span className="caption-label">Instagram Caption</span>
+                        <span className="caption-label">Caption</span>
                         <div className="caption-actions">
                           <button 
                             className="caption-action regenerate" 
@@ -704,7 +704,7 @@ export default function CaptionGenerator() {
             border-radius: 12px;
             padding: 1.5rem;
             border: 1px solid #e2e8f0;
-            max-width: 600px;
+            max-width: 700px;
             margin-left: auto;
             margin-right: auto;
           }
@@ -721,6 +721,7 @@ export default function CaptionGenerator() {
             border-radius: 8px;
             background: white;
             border: 1px solid #e2e8f0;
+            transition: all 0.2s ease;
           }
           .step.active {
             border-color: #62d76b;
@@ -752,6 +753,7 @@ export default function CaptionGenerator() {
           .step-content {
             flex: 1;
             display: flex;
+            flex-direction: row;
             justify-content: space-between;
             align-items: center;
             gap: 1rem;
@@ -777,12 +779,15 @@ export default function CaptionGenerator() {
             font-size: 0.875rem;
           }
           .progress-bar {
-            width: 200px;
+            width: 100px;
             height: 4px;
             background: #e2e8f0;
             border-radius: 2px;
             overflow: hidden;
             flex-shrink: 0;
+            margin-left: auto;
+            position: relative;
+            right: 0;
           }
           .progress-fill {
             height: 100%;

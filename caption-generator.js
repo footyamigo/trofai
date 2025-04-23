@@ -16,49 +16,98 @@ const CAPTION_LENGTHS = {
     [CAPTION_TYPES.LINKEDIN]: 3000    // LinkedIn optimal
 };
 
-async function generatePropertyCaptions(propertyData, type = CAPTION_TYPES.INSTAGRAM, agentProfile = null) {
+async function generatePropertyCaptions(propertyData, type = CAPTION_TYPES.INSTAGRAM, agentProfile = null, listingType = 'Just Listed') {
     try {
         // Always use agent-focused prompts
         const agentName = agentProfile?.name || "Your Name"; // Use placeholder if not available
         const agentEmail = agentProfile?.email || "your.email@example.com";
         const agentPhone = agentProfile?.phone || "Your Phone Number";
 
-        console.log(`Generating caption in AGENT mode (defaulted) for: ${agentName}`);
+        console.log(`Generating caption in AGENT mode (defaulted) for: ${agentName}, Listing Type: ${listingType}`);
         
-        // Combine system and user prompt for Gemini
-        const fullPrompt = `You are ${agentName}, an expert real estate copywriter known for crafting compelling and sophisticated property narratives for social media. Your goal is to generate an engaging post that attracts serious buyers for YOUR new listing.
+        // Determine the narrative focus based on listingType
+        let listingStatusContext = "";
+        let actionVerb = "present"; // Default verb
+        let toneInstruction = "professional, knowledgeable, and enthusiastic, highlighting the unique value proposition and lifestyle appeal.";
+        let callToAction = `Contact me for details: 📧 ${agentEmail} 📞 ${agentPhone}`;
+        let hashtags = ["#NewListing", "#RealEstate", "#DreamHome"]; // Default hashtags
 
-Your tone should be:
-- Professional, knowledgeable, and enthusiastic.
-- Focused on highlighting the unique value proposition and lifestyle appeal.
-- Evocative, painting a picture of living in the property and neighborhood.
+        switch (listingType) {
+            case 'Just Sold':
+                listingStatusContext = "This property has just been successfully sold by me.";
+                actionVerb = "announce the sale of";
+                toneInstruction = "celebratory and thankful, highlighting the successful outcome for my clients.";
+                callToAction = `Thinking of selling or buying? Let's chat! 📧 ${agentEmail} 📞 ${agentPhone}`;
+                hashtags = ["#JustSold", "#RealEstateSuccess", "#HappyClients", "#AgentLife"];
+                break;
+            case 'For Rent':
+                listingStatusContext = "This fantastic property is now available for rent.";
+                actionVerb = "introduce";
+                toneInstruction = "inviting and informative, focusing on the benefits for potential renters.";
+                callToAction = `Interested in renting? Contact me for a viewing: 📧 ${agentEmail} 📞 ${agentPhone}`;
+                hashtags = ["#ForRent", "#RentalProperty", "#ApartmentLiving", "#HomeForRent"];
+                break;
+            case 'Let Agreed':
+                listingStatusContext = "I'm pleased to announce this rental property has just been let (agreement secured).";
+                actionVerb = "share that";
+                toneInstruction = "satisfied and professional, confirming the property is now off the market.";
+                callToAction = `Looking for your next rental? Let me help! 📧 ${agentEmail} 📞 ${agentPhone}`;
+                hashtags = ["#LetAgreed", "#RentalSuccess", "#OffMarket", "#TenantFound"];
+                break;
+            case 'Just Listed':
+            default:
+                listingStatusContext = "I'm excited to present this property, newly listed on the market.";
+                actionVerb = "present";
+                toneInstruction = "professional, knowledgeable, and enthusiastic, highlighting the unique value proposition and lifestyle appeal for potential buyers.";
+                // callToAction remains the default
+                hashtags = ["#NewListing", "#ForSale", "#PropertyForSale", "#HouseHunting"];
+                break;
+        }
+        
+        // Add specific location/price hashtags if possible
+        // (Simple example - could be more sophisticated)
+        if (propertyData?.property?.address) {
+          const cityMatch = propertyData.property.address.match(/,\s*([A-Za-z\s]+)(?:,\s*[A-Z]{1,2}\d{1,2}[A-Z]?\d[A-Z]{2})?$/); // Try to extract city/area
+          if (cityMatch && cityMatch[1]) {
+            hashtags.push(`#${cityMatch[1].replace(/\s+/g, '')}`); // Add city/area hashtag
+          }
+        }
+        hashtags = [...new Set(hashtags)].slice(0, 5); // Keep unique, max 5
+
+        // Combine system and user prompt for Gemini
+        const fullPrompt = `You are ${agentName}, an expert real estate copywriter crafting a social media post. Your goal is to ${actionVerb} this property, reflecting its current status: **${listingType}**. 
+
+**Status Context:** ${listingStatusContext}
+
+Your tone should be: ${toneInstruction}
 
 Property Details:
 - Location: ${propertyData.property.address}
-- Price: ${propertyData.property.price}
+- Price: ${propertyData.property.price} ${listingType === 'For Rent' || listingType === 'Let Agreed' ? '(per month)' : ''} 
 - Layout: ${propertyData.property.bedrooms} bedrooms, ${propertyData.property.bathrooms} bathrooms
 - Key Features: ${propertyData.property.keyFeatures}
 - Additional Information/Facts: ${propertyData.property.facts || 'Not specified'}
 - Property Story/Description: ${propertyData.property.description}
 
-Your Contact Info:
+Your Contact Info (Use ONLY in the final call-to-action):
 - Name: ${agentName}
 - Email: ${agentEmail}
 - Phone: ${agentPhone}
 
-Draft a detailed and captivating social media post about YOUR new listing, writing in the first person (as ${agentName}).
+**TASK:** Draft a captivating social media post about this property, writing in the first person (as ${agentName}).
 
-Requirements:
-- Start with a strong, attention-grabbing hook about this specific property.
-- Weave together the Property Story/Description, Key Features, and Additional Information/Facts into a compelling narrative. Don't just list features; explain their benefits and contribution to the lifestyle.
-- Based on the property's location (${propertyData.property.address}), briefly mention specific nearby amenities, landmarks, transport links, or the general lifestyle appeal of the neighborhood to add local context.
-- Maintain a sophisticated and aspirational tone throughout.
-- Use 2-4 relevant emojis sparingly to enhance readability, not clutter the text.
-- Include 3-5 relevant and specific hashtags (e.g., #LuxuryChelseaLiving, #CanaryWharfView, #Zone1Apartment).
-- End with a clear and professional call-to-action inviting interested buyers to contact YOU directly. Format it like this: 'Contact me for details: 📧 ${agentEmail} 📞 ${agentPhone}'. Do not include your name in the CTA.
-- Ensure the final caption is well-structured and easy to read, potentially using short paragraphs.
-- Maximum length: ${CAPTION_LENGTHS[type]} characters.
-- Strictly NO ASTERISKS or other markdown/special formatting. Plain text only.`;
+**Requirements:**
+1.  **Hook:** Start with a strong opening relevant to the **${listingType}** status.
+2.  **Narrative:** Weave together the description, key features, and facts into a compelling story. Adapt the focus based on the **${listingType}** status (benefits for buyers/renters OR celebrating success).
+3.  **Local Context:** Briefly mention specific nearby amenities or the neighborhood lifestyle, especially if Listing/For Rent.
+4.  **Tone:** Maintain the specific tone instructed above based on the **${listingType}**.
+5.  **Emojis:** Use 2-4 relevant emojis sparingly.
+6.  **Hashtags:** Include ${hashtags.length} relevant hashtags: ${hashtags.join(' ')}.
+7.  **Call-to-Action:** End *only* with the specific call-to-action: '${callToAction}'. Do not add your name here.
+8.  **Formatting:** Ensure well-structured, readable text with short paragraphs. Strictly NO ASTERISKS or other markdown.
+9.  **Length:** Maximum ${CAPTION_LENGTHS[type]} characters.`;
+
+        console.log("Sending prompt to Gemini:", fullPrompt); // Log the full prompt
 
         const result = await model.generateContent(fullPrompt);
         const response = await result.response;

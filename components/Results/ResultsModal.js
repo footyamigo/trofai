@@ -294,7 +294,6 @@ export default function ResultsModal({ isOpen, onClose, results }) {
   
   // Handle caption editing
   const handleCaptionChange = (e) => {
-    if (!results.propertyData?.property?.address || !results.propertyData?.address) return; // Don't allow editing for testimonials
     const newCaption = e.target.value;
     setEditedCaptions({
       ...editedCaptions,
@@ -695,10 +694,17 @@ export default function ResultsModal({ isOpen, onClose, results }) {
     }
   };
 
-  // --- Determine Content Type --- 
-  const isProperty = results?.propertyData?.property?.address || results?.propertyData?.address; // Check both structures
-  const modalTitle = isProperty ? "Your Generated Property Content" : "Your Generated Testimonial Content";
-  const captionTitle = isProperty ? "Instagram Caption" : "Review Text";
+  // Determine if this is a property or a Testimonial/Review based on content
+  const isProperty = Boolean(
+    results.propertyData?.property?.address || 
+    results.propertyData?.address ||
+    results.property?.address ||
+    (!results.propertyData?.property?.reviewer && !results.propertyData?.property?.reviewText)
+  );
+  
+  // Determine appropriate title based on content type
+  const modalTitle = "Your Generated Property Content";
+  const captionTitle = "Caption";
   // --- End Determine Content Type ---
 
   return (
@@ -881,7 +887,6 @@ export default function ResultsModal({ isOpen, onClose, results }) {
                   onChange={handleCaptionChange}
                   rows={12}
                   placeholder={isProperty ? "Your caption will appear here for editing..." : "Review text extracted from image..."}
-                  readOnly={!isProperty}
                 />
               </div>
             </div>

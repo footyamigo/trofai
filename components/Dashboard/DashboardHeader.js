@@ -52,11 +52,7 @@ export default function DashboardHeader() {
   return (
     <header className="dashboard-header">
       <div className="left-section">
-        <div className="team-selector">
-          <RiTeamLine className="team-icon" />
-          <span>Personal Team</span>
-          <BiChevronDown />
-        </div>
+        {/* The team selector div was removed from here */}
       </div>
 
       <div className="right-section">
@@ -86,7 +82,7 @@ export default function DashboardHeader() {
           justify-content: space-between;
           align-items: center;
           padding: 0.75rem 1.5rem;
-          background: white;
+          background: transparent;
           border-bottom: 1px solid rgba(0, 0, 0, 0.06);
         }
 
@@ -177,8 +173,42 @@ export default function DashboardHeader() {
         }
 
         .header-button.profile {
-          background: #f0f0f0;
-          color: #1a1a1a;
+          /* Match Regenerate Button Styles */
+          background: #e2e8f0; /* Grey background like regenerate */
+          color: black; /* Black text */
+          border: 2px solid black; /* Black border */
+          box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.8); /* Shadow */
+          font-weight: 600; /* Match font-weight */
+          font-size: 0.7rem; /* Reduced font-size */
+          padding: 0.3rem 0.6rem; /* Reduced padding */
+          gap: 0.5rem; /* Ensure gap matches */
+          display: inline-flex; /* Ensure flex behavior */
+          align-items: center;
+          justify-content: center;
+          white-space: nowrap; /* Prevent wrapping */
+          transition: all 0.2s ease; /* Ensure transition */
+        }
+
+        .header-button.profile:hover {
+           background: #cbd5e1; /* Hover background like regenerate */
+           box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.8); /* Hover shadow */
+           transform: translateY(-1px); /* Hover transform */
+           color: black; /* Keep text black on hover */
+        }
+
+        .header-button.profile:active {
+           transform: translateY(1px); /* Active transform */
+           box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.8); /* Active shadow */
+           background: #cbd5e1; /* Keep hover background on active */
+        }
+        
+        .header-button.profile:disabled {
+          background: #ccc;
+          cursor: not-allowed;
+          opacity: 0.7;
+          transform: none;
+          box-shadow: none;
+          border-color: #999;
         }
 
         .loading-auth {
@@ -191,6 +221,20 @@ export default function DashboardHeader() {
           width: 1.25rem;
           height: 1.25rem;
         }
+
+        /* --- Styles for Sign Out Button --- */
+        :global(.sign-out-btn) {
+          font-size: 0.7rem !important; /* Reduced font-size */
+          padding: 0.3rem 0.6rem !important; /* Reduced padding */
+          min-height: initial !important; /* Allow button to shrink */
+          /* Adjust icon size if needed */
+          /* gap: 0.25rem; /* Reduce gap if needed */ 
+        }
+        
+        :global(.sign-out-btn svg) {
+           font-size: 0.9rem !important; /* Slightly smaller icon */
+        }
+        /* --- End Sign Out Button Styles --- */
       `}</style>
     </header>
   );

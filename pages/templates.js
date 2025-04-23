@@ -12,6 +12,27 @@ import { FiPlayCircle } from 'react-icons/fi';
 
 const PAGE_LIMIT = 25;
 
+// Loading spinner component to avoid duplication
+const LoadingView = () => (
+  <div style={{ 
+    display: 'flex', 
+    flexDirection: 'column',
+    alignItems: 'center', 
+    justifyContent: 'center',
+    padding: '3rem 1rem'
+  }}>
+    <div style={{ 
+      width: '40px', 
+      height: '40px', 
+      border: '4px solid rgba(0, 0, 0, 0.1)',
+      borderRadius: '50%',
+      borderTop: '4px solid #62d76b',
+      animation: 'spinAnimation 1s ease infinite'
+    }}></div>
+    <p style={{ color: '#555', fontWeight: '500', marginTop: '1rem' }}>Loading templates...</p>
+  </div>
+);
+
 const TEMPLATE_NUMBER_REGEX = /^Template(\d+)_/i;
 
 function getTemplateSetNumber(name) {
@@ -31,71 +52,119 @@ function TemplateGalleryPage() {
   const [isDuplicating, setIsDuplicating] = useState(false);
   const [allowedSetNumber, setAllowedSetNumber] = useState(null);
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
+  const [filterType, setFilterType] = useState('all'); // 'all' | 'listing' | 'quote' | 'testimonial'
 
   const observer = useRef();
 
-  const fetchTemplates = useCallback(async (page) => {
+  // Helper to flatten sets into templates
+  const flattenSetsToTemplates = (sets) => {
+    return sets.flatMap(set =>
+      (set.templates || set.templates || set.previews || set.previews) // fallback for different API shapes
+        ? (set.templates || set.previews).map(t => ({
+            ...t,
+            setName: set.display_name || set.name || '',
+            setId: set.id || '',
+          }))
+        : []
+    );
+  };
+
+  // Sort function to ensure Story templates appear at the end of each SET
+  const sortTemplates = (templates) => {
+    // First group templates by setId
+    const templatesBySet = templates.reduce((groups, template) => {
+      const setId = template.setId || '';
+      if (!groups[setId]) {
+        groups[setId] = [];
+      }
+      groups[setId].push(template);
+      return groups;
+    }, {});
+    
+    // Sort each set internally (designs first, Story last)
+    Object.keys(templatesBySet).forEach(setId => {
+      templatesBySet[setId].sort((a, b) => {
+        const aName = a.name || '';
+        const bName = b.name || '';
+        
+        const aIsStory = aName.includes('Story') || aName.includes('story');
+        const bIsStory = bName.includes('Story') || bName.includes('story');
+        
+        // Story templates at the end within each set
+        if (aIsStory && !bIsStory) return 1;
+        if (!aIsStory && bIsStory) return -1;
+        
+        // If both are of the same type, sort alphanumerically
+        return aName.localeCompare(bName);
+      });
+    });
+    
+    // Flatten the grouped templates back into a single array
+    return Object.values(templatesBySet).flat();
+  };
+
+  // Fetch templates based on filterType
+  const fetchTemplatesByType = useCallback(async (type) => {
     setLoading(true);
     setError(null);
+    let endpoints = [];
+    if (type === 'all') {
+      endpoints = [
+        '/api/list-listing-templates',
+        '/api/list-quote-templates',
+        '/api/list-testimonial-templates',
+      ];
+    } else if (type === 'listing') {
+      endpoints = ['/api/list-listing-templates'];
+    } else if (type === 'quote') {
+      endpoints = ['/api/list-quote-templates'];
+    } else if (type === 'testimonial') {
+      endpoints = ['/api/list-testimonial-templates'];
+    }
     try {
-      const response = await fetch(`/api/templates?page=${page}&limit=${PAGE_LIMIT}`);
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-      }
-      const data = await response.json();
-      
-      if (page === 1) {
-          setTemplates(data.templates);
-      } else {
-          setTemplates(prevTemplates => [...prevTemplates, ...data.templates]);
-      }
-      
-      setHasMore(data.hasMore);
-      setCurrentPage(page);
-
+      const results = await Promise.all(
+        endpoints.map(endpoint => fetch(endpoint).then(res => res.json()))
+      );
+      // Each result is { success, sets: [...] }
+      const allSets = results.flatMap(r => (r && r.success && Array.isArray(r.sets)) ? r.sets : []);
+      // Flatten sets to previews (not templates)
+      const allTemplates = allSets.flatMap(set =>
+        (set.previews || []).map(preview => ({
+          ...preview,
+          setName: set.display_name || set.name || '',
+          setId: set.id || '',
+        }))
+      );
+      // Sort templates to ensure Story templates appear at the end
+      const sortedTemplates = sortTemplates(allTemplates);
+      setTemplates(sortedTemplates);
+      setHasMore(false); // No infinite scroll for filtered sets
+      setCurrentPage(1);
     } catch (err) {
-      console.error("Error fetching templates:", err);
-      setError(err.message);
-      setHasMore(false);
+      setError('Failed to load templates.');
+      setTemplates([]);
     } finally {
       setLoading(false);
       setInitialLoading(false);
     }
   }, []);
 
+  // Fetch on mount and when filter changes
   useEffect(() => {
     setInitialLoading(true);
     setTemplates([]);
     setSelectedTemplates(new Map());
     setAllowedSetNumber(null);
     setCurrentPage(1);
-    setHasMore(true);
-    fetchTemplates(1);
-  }, [fetchTemplates]);
-
-  const lastTemplateElementRef = useCallback(node => {
-    if (loading || initialLoading) return;
-    if (observer.current) observer.current.disconnect();
-
-    observer.current = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting && hasMore) {
-        fetchTemplates(currentPage + 1);
-      }
-    });
-
-    if (node) observer.current.observe(node);
-  }, [loading, hasMore, currentPage, fetchTemplates, initialLoading]);
+    setHasMore(false);
+    fetchTemplatesByType(filterType);
+  }, [fetchTemplatesByType, filterType]);
 
   const handleSelectTemplate = (template) => {
-    const currentSetNumber = getTemplateSetNumber(template.name);
+    // Set ID could be in template data now since we store setId in each template
+    const setId = template.setId;
     
-    if (currentSetNumber === null && !selectedTemplates.has(template.uid)) {
-        toast.error("This template doesn't seem to belong to a standard set.");
-        return;
-    }
-
-    if (!allowedSetNumber || currentSetNumber === allowedSetNumber) {
+    if (!allowedSetNumber || template.setId === allowedSetNumber) {
       setSelectedTemplates(prevSelected => {
         const newSelected = new Map(prevSelected);
         
@@ -107,13 +176,13 @@ function TemplateGalleryPage() {
         } else {
           newSelected.set(template.uid, template.name);
           if (prevSelected.size === 0) {
-            setAllowedSetNumber(currentSetNumber);
+            setAllowedSetNumber(setId);
           }
         }
         return newSelected;
       });
     } else {
-      toast.error(`Please select templates only from Set ${allowedSetNumber}.`);
+      toast.error(`Please select templates only from set "${allowedSetNumber}"`);
     }
   };
 
@@ -186,7 +255,7 @@ function TemplateGalleryPage() {
 
   let pageContent;
   if (initialLoading) {
-    pageContent = <div>Loading initial templates...</div>;
+    pageContent = <LoadingView />;
   } else if (error && templates.length === 0) {
     pageContent = <div>Error loading templates: {error}</div>;
   } else if (templates.length === 0 && !hasMore) {
@@ -211,6 +280,29 @@ function TemplateGalleryPage() {
                 onMouseOut={(e) => e.currentTarget.style.color = '#62d76b'}
                 title="Watch How-To Video"
               />
+          </div>
+          <div style={{ margin: '1.5rem 0 0.5rem 0', display: 'flex', justifyContent: 'center', gap: '1rem' }}>
+            {['all', 'listing', 'quote', 'testimonial'].map(type => (
+              <button
+                key={type}
+                onClick={() => setFilterType(type)}
+                style={{
+                  padding: '0.5rem 1.25rem',
+                  borderRadius: '20px',
+                  border: filterType === type ? '2px solid #62d76b' : '1px solid #ccc',
+                  background: filterType === type ? '#e6fbe9' : '#fff',
+                  color: filterType === type ? '#1a7f37' : '#333',
+                  fontWeight: filterType === type ? 700 : 400,
+                  fontSize: '1rem',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  outline: 'none',
+                  boxShadow: filterType === type ? '0 2px 8px rgba(98,215,107,0.08)' : 'none',
+                }}
+              >
+                {type === 'all' ? 'All' : type.charAt(0).toUpperCase() + type.slice(1) + ' Templates'}
+              </button>
+            ))}
           </div>
           <p className="subtitle"> {/* Added className */} 
             Select templates from the same set to duplicate them.
@@ -246,12 +338,12 @@ function TemplateGalleryPage() {
             {templates.map((template, index) => {
               const isLastElement = templates.length === index + 1;
               const isSelected = selectedTemplates.has(template.uid);
-              const templateSetNumber = getTemplateSetNumber(template.name);
-              const isDisabled = allowedSetNumber !== null && templateSetNumber !== allowedSetNumber;
+              // Determine if this template should be disabled based on setId
+              const isDisabled = allowedSetNumber !== null && template.setId !== allowedSetNumber;
               return (
                 <div
-                  ref={isLastElement ? lastTemplateElementRef : null}
-                  key={`${template.uid}-${index}`}
+                  ref={isLastElement ? observer.current : null}
+                  key={`${template.uid || template.name || index}`}
                   style={{
                     display: 'flex', 
                     flexDirection: 'column', 
@@ -300,9 +392,9 @@ function TemplateGalleryPage() {
                       overflow: 'hidden', 
                       marginBottom: '0.75rem'
                     }}>
-                      {template.preview_url ? (
+                      {template.url ? (
                         <img
-                          src={template.preview_url}
+                          src={template.url}
                           alt={`Preview of ${template.name}`}
                           style={{ 
                             width: '100%',
@@ -350,7 +442,7 @@ function TemplateGalleryPage() {
             <div className="content">
               {/* Moved pageContent rendering inside content div */} 
               {initialLoading ? (
-                <div>Loading initial templates...</div>
+                <LoadingView />
               ) : error && templates.length === 0 ? (
                 <div>Error loading templates: {error}</div>
               ) : templates.length === 0 && !hasMore ? (
@@ -375,6 +467,29 @@ function TemplateGalleryPage() {
                         onMouseOut={(e) => e.currentTarget.style.color = '#62d76b'}
                         title="Watch How-To Video"
                       />
+                    </div>
+                    <div style={{ margin: '1.5rem 0 0.5rem 0', display: 'flex', justifyContent: 'center', gap: '1rem' }}>
+                      {['all', 'listing', 'quote', 'testimonial'].map(type => (
+                        <button
+                          key={type}
+                          onClick={() => setFilterType(type)}
+                          style={{
+                            padding: '0.5rem 1.25rem',
+                            borderRadius: '20px',
+                            border: filterType === type ? '2px solid #62d76b' : '1px solid #ccc',
+                            background: filterType === type ? '#e6fbe9' : '#fff',
+                            color: filterType === type ? '#1a7f37' : '#333',
+                            fontWeight: filterType === type ? 700 : 400,
+                            fontSize: '1rem',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            outline: 'none',
+                            boxShadow: filterType === type ? '0 2px 8px rgba(98,215,107,0.08)' : 'none',
+                          }}
+                        >
+                          {type === 'all' ? 'All' : type.charAt(0).toUpperCase() + type.slice(1) + ' Templates'}
+                        </button>
+                      ))}
                     </div>
                     <p className="subtitle">
                       Select templates from the same set to duplicate them.
@@ -411,12 +526,12 @@ function TemplateGalleryPage() {
                       {templates.map((template, index) => {
                         const isLastElement = templates.length === index + 1;
                         const isSelected = selectedTemplates.has(template.uid);
-                        const templateSetNumber = getTemplateSetNumber(template.name);
-                        const isDisabled = allowedSetNumber !== null && templateSetNumber !== allowedSetNumber;
+                        // Use the same isDisabled logic as above, based on setId
+                        const isDisabled = allowedSetNumber !== null && template.setId !== allowedSetNumber;
                         return (
                           <div
-                            ref={isLastElement ? lastTemplateElementRef : null}
-                            key={`${template.uid}-${index}`}
+                            ref={isLastElement ? observer.current : null}
+                            key={`${template.uid || template.name || index}`}
                             style={{
                               display: 'flex', 
                               flexDirection: 'column', 
@@ -465,9 +580,9 @@ function TemplateGalleryPage() {
                                 overflow: 'hidden', 
                                 marginBottom: '0.75rem'
                               }}>
-                                {template.preview_url ? (
+                                {template.url ? (
                                   <img
-                                    src={template.preview_url}
+                                    src={template.url}
                                     alt={`Preview of ${template.name}`}
                                     style={{ 
                                       width: '100%',
@@ -581,6 +696,12 @@ function TemplateGalleryPage() {
             .subtitle {
               font-size: 1rem;
             }
+          }
+          
+          /* Global animation for spinner */
+          @keyframes spinAnimation {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
           }
         `}</style>
       </div>

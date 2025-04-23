@@ -62,7 +62,8 @@ const BANNERBEAR_TEMPLATE_CONFIG = {
         bathrooms: 'bathrooms',
         bathroomIcon: 'bathroom_icon',
         agentLogo: 'logo',
-        agentAddress: 'estate_agent_address'
+        agentAddress: 'estate_agent_address',
+        squareFt: 'sq_ft'
     },
     options: {
         transparent: false,
@@ -561,6 +562,30 @@ function findValueByPossibleKeys(obj, possibleKeys) {
     return null;
 }
 
+// Add utility function to format square footage
+function formatSquareFt(sqft) {
+    if (!sqft) return "";
+    
+    // If already formatted with sq ft, return as is
+    if (typeof sqft === 'string' && sqft.toLowerCase().includes('sq ft')) {
+        return sqft;
+    }
+    
+    // Convert to number if it's a string
+    const numericValue = typeof sqft === 'string' ? parseInt(sqft.replace(/[^0-9]/g, ''), 10) : sqft;
+    
+    // If not a valid number, return empty string
+    if (isNaN(numericValue) || numericValue <= 0) {
+        return "";
+    }
+    
+    // Format the number with commas for thousands if needed
+    const formattedValue = numericValue.toLocaleString();
+    
+    // Return with sq ft appended
+    return `${formattedValue} sq ft`;
+}
+
 async function createOutputData(formattedData) {
     // Generate captions using existing function
     let caption = null;
@@ -615,6 +640,10 @@ async function createOutputData(formattedData) {
             {
                 name: BANNERBEAR_TEMPLATE_CONFIG.layers.agentAddress,
                 text: formattedData.agent.address
+            },
+            {
+                name: BANNERBEAR_TEMPLATE_CONFIG.layers.squareFt || 'sq_ft',
+                text: formatSquareFt(formattedData.property.square_ft)
             }
         ],
         ...BANNERBEAR_TEMPLATE_CONFIG.options
@@ -771,6 +800,10 @@ async function generateBannerbearCollection(propertyData, templateSetUid) {
             {
                 name: "bathrooms",
                 text: propertyData.raw.property.bathrooms
+            },
+            {
+                name: "sq_ft",
+                text: formatSquareFt(propertyData.raw.property.square_ft)
             },
             {
                 name: "logo",

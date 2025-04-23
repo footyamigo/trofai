@@ -63,6 +63,7 @@ const BANNERBEAR_TEMPLATE_CONFIG = {
         bedroomIcon: 'bedroom_icon',
         bathrooms: 'bathrooms',
         bathroomIcon: 'bathroom_icon',
+        squareFt: 'sq_ft',
         agentLogo: 'logo',
         agentName: 'management_name',
         agentAddress: 'estate_agent-address',
@@ -113,6 +114,30 @@ function formatPrice(price) {
     return `${formattedAmount}${suffix ? ' ' + suffix : ''}`.trim();
 }
 
+// Add utility function to format square footage
+function formatSquareFt(sqft) {
+    if (!sqft) return "";
+    
+    // If already formatted with sq ft, return as is
+    if (typeof sqft === 'string' && sqft.toLowerCase().includes('sq ft')) {
+        return sqft;
+    }
+    
+    // Convert to number if it's a string
+    const numericValue = typeof sqft === 'string' ? parseInt(sqft.replace(/[^0-9]/g, ''), 10) : sqft;
+    
+    // If not a valid number, return empty string
+    if (isNaN(numericValue) || numericValue <= 0) {
+        return "";
+    }
+    
+    // Format the number with commas for thousands if needed
+    const formattedValue = numericValue.toLocaleString();
+    
+    // Return with sq ft appended
+    return `${formattedValue} sq ft`;
+}
+
 async function retryWithBackoff(fn, maxAttempts = MAX_RETRY_ATTEMPTS) {
     let lastError;
     
@@ -135,12 +160,12 @@ async function retryWithBackoff(fn, maxAttempts = MAX_RETRY_ATTEMPTS) {
 /**
  * Scrape Zillow property data using the FirecrawlApp package
  */
-async function scrapeWithFirecrawlPackage(propertyUrl, agentProfile = null) {
+async function scrapeWithFirecrawlPackage(propertyUrl, listingType, agentProfile = null) {
     if (!FirecrawlApp) {
         throw new Error('FirecrawlApp package not available');
     }
 
-    console.log(`Scraping with FirecrawlApp package: ${propertyUrl}`);
+    console.log(`Scraping with FirecrawlApp package: ${propertyUrl}, Listing Type: ${listingType}`);
     validateZillowUrl(propertyUrl);
 
     try {
@@ -211,7 +236,7 @@ Check in these specific areas:
 
         // Process the first item in the results (there should only be one)
         const data = extractResult.data[0];
-        return await processZillowData(data, agentProfile);
+        return await processZillowData(data, listingType, agentProfile);
     } catch (error) {
         console.error("Error using FirecrawlApp package:", error);
         throw error;
@@ -247,14 +272,14 @@ function extractPhoneNumbersFromText(text) {
     return null;
 }
 
-async function scrapeZillowProperty(propertyUrl, agentProfile = null) {
-    console.log(`Starting scrape for: ${propertyUrl}`);
+async function scrapeZillowProperty(propertyUrl, listingType, agentProfile = null) {
+    console.log(`Starting scrape for: ${propertyUrl}, Listing Type: ${listingType}`);
 
     try {
         // First try using the FirecrawlApp package if available
         if (FirecrawlApp) {
             try {
-                return await scrapeWithFirecrawlPackage(propertyUrl, agentProfile);
+                return await scrapeWithFirecrawlPackage(propertyUrl, listingType, agentProfile);
             } catch (packageError) {
                 console.warn('Failed to use FirecrawlApp package, falling back to direct API:', packageError.message);
             }
@@ -431,8 +456,9 @@ Check in these specific areas:
                     }
                 }
             }
-                    
-            return await processZillowData(processedData, agentProfile);
+            
+            // Pass listingType to the processing function
+            return await processZillowData(processedData, listingType, agentProfile);
         } catch (error) {
             console.error('Error using Firecrawl direct API:', error);
             throw error;
@@ -486,8 +512,9 @@ async function pollFirecrawlResults(extractId) {
     return await poll();
 }
 
-async function processZillowData(data, agentProfile = null) {
+async function processZillowData(data, listingType, agentProfile = null) {
     console.log('Processing Zillow data with keys:', Object.keys(data));
+    console.log(`Listing Type received: ${listingType}`);
     
     if (!data) {
         throw new ScrapingError('No data returned from Firecrawl');
@@ -595,14 +622,14 @@ async function processZillowData(data, agentProfile = null) {
         hasLogo: !!formattedData.agent.logo
     });
     
-    return await createOutputData(formattedData, agentProfile);
+    return await createOutputData(formattedData, listingType, agentProfile);
 }
 
-async function createOutputData(formattedData, agentProfile = null) {
-    // Generate captions using existing function, passing agentProfile
+async function createOutputData(formattedData, listingType, agentProfile = null) {
+    // Generate captions using existing function, passing agentProfile and listingType
     let caption = null;
     try {
-        caption = await generatePropertyCaptions(formattedData, CAPTION_TYPES.INSTAGRAM, agentProfile);
+        caption = await generatePropertyCaptions(formattedData, CAPTION_TYPES.INSTAGRAM, agentProfile, listingType);
         console.log('Generated caption type:', typeof caption);
         
         // If caption is not a string, convert it or set to a default
@@ -651,6 +678,10 @@ async function createOutputData(formattedData, agentProfile = null) {
             {
                 name: BANNERBEAR_TEMPLATE_CONFIG.layers.bathrooms,
                 text: formattedData.property.bathrooms
+            },
+            {
+                name: BANNERBEAR_TEMPLATE_CONFIG.layers.squareFt,
+                text: formatSquareFt(formattedData.property.square_ft)
             },
             {
                 name: BANNERBEAR_TEMPLATE_CONFIG.layers.agentLogo,
@@ -763,7 +794,7 @@ async function generateBannerbearImage(propertyData, agentProfile = null) {
     }
 }
 
-async function generateBannerbearCollection(propertyData, templateSetUid, agentProfile = null) {
+async function generateBannerbearCollection(propertyData, templateSetUid, agentProfile = null, listing_type = null) {
     try {
         // Get all available property images
         const propertyImages = propertyData.raw.property.allImages;
@@ -796,6 +827,10 @@ async function generateBannerbearCollection(propertyData, templateSetUid, agentP
                 text: propertyData.raw.property.bathrooms
             },
             {
+                name: "sq_ft",
+                text: formatSquareFt(propertyData.raw.property.square_ft)
+            },
+            {
                 name: "logo",
                 image_url: transparentPng // Always use transparent PNG for Zillow listings
             },
@@ -808,6 +843,15 @@ async function generateBannerbearCollection(propertyData, templateSetUid, agentP
                 text: propertyData.raw.property.keyFeatures.slice(0, 5).join(', ')
             }
         ];
+
+        // Add listing type modification if provided
+        if (listing_type) {
+            console.log(`Adding listing_type modification with value: "${listing_type}"`);
+            baseModifications.push({
+                name: "listing_type",
+                text: listing_type
+            });
+        }
 
         // Add agent modifications if profile is provided
         const agentModifications = [];
@@ -852,6 +896,11 @@ async function generateBannerbearCollection(propertyData, templateSetUid, agentP
                 total_images: propertyImages.length
             }
         };
+
+        // Add listing_type to metadata if provided
+        if (listing_type) {
+            collectionPayload.metadata.listing_type = listing_type;
+        }
 
         // Add webhook configuration if available
         if (serverRuntimeConfig.BANNERBEAR_WEBHOOK_URL) {

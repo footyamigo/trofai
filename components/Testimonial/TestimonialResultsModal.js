@@ -33,6 +33,7 @@ export default function TestimonialResultsModal({ isOpen, onClose, results }) {
   // Add state for the editable generated caption
   const [editedGeneratedCaption, setEditedGeneratedCaption] = useState('');
   const [isRegeneratingCaption, setIsRegeneratingCaption] = useState(false);
+  const [captionError, setCaptionError] = useState(null);
 
   // --- useEffects (Keep social status fetching, remove caption init based on options) ---
    useEffect(() => { // Fetch social status
@@ -84,6 +85,7 @@ export default function TestimonialResultsModal({ isOpen, onClose, results }) {
   useEffect(() => {
     if (results) {
       setEditedGeneratedCaption(results.caption || ''); 
+      setCaptionError(null);
       setSelectedImages([]);
       setSelectedStoryImage(null);
     }
@@ -190,6 +192,7 @@ export default function TestimonialResultsModal({ isOpen, onClose, results }) {
   // --- Added Regenerate Handler --- 
   const handleRegenerateCaption = async () => {
       setIsRegeneratingCaption(true);
+      setCaptionError(null);
       try {
           const sessionToken = localStorage.getItem('session');
           if (!sessionToken) {
@@ -221,6 +224,7 @@ export default function TestimonialResultsModal({ isOpen, onClose, results }) {
 
       } catch (error) {
           console.error("Failed to regenerate testimonial caption:", error);
+          setCaptionError(error.message || 'Could not regenerate caption.');
           toast.error(error.message || 'Failed to regenerate caption.');
       } finally {
           setIsRegeneratingCaption(false);
@@ -232,7 +236,7 @@ export default function TestimonialResultsModal({ isOpen, onClose, results }) {
     <Modal 
       isOpen={isOpen} 
       onClose={onClose} 
-      title="Your Generated Testimonial Content" // Updated title
+      title="Your Generated Review Content" // Updated title
       size="xl" 
     >
       <div className="content-container">
@@ -361,12 +365,15 @@ export default function TestimonialResultsModal({ isOpen, onClose, results }) {
                 </div>
               </div>
               <div className="caption-content">
+                {captionError && (
+                    <div className="error-placeholder">Error: {captionError} <button onClick={handleRegenerateCaption}>Retry</button></div>
+                )}
                 <textarea
                   className="caption-textarea editable-caption"
-                  value={currentCaption} 
-                  onChange={handleCaptionChange} 
-                  rows={12}
-                  placeholder="Generated caption text..."
+                  value={currentCaption}
+                  onChange={handleCaptionChange}
+                  rows={10}
+                  placeholder={captionError ? "Caption unavailable." : "Generated tip caption text..."}
                 />
               </div>
             </div>

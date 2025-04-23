@@ -18,6 +18,37 @@ export default function LoadingModal({
 }) {
   const currentSteps = steps || STEPS;
   const currentStepData = currentSteps[currentStepIndex] || currentSteps[0];
+  const [countdown, setCountdown] = useState(60);
+  const [activeStep, setActiveStep] = useState(currentStepIndex);
+
+  // Handle countdown timer
+  useEffect(() => {
+    if (!isOpen) {
+      // Reset countdown when modal closes
+      setCountdown(60);
+      return;
+    }
+
+    // Start countdown timer
+    const timer = setInterval(() => {
+      setCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      clearInterval(timer);
+    };
+  }, [isOpen]);
+
+  // Update active step when currentStepIndex changes
+  useEffect(() => {
+    setActiveStep(currentStepIndex);
+  }, [currentStepIndex]);
 
   return (
     <Modal
@@ -27,12 +58,18 @@ export default function LoadingModal({
     >
       <div className="loading-container">
         {url && (
-          <div className="url-section">
-            <div className="url-label">
-              <span className="url-icon">🔗</span>
-              Property URL
+          <div className="url-section" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div>
+              <div className="url-label">
+                <span className="url-icon">🔗</span>
+                Property URL
+              </div>
+              <div className="url-value">{url}</div>
             </div>
-            <div className="url-value">{url}</div>
+            <div className="countdown-timer">
+              <span className="timer-emoji">⏱️</span>
+              <span className="timer-value">{countdown}</span>
+            </div>
           </div>
         )}
 
@@ -46,13 +83,13 @@ export default function LoadingModal({
           {currentSteps.map((step, index) => (
             <div 
               key={step.key} 
-              className={`step ${index === currentStepIndex ? 'active' : ''} ${index < currentStepIndex ? 'completed' : ''}`}
+              className={`step ${index === activeStep ? 'active' : ''} ${index < activeStep ? 'completed' : ''}`}
             >
               <div className="step-number">
-                {index < currentStepIndex ? (
+                {index < activeStep ? (
                   <div className="step-completed">✓</div>
                 ) : (
-                  <div className={index === currentStepIndex ? 'step-active' : 'step-inactive'}>
+                  <div className={index === activeStep ? 'step-active' : 'step-inactive'}>
                     {index + 1}
                   </div>
                 )}
@@ -63,12 +100,14 @@ export default function LoadingModal({
                     <span className="step-label">{step.label}</span>
                   </div>
                   <div className="step-description">{step.description}</div>
-                  {index === currentStepIndex && (
+                </div>
+                {index === activeStep && (
+                  <div className="progress-container">
                     <div className="progress-bar">
                       <div className="progress-fill"></div>
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -80,6 +119,7 @@ export default function LoadingModal({
           padding: 1.5rem;
           background: linear-gradient(to top, #f2fbf3, #f5fcf6, #ffffff);
           border-radius: 12px;
+          position: relative;
         }
 
         .url-section {
@@ -131,11 +171,17 @@ export default function LoadingModal({
           border-radius: 8px;
           background: white;
           border: 1px solid #e2e8f0;
+          transition: all 0.3s ease;
         }
 
         .step.active {
           border-color: #62d76b;
           background: rgba(98, 215, 107, 0.05);
+        }
+
+        .step.completed {
+          border-color: #e2e8f0;
+          background: white;
         }
 
         .step-number {
@@ -155,6 +201,7 @@ export default function LoadingModal({
           justify-content: center;
           font-weight: 500;
           font-size: 0.875rem;
+          transition: all 0.3s ease;
         }
 
         .step-completed {
@@ -205,13 +252,19 @@ export default function LoadingModal({
           font-size: 0.875rem;
         }
 
+        .progress-container {
+          display: flex;
+          align-items: center;
+        }
+
         .progress-bar {
-          width: 200px;
+          width: 150px;
           height: 4px;
           background: #e2e8f0;
           border-radius: 2px;
           overflow: hidden;
           flex-shrink: 0;
+          margin-left: auto;
         }
 
         .progress-fill {
@@ -240,6 +293,28 @@ export default function LoadingModal({
           border: 1px solid #fed7d7;
           border-radius: 6px;
           font-size: 0.9rem;
+        }
+
+        .countdown-timer {
+          display: flex;
+          align-items: center;
+          gap: 0.2rem;
+          background: rgba(98, 215, 107, 0.08);
+          border: 1px solid rgba(98, 215, 107, 0.2);
+          border-radius: 6px;
+          padding: 0.2rem 0.5rem;
+          margin-left: 1rem;
+          font-size: 0.95rem;
+        }
+
+        .timer-emoji {
+          font-size: 1rem;
+        }
+
+        .timer-value {
+          font-size: 1.1rem;
+          font-weight: 600;
+          color: #62d76b;
         }
       `}</style>
     </Modal>

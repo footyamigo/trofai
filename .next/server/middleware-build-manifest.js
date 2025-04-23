@@ -7,7 +7,10 @@ self.__BUILD_MANIFEST = {
   ],
   "ampDevFiles": [],
   "lowPriorityFiles": [],
-  "rootMainFiles": [],
+  "rootMainFiles": [
+    "static/chunks/webpack.js",
+    "static/chunks/main-app.js"
+  ],
   "pages": {
     "/_app": [
       "static/chunks/webpack.js",
@@ -19,15 +22,30 @@ self.__BUILD_MANIFEST = {
       "static/chunks/main.js",
       "static/chunks/pages/_error.js"
     ],
+    "/caption": [
+      "static/chunks/webpack.js",
+      "static/chunks/main.js",
+      "static/chunks/pages/caption.js"
+    ],
+    "/dashboard": [
+      "static/chunks/webpack.js",
+      "static/chunks/main.js",
+      "static/chunks/pages/dashboard.js"
+    ],
+    "/my-templates": [
+      "static/chunks/webpack.js",
+      "static/chunks/main.js",
+      "static/chunks/pages/my-templates.js"
+    ],
     "/review-generator": [
       "static/chunks/webpack.js",
       "static/chunks/main.js",
       "static/chunks/pages/review-generator.js"
     ],
-    "/tips-generator": [
+    "/templates": [
       "static/chunks/webpack.js",
       "static/chunks/main.js",
-      "static/chunks/pages/tips-generator.js"
+      "static/chunks/pages/templates.js"
     ]
   },
   "ampFirstPages": []

@@ -95,11 +95,14 @@ function getScraper(url) {
 /**
  * Scrape property data from a URL, automatically routing to the right scraper
  * @param {string} propertyUrl - The URL to scrape
+ * @param {string} listingType - The listing type (Just Listed, Just Sold, For Rent, Let Agreed)
  * @param {object} [agentProfile=null] - Optional agent profile data
  * @returns {Promise<object>} The scraped property data
  */
-async function scrapeProperty(propertyUrl, agentProfile = null) {
+async function scrapeProperty(propertyUrl, listingType, agentProfile = null) {
   console.log(`Scraping property data from: ${propertyUrl}`);
+  // Log received listingType and agentProfile
+  console.log(`[Scraper] Received listingType: ${listingType}`);
   console.log(`[Scraper] Received agentProfile:`, JSON.stringify(agentProfile));
   
   try {
@@ -110,12 +113,13 @@ async function scrapeProperty(propertyUrl, agentProfile = null) {
     console.log('Available functions in scraper:', Object.keys(scraper));
     
     // Call the specialized scraper function with explicit error handling
+    // Make sure to pass BOTH listingType and agentProfile
     if (RIGHTMOVE_URL_PATTERN.test(propertyUrl)) {
       if (typeof scraper.scrapeRightmoveProperty !== 'function') {
         throw new Error('scrapeRightmoveProperty is not a function in the rightmove scraper module');
       }
-      console.log('Calling scraper.scrapeRightmoveProperty() with agentProfile');
-      return await scraper.scrapeRightmoveProperty(propertyUrl, agentProfile);
+      console.log('Calling scraper.scrapeRightmoveProperty() with listingType and agentProfile');
+      return await scraper.scrapeRightmoveProperty(propertyUrl, listingType, agentProfile);
     } else if (ZILLOW_URL_PATTERN.test(propertyUrl)) {
       console.log('Detected Zillow URL pattern. Checking for scrapeZillowProperty function...');
       
@@ -126,9 +130,9 @@ async function scrapeProperty(propertyUrl, agentProfile = null) {
         throw new Error('scrapeZillowProperty is not a function in the zillow scraper module');
       }
       
-      console.log('Calling scraper.scrapeZillowProperty() with agentProfile');
+      console.log('Calling scraper.scrapeZillowProperty() with listingType and agentProfile');
       try {
-        const result = await scraper.scrapeZillowProperty(propertyUrl, agentProfile);
+        const result = await scraper.scrapeZillowProperty(propertyUrl, listingType, agentProfile);
         console.log('scrapeZillowProperty completed successfully', result ? 'with data' : 'no data returned');
         return result;
       } catch (zillowError) {
@@ -137,11 +141,11 @@ async function scrapeProperty(propertyUrl, agentProfile = null) {
       }
     } else if (ONTHEMARKET_URL_PATTERN.test(propertyUrl)) {
       if (typeof scraper === 'function' || typeof scraper.default === 'function') {
-        console.log('Calling OnTheMarket scraper (default export) with agentProfile');
-        return await (scraper.default || scraper)(propertyUrl, agentProfile);
+        console.log('Calling OnTheMarket scraper (default export) with listingType and agentProfile');
+        return await (scraper.default || scraper)(propertyUrl, listingType, agentProfile);
       } else if (typeof scraper.scrapeOnTheMarketProperty === 'function') {
-        console.log('Calling scraper.scrapeOnTheMarketProperty() with agentProfile');
-        return await scraper.scrapeOnTheMarketProperty(propertyUrl, agentProfile);
+        console.log('Calling scraper.scrapeOnTheMarketProperty() with listingType and agentProfile');
+        return await scraper.scrapeOnTheMarketProperty(propertyUrl, listingType, agentProfile);
       } else {
         throw new Error('No valid function found in OnTheMarket scraper module');
       }
@@ -182,19 +186,26 @@ async function generateBannerbearImage(propertyData, agentProfile = null) {
  * @param {object} propertyData - The property data
  * @param {string} templateSetUid - The Bannerbear template set UID
  * @param {object} [agentProfile=null] - Optional agent profile data
+ * @param {string} [listing_type=null] - Optional listing type (Just Listed, Just Sold, For Rent, Let Agreed)
  * @returns {Promise<object>} The Bannerbear response
  */
-async function generateBannerbearCollection(propertyData, templateSetUid, agentProfile = null) {
+async function generateBannerbearCollection(propertyData, templateSetUid, agentProfile = null, listing_type = null) {
   // Determine which scraper to use based on the metadata
   const source = propertyData.bannerbear.metadata.source;
   console.log(`Routing Bannerbear collection generation for source: ${source}`);
+  
+  // Log if listing type is provided
+  if (listing_type) {
+    console.log(`Using listing type: ${listing_type} for Bannerbear collection`);
+  }
+  
   if (source === 'rightmove') {
-    return await rightmoveScraper.generateBannerbearCollection(propertyData, templateSetUid, agentProfile);
+    return await rightmoveScraper.generateBannerbearCollection(propertyData, templateSetUid, agentProfile, listing_type);
   } else if (source === 'zillow') {
-    return await zillowScraper.generateBannerbearCollection(propertyData, templateSetUid, agentProfile);
+    return await zillowScraper.generateBannerbearCollection(propertyData, templateSetUid, agentProfile, listing_type);
   } else if (source === 'onthemarket') {
      // Assuming onthemarket scraper also follows the same pattern
-    return await onthemarketScraper.generateBannerbearCollection(propertyData, templateSetUid, agentProfile);
+    return await onthemarketScraper.generateBannerbearCollection(propertyData, templateSetUid, agentProfile, listing_type);
   } else {
     console.error(`Cannot generate collection: Unknown property source: ${source}`);
     throw new Error(`Unknown property source: ${source}`);
