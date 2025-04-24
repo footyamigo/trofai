@@ -57,6 +57,29 @@ const Button = ({
         .full-width {
           width: 100%;
         }
+        
+        .small {
+          padding: 0.4rem 0.8rem;
+          font-size: 0.75rem;
+          box-shadow: 1px 1px 0 rgba(0, 0, 0, 0.8);
+        }
+        
+        .small:hover {
+          box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.8);
+        }
+        
+        .outline {
+          background: transparent;
+          border: 1px solid #62d76b;
+          color: #62d76b;
+          box-shadow: none;
+        }
+        
+        .outline:hover {
+          background: rgba(98, 215, 107, 0.1);
+          box-shadow: none;
+          transform: none;
+        }
 
         .loading-spinner {
           display: inline-block;
