@@ -6,8 +6,8 @@ import { useAuth } from '../src/context/AuthContext';
 import { FiChevronDown, FiChevronUp, FiPlus, FiCheck } from 'react-icons/fi';
 import { FaInstagram, FaFacebookF, FaLinkedinIn, FaTiktok, FaTwitter } from 'react-icons/fa'; // Update social icon imports
 import Button from '../components/UI/Button';
-import FrontendHeader from '../components/layout/FrontendHeader';
-import Footer from '../components/layout/Footer';
+import FrontendHeader from '../components/Layout/FrontendHeader';
+import Footer from '../components/Layout/Footer';
 
 // Reference colors (can be refined)
 const darkGreen = '#1A4D2E'; // Dark green background
