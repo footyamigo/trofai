@@ -25,7 +25,7 @@ export default async function handler(req, res) {
       // Return status as not connected if no token
       return res.status(200).json({ 
         success: true, 
-        connections: { facebook: false, instagram: false } 
+        connections: { facebook: false, instagram: false, linkedin: false } 
       });
     }
 
@@ -41,7 +41,7 @@ export default async function handler(req, res) {
         // Return status as not connected if session invalid
         return res.status(200).json({ 
             success: true, 
-            connections: { facebook: false, instagram: false } 
+            connections: { facebook: false, instagram: false, linkedin: false } 
         });
     }
 
@@ -56,6 +56,10 @@ export default async function handler(req, res) {
     const isInstagramConnected = !!userData?.instagramUserId; // Use igUserId as check
     const instagramUsername = userData?.instagramUsername || null; // Get username
 
+    // Add LinkedIn status check
+    const isLinkedInConnected = !!userData?.linkedinUrn; // Use linkedinUrn or linkedinAccessToken as check
+    const linkedinName = userData?.linkedinName || null; // Get LinkedIn name
+
     // 3. Return Status including names
     return res.status(200).json({
       success: true,
@@ -64,6 +68,9 @@ export default async function handler(req, res) {
         facebookPageName: facebookPageName, // Include page name
         instagram: isInstagramConnected,
         instagramUsername: instagramUsername, // Include username
+        // Add LinkedIn status and name to the response
+        linkedin: isLinkedInConnected,
+        linkedinName: linkedinName,
       },
     });
 
@@ -72,7 +79,7 @@ export default async function handler(req, res) {
     // Return disconnected status on error
     return res.status(200).json({ 
         success: true, // Request succeeded, but status is 'disconnected' due to error
-        connections: { facebook: false, instagram: false },
+        connections: { facebook: false, instagram: false, linkedin: false },
         error: 'Failed to retrieve connection status.' // Optional error info
      }); 
   }

@@ -10,7 +10,7 @@ import Button from '../components/UI/Button';
 import Modal from '../components/UI/Modal';
 import { FiPlayCircle } from 'react-icons/fi';
 
-const PAGE_LIMIT = 25;
+const PAGE_LIMIT = 20;
 
 // Loading spinner component to avoid duplication
 const LoadingView = () => (
@@ -41,9 +41,61 @@ function getTemplateSetNumber(name) {
   return match ? match[1] : null;
 }
 
+// <<< Add Helper Function for Display Name >>>
+function formatTemplateDisplayName(template) {
+  if (!template || !template.name) {
+    return 'Unnamed Template';
+  }
+
+  let setNumber = null;
+  let type = null; // 'Design' or 'Story'
+  let typeNumber = null;
+
+  // Try parsing Set Number from setName (e.g., "Template Set 1")
+  if (template.setName) {
+    const setMatch = template.setName.match(/Set (\d+)/i);
+    if (setMatch) {
+      setNumber = setMatch[1];
+    }
+  }
+
+  // Fallback: Try parsing Set Number from template name (e.g., "Template1_Design1")
+  if (!setNumber && template.name) {
+      const nameSetMatch = template.name.match(/Template(\d+)_/i);
+      if (nameSetMatch) {
+          setNumber = nameSetMatch[1];
+      }
+  }
+
+  // Try parsing Design Number or Story Number from template name
+  if (template.name) {
+    let match = template.name.match(/Design(\d+)$/i);
+    if (match) {
+      type = 'Design';
+      typeNumber = match[1];
+    } else {
+      match = template.name.match(/Story(\d+)$/i);
+      if (match) {
+        type = 'Story';
+        typeNumber = match[1];
+      }
+    }
+  }
+
+  // Construct the new name if all parts are found
+  if (setNumber !== null && type !== null && typeNumber !== null) {
+    return `Template${setNumber} ${type}${typeNumber}`;
+  }
+
+  // Fallback to original name if parsing failed
+  return template.name;
+}
+// <<< End Helper Function >>>
+
 function TemplateGalleryPage() {
+  const [allFetchedTemplates, setAllFetchedTemplates] = useState([]);
   const [templates, setTemplates] = useState([]);
-  const [currentPage, setCurrentPage] = useState(1);
+  const [visibleCount, setVisibleCount] = useState(PAGE_LIMIT);
   const [hasMore, setHasMore] = useState(true);
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
@@ -55,6 +107,19 @@ function TemplateGalleryPage() {
   const [filterType, setFilterType] = useState('all'); // 'all' | 'listing' | 'quote' | 'testimonial'
 
   const observer = useRef();
+  const lastTemplateElementRef = useCallback(node => {
+    if (loading) return; // Don't observe while loading
+    if (observer.current) observer.current.disconnect(); // Disconnect previous observer
+
+    observer.current = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting && hasMore && !loading) {
+        console.log('Last element intersecting, loading more...');
+        setVisibleCount(prevCount => prevCount + PAGE_LIMIT);
+      }
+    });
+
+    if (node) observer.current.observe(node); // Observe the new node
+  }, [loading, hasMore]);
 
   // Helper to flatten sets into templates
   const flattenSetsToTemplates = (sets) => {
@@ -81,21 +146,38 @@ function TemplateGalleryPage() {
       return groups;
     }, {});
     
-    // Sort each set internally (designs first, Story last)
+    // Helper to extract type and number for sorting
+    const extractSortInfo = (name) => {
+      if (!name) return { type: null, number: null };
+      let match = name.match(/Design(\d+)$/i);
+      if (match) return { type: 'Design', number: parseInt(match[1], 10) };
+      match = name.match(/Story(\d+)$/i);
+      if (match) return { type: 'Story', number: parseInt(match[1], 10) };
+      return { type: null, number: null }; // Fallback
+    };
+
+    // Sort each set internally numerically
     Object.keys(templatesBySet).forEach(setId => {
       templatesBySet[setId].sort((a, b) => {
-        const aName = a.name || '';
-        const bName = b.name || '';
-        
-        const aIsStory = aName.includes('Story') || aName.includes('story');
-        const bIsStory = bName.includes('Story') || bName.includes('story');
-        
-        // Story templates at the end within each set
-        if (aIsStory && !bIsStory) return 1;
-        if (!aIsStory && bIsStory) return -1;
-        
-        // If both are of the same type, sort alphanumerically
-        return aName.localeCompare(bName);
+        const aInfo = extractSortInfo(a.name);
+        const bInfo = extractSortInfo(b.name);
+
+        // If parsing fails for either, use localeCompare as fallback
+        if (aInfo.type === null || aInfo.number === null || bInfo.type === null || bInfo.number === null) {
+          return (a.name || '').localeCompare(b.name || '');
+        }
+
+        // Primary sort: Design before Story
+        if (aInfo.type === 'Design' && bInfo.type === 'Story') return -1;
+        if (aInfo.type === 'Story' && bInfo.type === 'Design') return 1;
+
+        // Secondary sort: Numerical order within the same type
+        if (aInfo.number !== bInfo.number) {
+          return aInfo.number - bInfo.number;
+        }
+
+        // Fallback sort: localeCompare if numbers are the same (e.g., error case)
+        return (a.name || '').localeCompare(b.name || '');
       });
     });
     
@@ -105,8 +187,13 @@ function TemplateGalleryPage() {
 
   // Fetch templates based on filterType
   const fetchTemplatesByType = useCallback(async (type) => {
+    setInitialLoading(true);
     setLoading(true);
     setError(null);
+    setAllFetchedTemplates([]);
+    setTemplates([]);
+    setVisibleCount(PAGE_LIMIT);
+
     let endpoints = [];
     if (type === 'all') {
       endpoints = [
@@ -121,42 +208,59 @@ function TemplateGalleryPage() {
     } else if (type === 'testimonial') {
       endpoints = ['/api/list-testimonial-templates'];
     }
+
     try {
       const results = await Promise.all(
-        endpoints.map(endpoint => fetch(endpoint).then(res => res.json()))
+        endpoints.map(endpoint => fetch(endpoint).then(res => {
+          if (!res.ok) throw new Error(`Failed to fetch ${endpoint}: ${res.statusText}`);
+          return res.json();
+        }))
       );
-      // Each result is { success, sets: [...] }
+
       const allSets = results.flatMap(r => (r && r.success && Array.isArray(r.sets)) ? r.sets : []);
-      // Flatten sets to previews (not templates)
-      const allTemplates = allSets.flatMap(set =>
+      const flattenedTemplates = allSets.flatMap(set =>
         (set.previews || []).map(preview => ({
           ...preview,
           setName: set.display_name || set.name || '',
           setId: set.id || '',
         }))
       );
-      // Sort templates to ensure Story templates appear at the end
-      const sortedTemplates = sortTemplates(allTemplates);
-      setTemplates(sortedTemplates);
-      setHasMore(false); // No infinite scroll for filtered sets
-      setCurrentPage(1);
+      const sortedTemplates = sortTemplates(flattenedTemplates);
+
+      setAllFetchedTemplates(sortedTemplates);
+      setTemplates(sortedTemplates.slice(0, PAGE_LIMIT));
+      setHasMore(sortedTemplates.length > PAGE_LIMIT);
+
     } catch (err) {
-      setError('Failed to load templates.');
+      console.error("Error fetching templates:", err);
+      setError(`Failed to load templates: ${err.message}`);
       setTemplates([]);
+      setAllFetchedTemplates([]);
+      setHasMore(false);
     } finally {
       setLoading(false);
       setInitialLoading(false);
     }
   }, []);
 
+  // Effect to update visible templates when visibleCount changes or allFetchedTemplates changes
+  useEffect(() => {
+    if (allFetchedTemplates.length > 0) {
+      setTemplates(allFetchedTemplates.slice(0, visibleCount));
+      setHasMore(allFetchedTemplates.length > visibleCount);
+    }
+  }, [visibleCount, allFetchedTemplates]);
+
   // Fetch on mount and when filter changes
   useEffect(() => {
     setInitialLoading(true);
     setTemplates([]);
+    setAllFetchedTemplates([]);
     setSelectedTemplates(new Map());
     setAllowedSetNumber(null);
-    setCurrentPage(1);
-    setHasMore(false);
+    setVisibleCount(PAGE_LIMIT);
+    setHasMore(true);
+
     fetchTemplatesByType(filterType);
   }, [fetchTemplatesByType, filterType]);
 
@@ -236,7 +340,7 @@ function TemplateGalleryPage() {
         toast.error(`Processed ${templatesToDuplicate.length}: ${successCount} succeeded, ${failureCount} failed. Check console.`, { id: toastId });
          console.error("Duplication/Rename failures:", result.results?.filter(r => !r.success));
       } else {
-         toast.success(`Successfully duplicated & renamed ${successCount} template(s)!`, { id: toastId });
+         toast.success(`Successfully duplicated ${successCount} template(s)! They are now available in 'My Templates'.`, { id: toastId });
       }
 
       setSelectedTemplates(new Map());
@@ -336,14 +440,13 @@ function TemplateGalleryPage() {
             alignItems: 'stretch'
           }}>
             {templates.map((template, index) => {
-              const isLastElement = templates.length === index + 1;
+              const isLastElement = index === templates.length - 1;
               const isSelected = selectedTemplates.has(template.uid);
-              // Determine if this template should be disabled based on setId
               const isDisabled = allowedSetNumber !== null && template.setId !== allowedSetNumber;
               return (
                 <div
-                  ref={isLastElement ? observer.current : null}
-                  key={`${template.uid || template.name || index}`}
+                  ref={isLastElement ? lastTemplateElementRef : null}
+                  key={`${template.uid || template.name || index}-${template.setId}`}
                   style={{
                     display: 'flex', 
                     flexDirection: 'column', 
@@ -412,7 +515,7 @@ function TemplateGalleryPage() {
                     </div>
                   </div>
                   <div style={{ fontSize: '0.85rem', fontWeight: '300', flexShrink: 0 }}> 
-                    {template.name}
+                    {formatTemplateDisplayName(template)}
                   </div>
                 </div>
               );
@@ -420,7 +523,6 @@ function TemplateGalleryPage() {
           </div>
         </div> 
         {loading && !initialLoading && <div style={{ textAlign: 'center', padding: '2rem' }}>Loading more templates...</div>}
-        {error && !initialLoading && <div style={{ textAlign: 'center', padding: '1rem', color: 'red' }}>Error loading more: {error}</div>}
       </>
     );
   }
@@ -524,14 +626,13 @@ function TemplateGalleryPage() {
                       alignItems: 'stretch'
                     }}>
                       {templates.map((template, index) => {
-                        const isLastElement = templates.length === index + 1;
+                        const isLastElement = index === templates.length - 1;
                         const isSelected = selectedTemplates.has(template.uid);
-                        // Use the same isDisabled logic as above, based on setId
                         const isDisabled = allowedSetNumber !== null && template.setId !== allowedSetNumber;
                         return (
                           <div
-                            ref={isLastElement ? observer.current : null}
-                            key={`${template.uid || template.name || index}`}
+                            ref={isLastElement ? lastTemplateElementRef : null}
+                            key={`${template.uid || template.name || index}-${template.setId}-main`}
                             style={{
                               display: 'flex', 
                               flexDirection: 'column', 
@@ -600,7 +701,7 @@ function TemplateGalleryPage() {
                               </div>
                             </div>
                             <div style={{ fontSize: '0.85rem', fontWeight: '300', flexShrink: 0 }}> 
-                              {template.name}
+                              {formatTemplateDisplayName(template)}
                             </div>
                           </div>
                         );
@@ -608,7 +709,6 @@ function TemplateGalleryPage() {
                     </div>
                   </div> 
                   {loading && !initialLoading && <div style={{ textAlign: 'center', padding: '2rem' }}>Loading more templates...</div>}
-                  {error && !initialLoading && <div style={{ textAlign: 'center', padding: '1rem', color: 'red' }}>Error loading more: {error}</div>}
                 </>
               )}
             </div>

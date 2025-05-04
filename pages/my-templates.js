@@ -7,9 +7,10 @@ import ProtectedRoute from '../src/components/ProtectedRoute'; // ADDED
 import DashboardHeader from '../components/Dashboard/DashboardHeader';
 import { toast } from 'react-hot-toast';
 import Button from '../components/UI/Button';
-import { FiGrid } from 'react-icons/fi';
+import { FiGrid, FiTrash2 } from 'react-icons/fi';
 import Link from 'next/link';
 import Modal from '../components/UI/Modal';
+import ConfirmationModal from '../components/UI/ConfirmationModal'; // Import ConfirmationModal
 import { FiPlayCircle } from 'react-icons/fi';
 
 // Loading spinner component to avoid duplication
@@ -35,13 +36,62 @@ const LoadingView = () => (
 
 // No longer paginated, so PAGE_LIMIT is not needed here
 
+// <<< Copy Sort Helper Functions from templates.js >>>
+const extractSortInfo = (name) => {
+  if (!name) return { type: null, number: null };
+  let match = name.match(/Design(\d+)$/i);
+  if (match) return { type: 'Design', number: parseInt(match[1], 10) };
+  match = name.match(/Story(\d+)$/i);
+  if (match) return { type: 'Story', number: parseInt(match[1], 10) };
+  return { type: null, number: null }; // Fallback
+};
+
+const sortTemplates = (templates) => {
+  // Group templates by template_set_id (or a similar identifier if available)
+  const templatesBySet = templates.reduce((groups, template) => {
+    // Assuming the template object has a 'template_set_id' or similar
+    // Use original_template_id if available, assuming it links back to the set structure
+    const setId = template.original_template_id || template.template_set_id || 'default_set'; 
+    if (!groups[setId]) {
+      groups[setId] = [];
+    }
+    groups[setId].push(template);
+    return groups;
+  }, {});
+
+  // Sort each set internally numerically
+  Object.keys(templatesBySet).forEach(setId => {
+    templatesBySet[setId].sort((a, b) => {
+      // Use the display_name for sorting as it should contain DesignX/StoryX
+      const aInfo = extractSortInfo(a.display_name);
+      const bInfo = extractSortInfo(b.display_name);
+
+      if (aInfo.type === null || aInfo.number === null || bInfo.type === null || bInfo.number === null) {
+        return (a.display_name || '').localeCompare(b.display_name || '');
+      }
+      if (aInfo.type === 'Design' && bInfo.type === 'Story') return -1;
+      if (aInfo.type === 'Story' && bInfo.type === 'Design') return 1;
+      if (aInfo.number !== bInfo.number) {
+        return aInfo.number - bInfo.number;
+      }
+      return (a.display_name || '').localeCompare(b.display_name || '');
+    });
+  });
+
+  return Object.values(templatesBySet).flat();
+};
+// <<< End Copy Sort Helper Functions >>>
+
 // This page displays all templates, similar to the gallery but without selection/duplication
 function MyTemplatesPage() {
   const [templates, setTemplates] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
   const [editingUid, setEditingUid] = useState(null);
+  const [deletingUid, setDeletingUid] = useState(null);
   const [isVideoModalOpen, setIsVideoModalOpen] = useState(false);
+  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [templateUidToDelete, setTemplateUidToDelete] = useState(null);
 
   // Fetch user-specific templates once
   const fetchMyTemplates = useCallback(async () => {
@@ -115,7 +165,9 @@ function MyTemplatesPage() {
         return { ...template, display_name: displayName };
       });
       
-      setTemplates(processedTemplates); // Set the processed templates
+      // <<< Apply sorting here >>>
+      const sortedTemplates = sortTemplates(processedTemplates);
+      setTemplates(sortedTemplates); // Set the sorted templates
       // <-- END ADDITION -->
 
     } catch (err) {
@@ -182,6 +234,70 @@ function MyTemplatesPage() {
     }
   };
 
+  // --- Delete Handler (Opens Modal) ---
+  const handleDeleteTemplate = (templateUid) => {
+    setTemplateUidToDelete(templateUid); // Store the UID
+    setIsDeleteModalOpen(true); // Open the confirmation modal
+  };
+
+  // --- Confirm Delete Handler (Called from Modal) ---
+  const confirmDeleteHandler = async () => {
+    if (!templateUidToDelete) return;
+
+    setIsDeleteModalOpen(false); // Close modal immediately
+    setDeletingUid(templateUidToDelete); // Indicate loading state for the button
+    const toastId = toast.loading('Deleting template...');
+
+    let sessionToken;
+    if (typeof window !== 'undefined') {
+        sessionToken = localStorage.getItem('session'); 
+    } else {
+        toast.error('Authentication error - Cannot verify session.', { id: toastId });
+        setDeletingUid(null);
+        setTemplateUidToDelete(null);
+        return;
+    }
+    if (!sessionToken) {
+        toast.error('Authentication error - Please sign in again.', { id: toastId });
+        setDeletingUid(null);
+        setTemplateUidToDelete(null);
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/templates/delete', { 
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${sessionToken}`,
+            },
+            body: JSON.stringify({ templateUid: templateUidToDelete }),
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            throw new Error(result.message || 'Failed to delete template');
+        }
+
+        toast.success('Template deleted successfully!', { id: toastId });
+        // Remove template from local state
+        setTemplates(prevTemplates => prevTemplates.filter(t => t.uid !== templateUidToDelete));
+
+    } catch (err) {
+        console.error("Error deleting template:", err);
+        toast.error(`Failed to delete template: ${err.message}`, { id: toastId });
+    } finally {
+        setDeletingUid(null); // Reset loading state
+        setTemplateUidToDelete(null); // Clear the stored UID
+    }
+  };
+  
+  const closeDeleteModal = () => {
+    setIsDeleteModalOpen(false);
+    setTemplateUidToDelete(null);
+  };
+
   // --- Render Logic (Simplified) ---
   let pageContent;
   if (isLoading) {
@@ -237,9 +353,47 @@ function MyTemplatesPage() {
                   textAlign: 'center',
                   display: 'flex',
                   flexDirection: 'column',
-                  justifyContent: 'space-between'
+                  justifyContent: 'space-between',
+                  position: 'relative' // Needed for positioning delete button
                 }}
             >
+              {/* Delete Button/Icon */}
+              <button 
+                onClick={() => handleDeleteTemplate(template.uid)}
+                disabled={deletingUid === template.uid} // Disable only the clicked button
+                style={{
+                  position: 'absolute',
+                  top: '8px',
+                  right: '8px',
+                  background: 'rgba(255, 255, 255, 0.7)',
+                  border: '1px solid #ddd',
+                  borderRadius: '50%',
+                  padding: '4px',
+                  cursor: 'pointer',
+                  zIndex: 1,
+                  display: 'flex', // Center icon
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '30px',
+                  height: '30px',
+                  color: '#dc3545',
+                  transition: 'all 0.2s ease'
+                }}
+                title="Delete Template"
+              >
+                {deletingUid === template.uid ? (
+                  <div style={{ 
+                      width: '16px', 
+                      height: '16px', 
+                      border: '2px solid rgba(0, 0, 0, 0.1)',
+                      borderRadius: '50%',
+                      borderTop: '2px solid #dc3545',
+                      animation: 'spinAnimation 1s ease infinite'
+                    }}></div>
+                ) : (
+                  <FiTrash2 size={16} />
+                )}
+              </button>
               <div> {/* Wrapper for image and name */}
                 {template.preview_url ? (
                   <div style={{ 
@@ -369,6 +523,16 @@ function MyTemplatesPage() {
             </div>
           </div>
         </Modal>
+        
+        {/* <<< Use ConfirmationModal for Delete >>> */}
+        <ConfirmationModal
+          isOpen={isDeleteModalOpen}
+          onCancel={closeDeleteModal}
+          onConfirm={confirmDeleteHandler}
+          title="Delete Template"
+          message="Are you sure you want to delete this template? This action cannot be undone."
+          isLoading={!!deletingUid} // Use !! to convert UID to boolean for loading state
+        />
         
         {/* Copied Styles */} 
         <style jsx>{`

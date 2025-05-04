@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Modal from '../UI/Modal';
 import { FiDownload, FiCopy, FiShare2, FiChevronLeft, FiChevronRight, FiX, FiRefreshCw, FiSave } from 'react-icons/fi';
-import { FaInstagram, FaFacebookSquare } from 'react-icons/fa';
+import { FaInstagram, FaFacebookSquare, FaLinkedin } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../src/context/AuthContext';
 
@@ -31,6 +31,9 @@ export default function ResultsModal({ isOpen, onClose, results }) {
   const [isLoadingStatus, setIsLoadingStatus] = useState(false); // To prevent multiple fetches
   const [isPosting, setIsPosting] = useState(false); // Loading state for posting actions
 
+  // Add state for LinkedIn connection status
+  const [isLinkedInConnected, setIsLinkedInConnected] = useState(false);
+
   // Fetch social connection status ONCE when the modal opens
   useEffect(() => {
     let isMounted = true; // Prevent state update on unmounted component
@@ -46,6 +49,7 @@ export default function ResultsModal({ isOpen, onClose, results }) {
         if (isMounted) {
           setIsFacebookConnected(false);
           setIsInstagramConnected(false);
+          setIsLinkedInConnected(false); // Set LinkedIn status
           setIsLoadingStatus(false);
         }
         return;
@@ -62,11 +66,14 @@ export default function ResultsModal({ isOpen, onClose, results }) {
         if (data.success && data.connections) {
           setIsFacebookConnected(data.connections.facebook || false);
           setIsInstagramConnected(data.connections.instagram || false);
+          // Get LinkedIn status from the response
+          setIsLinkedInConnected(data.connections.linkedin || false);
         } else {
           console.error('ResultsModal: Failed to fetch social status:', data.message);
            // Handle potential errors, maybe set defaults
            setIsFacebookConnected(false);
            setIsInstagramConnected(false);
+           setIsLinkedInConnected(false); // Set LinkedIn status on error
         }
       } catch (error) {
          if (!isMounted) return; 
@@ -74,6 +81,7 @@ export default function ResultsModal({ isOpen, onClose, results }) {
          // Set defaults on error
          setIsFacebookConnected(false);
          setIsInstagramConnected(false);
+         setIsLinkedInConnected(false); // Set LinkedIn status on error
       } finally {
          if (isMounted) {
             setIsLoadingStatus(false);
@@ -84,13 +92,13 @@ export default function ResultsModal({ isOpen, onClose, results }) {
     // Fetch status only when modal becomes visible
     if (isOpen) {
       // Reset status before fetching if needed, or rely on initial state
-      // setIsLoadingStatus(true); // Moved inside fetchStatus to avoid race conditions
       fetchStatus();
     } else {
       // Optionally reset state when modal closes
       setIsLoadingStatus(false);
       setIsFacebookConnected(false); 
       setIsInstagramConnected(false);
+      setIsLinkedInConnected(false); // Reset LinkedIn status on close
     }
 
     // Cleanup function
@@ -694,6 +702,68 @@ export default function ResultsModal({ isOpen, onClose, results }) {
     }
   };
 
+  // Add handler for posting to LinkedIn
+  const handlePostToLinkedIn = async () => {
+    // 1. Check connection status
+    if (!isLinkedInConnected) {
+      toast.error("Please connect your LinkedIn account in Settings first.");
+      return;
+    }
+    // 2. Check if images are selected
+    if (selectedImages.length === 0) {
+      toast.error("Please select at least one image to post.");
+      return;
+    }
+    if (selectedImages.length > 9) {
+      // Currently API only supports one image for direct posts
+      toast.error("LinkedIn posting currently supports only one image.");
+      return;
+    }
+    
+    // 3. Prepare data
+    const sessionToken = localStorage.getItem('session');
+    if (!sessionToken) {
+      toast.error('Authentication error. Please log in again.');
+      return;
+    }
+    const imageUrlsToPost = selectedImages.map(img => img.url); // Should be just one URL
+    
+    setIsPosting(true); // Use general posting state
+    toast.loading('Posting to LinkedIn...');
+    
+    try {
+      const response = await fetch('/api/social/post-linkedin', { // Call the new backend endpoint
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionToken}`
+        },
+        body: JSON.stringify({
+          caption: currentCaption,
+          imageUrls: imageUrlsToPost // Send array with single URL
+        }),
+      });
+      const data = await response.json();
+      toast.dismiss();
+      
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || 'Failed to post to LinkedIn.');
+      }
+      
+      toast.success(data.message || 'Successfully posted to LinkedIn!');
+      // Optionally clear selection or close modal
+      // onClose();
+      // setSelectedImages([]);
+      
+    } catch (error) {
+      toast.dismiss();
+      console.error('Error posting to LinkedIn:', error);
+      toast.error(error.message || 'Failed to post to LinkedIn.');
+    } finally {
+      setIsPosting(false); // Reset general posting state
+    }
+  };
+
   // Determine if this is a property or a Testimonial/Review based on content
   const isProperty = Boolean(
     results.propertyData?.property?.address || 
@@ -1062,34 +1132,47 @@ export default function ResultsModal({ isOpen, onClose, results }) {
                     {isLoadingStatus && <p>Loading connection status...</p>} 
                     {!isLoadingStatus && (
                         <div className="social-buttons">
-                        {/* Instagram Button - Removed !isInstagramConnected from disabled */}
-                        <button 
-                            className="social-button instagram"
-                            onClick={handlePostToInstagram}
-                            disabled={isPosting || selectedImages.length === 0} // Only disable if posting or no images selected
-                        >
-                            <FaInstagram className="icon" />
-                            <div className="button-content">
-                            <span className="button-title">Post to Instagram</span>
-                            <span className="button-desc">Share your property listing</span>
-                            </div>
-                        </button>
-                        {/* Facebook Button - Removed !isFacebookConnected from disabled */}
-                        <button 
-                            className="social-button facebook"
-                            onClick={handlePostToFacebook}
-                            disabled={isPosting || selectedImages.length === 0} // Only disable if posting or no images selected
-                        >
-                            <FaFacebookSquare className="icon" />
-                            <div className="button-content">
-                            <span className="button-title">Share on Facebook</span>
-                            <span className="button-desc">Post to your business page</span>
-                            </div>
-                        </button>
+                          {/* Instagram Button */}
+                          <button 
+                              className="social-button instagram"
+                              onClick={handlePostToInstagram}
+                              disabled={isPosting || selectedImages.length === 0 || !isInstagramConnected} // Add connection check to disabled
+                          >
+                              <FaInstagram className="icon" />
+                              <div className="button-content">
+                              <span className="button-title">Post to Instagram</span>
+                              <span className="button-desc">Share your property listing</span>
+                              </div>
+                          </button>
+                          {/* Facebook Button */}
+                          <button 
+                              className="social-button facebook"
+                              onClick={handlePostToFacebook}
+                              disabled={isPosting || selectedImages.length === 0 || !isFacebookConnected} // Add connection check to disabled
+                          >
+                              <FaFacebookSquare className="icon" />
+                              <div className="button-content">
+                              <span className="button-title">Share on Facebook</span>
+                              <span className="button-desc">Post to your business page</span>
+                              </div>
+                          </button>
+                          {/* LinkedIn Button - NEW */}
+                          <button 
+                              className="social-button linkedin" // Add specific class for styling
+                              onClick={handlePostToLinkedIn}
+                              // Disable if posting, no images selected, more than 9, or not connected
+                              disabled={isPosting || selectedImages.length < 1 || selectedImages.length > 9 || !isLinkedInConnected}
+                          >
+                              <FaLinkedin className="icon" />
+                              <div className="button-content">
+                              <span className="button-title">Share on LinkedIn</span>
+                              <span className="button-desc">Post up to 9 images to your profile</span>
+                              </div>
+                          </button>
                         </div>
                     )}
-                    {/* Keep the tip encouraging connection */}
-                    {!isLoadingStatus && (!isFacebookConnected || !isInstagramConnected) && (
+                    {/* Update connection tip to include LinkedIn */}
+                    {!isLoadingStatus && (!isFacebookConnected || !isInstagramConnected || !isLinkedInConnected) && (
                         <p className="connect-tip">
                             Connect your accounts in <a href="/dashboard/settings" target="_blank" rel="noopener noreferrer">Settings</a> to enable posting.
                         </p>
@@ -1663,6 +1746,7 @@ export default function ResultsModal({ isOpen, onClose, results }) {
 
         .social-buttons {
           display: flex;
+          flex-direction: column;
           gap: 1rem;
           margin-top: 1rem;
         }
@@ -1671,12 +1755,16 @@ export default function ResultsModal({ isOpen, onClose, results }) {
           flex: 1;
           display: flex;
           align-items: center;
-          gap: 1rem;
-          padding: 1rem;
-          border-radius: 10px;
+          gap: 1.25rem;
+          padding: 1rem 1.5rem;
+          border-radius: 12px;
           text-decoration: none;
           color: white;
           transition: all 0.2s ease;
+          border: none;
+          cursor: pointer;
+          background: white;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
         }
 
         .social-button.instagram {
@@ -1687,40 +1775,66 @@ export default function ResultsModal({ isOpen, onClose, results }) {
           background: #1877f2;
         }
 
-        .social-button:hover {
+        .social-button.linkedin {
+          background: #0A66C2;
+        }
+
+        .social-button:hover:not(:disabled) {
           transform: translateY(-2px);
-          filter: brightness(110%);
+          box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .social-button:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+          transform: none;
+          box-shadow: none;
         }
 
         .social-button .icon {
-          font-size: 1.25rem;
+          font-size: 1.5rem;
+          flex-shrink: 0;
         }
 
         .button-content {
           display: flex;
           flex-direction: column;
+          text-align: left;
+          flex-grow: 1;
         }
-
+        
         .button-title {
           font-weight: 600;
           font-size: 1rem;
-        }
-
-        .button-desc {
-          font-size: 0.8rem;
-          opacity: 0.9;
-        }
-
-        .social-tip {
-          margin-top: 1rem;
-          padding: 1rem;
-          background: #f8f9fa;
-          border-radius: 8px;
-          font-size: 0.9rem;
-          color: #666;
-          border-left: 3px solid #62d76b;
+          margin-bottom: 0.25rem;
         }
         
+        .button-desc {
+          font-size: 0.85rem;
+          opacity: 0.9;
+        }
+        
+        .connect-tip {
+          margin-top: 1.5rem;
+          padding: 1rem 1.25rem;
+          background: #f8f9fa;
+          border-radius: 10px;
+          font-size: 0.9rem;
+          color: #666;
+          border-left: 4px solid #62d76b;
+          line-height: 1.5;
+        }
+        
+        .connect-tip a {
+          color: #62d76b;
+          text-decoration: none;
+          font-weight: 500;
+        }
+        
+        .connect-tip a:hover {
+          text-decoration: underline;
+        }
+
         .social-thumbnail {
           position: relative;
           aspect-ratio: 1;
@@ -2031,16 +2145,6 @@ export default function ResultsModal({ isOpen, onClose, results }) {
         
         .save-button.saved {
           background-color: #2e7d32;
-        }
-
-        .connect-tip {
-          margin-top: 1rem;
-          padding: 1rem;
-          background: #f8f9fa;
-          border-radius: 8px;
-          font-size: 0.9rem;
-          color: #666;
-          border-left: 3px solid #62d76b;
         }
 
         .social-buttons.single-button { 

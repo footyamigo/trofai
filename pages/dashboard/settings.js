@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Head from 'next/head';
+import { useRouter } from 'next/router';
 import { useAuth } from '../../src/context/AuthContext';
 import ProtectedRoute from '../../src/components/ProtectedRoute';
 import DashboardHeader from '../../components/Dashboard/DashboardHeader';
@@ -7,9 +8,11 @@ import Sidebar from '../../components/Layout/Sidebar';
 import MobileMenu from '../../components/Layout/MobileMenu';
 import Card from '../../components/UI/Card';
 import { toast } from 'react-hot-toast';
+import { FaFacebookSquare, FaInstagram, FaLinkedin } from 'react-icons/fa';
 import InstagramConnectInfoModal from '../../components/UI/InstagramConnectInfoModal';
 import InstagramAccountSelectModal from '../../components/UI/InstagramAccountSelectModal';
 import FacebookPageSelectModal from '../../components/UI/FacebookPageSelectModal';
+import { FiEye, FiEyeOff } from 'react-icons/fi';
 
 // Loading spinner component
 const LoadingView = () => (
@@ -34,20 +37,25 @@ const LoadingView = () => (
 
 export default function SettingsPage() {
   const { user } = useAuth();
+  const router = useRouter();
   const [isFacebookConnected, setIsFacebookConnected] = useState(false);
   const [isInstagramConnected, setIsInstagramConnected] = useState(false);
   const [isLoadingStatus, setIsLoadingStatus] = useState(true);
   const [isConnecting, setIsConnecting] = useState(false);
+  const [isLinking, setIsLinking] = useState(false);
   const [showInstagramInfoModal, setShowInstagramInfoModal] = useState(false);
   const [showInstagramSelectModal, setShowInstagramSelectModal] = useState(false);
   const [availableIgAccounts, setAvailableIgAccounts] = useState([]);
-  const [isLinking, setIsLinking] = useState(false);
   const [showFacebookPageModal, setShowFacebookPageModal] = useState(false);
   const [availableFbPages, setAvailableFbPages] = useState([]);
   const [fbConnectData, setFbConnectData] = useState(null);
   const [facebookPageName, setFacebookPageName] = useState(null);
   const [instagramUsername, setInstagramUsername] = useState(null);
   const [igConnectData, setIgConnectData] = useState(null);
+
+  // LinkedIn State
+  const [isLinkedInConnected, setIsLinkedInConnected] = useState(false);
+  const [linkedinName, setLinkedinName] = useState(null);
 
   // Agent Profile State
   const [agentName, setAgentName] = useState('');
@@ -56,6 +64,18 @@ export default function SettingsPage() {
   const [agentPhotoFile, setAgentPhotoFile] = useState(null);
   const [agentPhotoPreview, setAgentPhotoPreview] = useState(null);
   const [isSavingAgentInfo, setIsSavingAgentInfo] = useState(false);
+
+  // Account Profile State (Password Only)
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [isUpdatingAccount, setIsUpdatingAccount] = useState(false);
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
+
+  // Tab State
+  const [activeTab, setActiveTab] = useState('social'); // 'social', 'agent', 'account'
 
   useEffect(() => {
     let isMounted = true; 
@@ -68,8 +88,10 @@ export default function SettingsPage() {
         if (isMounted) {
           setIsFacebookConnected(false);
           setIsInstagramConnected(false);
+          setIsLinkedInConnected(false);
           setFacebookPageName(null);
           setInstagramUsername(null);
+          setLinkedinName(null);
           setIsLoadingStatus(false);
         }
         return;
@@ -87,20 +109,26 @@ export default function SettingsPage() {
           setFacebookPageName(data.connections.facebookPageName || null);
           setIsInstagramConnected(data.connections.instagram || false);
           setInstagramUsername(data.connections.instagramUsername || null);
+          setIsLinkedInConnected(data.connections.linkedin || false);
+          setLinkedinName(data.connections.linkedinName || null);
         } else {
           console.error('Failed to fetch social status:', data.message);
            setIsFacebookConnected(false);
            setIsInstagramConnected(false);
+           setIsLinkedInConnected(false);
            setFacebookPageName(null);
            setInstagramUsername(null);
+           setLinkedinName(null);
         }
       } catch (error) {
          if (!isMounted) return; 
          console.error('Error fetching social status:', error);
          setIsFacebookConnected(false);
          setIsInstagramConnected(false);
+         setIsLinkedInConnected(false);
          setFacebookPageName(null);
          setInstagramUsername(null);
+         setLinkedinName(null);
       } finally {
          if (isMounted) {
             setIsLoadingStatus(false);
@@ -114,14 +142,69 @@ export default function SettingsPage() {
 
   }, []);
 
-  // Add useEffect to load existing agent data
+  // Handle Redirects from LinkedIn OAuth Callback
+  useEffect(() => {
+    const { linkedin_connected, linkedin_error } = router.query;
+
+    // Define fetchStatus locally if it's not accessible or redefine it if needed
+    // This assumes fetchStatus is defined in the outer scope of SettingsPage
+    const triggerStatusFetch = async () => {
+      const sessionToken = localStorage.getItem('session');
+      if (!sessionToken) return; // No need to fetch if logged out
+      
+      setIsLoadingStatus(true); // Show loading while fetching
+      try {
+        const response = await fetch('/api/social/status', {
+          headers: { 'Authorization': `Bearer ${sessionToken}` }
+        });
+        const data = await response.json();
+        if (data.success && data.connections) {
+          setIsFacebookConnected(data.connections.facebook || false);
+          setFacebookPageName(data.connections.facebookPageName || null);
+          setIsInstagramConnected(data.connections.instagram || false);
+          setInstagramUsername(data.connections.instagramUsername || null);
+          setIsLinkedInConnected(data.connections.linkedin || false);
+          setLinkedinName(data.connections.linkedinName || null);
+        } else {
+          // Handle error case, maybe show a toast
+          console.error('Failed to re-fetch social status after LinkedIn connect:', data.message);
+        }
+      } catch (error) {
+        console.error('Error re-fetching social status after LinkedIn connect:', error);
+      } finally {
+        setIsLoadingStatus(false);
+      }
+    };
+
+    if (linkedin_connected === 'true') {
+      toast.success('LinkedIn connected successfully!');
+      // Clean up URL first
+      const { pathname, query } = router;
+      delete query.linkedin_connected;
+      router.replace({ pathname, query }, undefined, { shallow: true });
+      
+      // THEN trigger status refresh
+      triggerStatusFetch(); 
+    }
+
+    if (linkedin_error) {
+      toast.error(`LinkedIn connection failed: ${linkedin_error}`);
+      // Clean up URL
+      const { pathname, query } = router;
+      delete query.linkedin_error;
+      router.replace({ pathname, query }, undefined, { shallow: true });
+    }
+    // Ensure fetchStatus is listed as a dependency if it's defined outside this hook
+    // and relies on state/props. If it's defined inside SettingsPage, it's fine.
+  }, [router.query, router]); // Add router to dependencies
+
   useEffect(() => {
     let isMounted = true;
     const fetchAgentProfile = async () => {
       const sessionToken = localStorage.getItem('session');
       if (!sessionToken) {
         console.log('Agent Profile: No session token, cannot fetch data.');
-        return; // Don't try to fetch if not logged in
+        return;
       }
 
       try {
@@ -140,16 +223,12 @@ export default function SettingsPage() {
           setAgentEmail(data.profile.agentEmail || '');
           setAgentPhone(data.profile.agentPhone || '');
           setAgentPhotoPreview(data.profile.agentPhotoUrl || null);
-          // Note: We don't set agentPhotoFile here, only the preview URL
         } else {
           console.error('Failed to fetch agent profile:', data.message || 'Unknown error');
-          // Optionally show a toast error, but might be annoying on load
-          // toast.error('Could not load your agent profile data.'); 
         }
       } catch (error) {
         if (!isMounted) return;
         console.error('Error fetching agent profile:', error);
-        // toast.error('Error loading agent profile data.');
       }
     };
 
@@ -157,7 +236,7 @@ export default function SettingsPage() {
 
     return () => { isMounted = false; };
 
-  }, []); // Run this effect once when the component mounts
+  }, []);
 
   const handleConnectFacebook = () => {
     if (typeof FB === 'undefined') {
@@ -321,7 +400,6 @@ export default function SettingsPage() {
                 return res.json();
             })
             .then(data => {
-                toast.dismiss();
                 setIsConnecting(false); 
                 if (data.success && data.accounts) {
                     if (data.accounts.length > 0) {
@@ -340,13 +418,11 @@ export default function SettingsPage() {
                 }
             })
             .catch(error => {
-                toast.dismiss(); 
                 setIsConnecting(false); 
                 console.error('Error fetching Instagram accounts list:', error);
                 toast.error(error.message || 'Failed to fetch Instagram accounts list.');
             });
         } else {
-            toast.dismiss();
             setIsConnecting(false);
             console.log('User cancelled Instagram login/permissions or did not fully authorize.');
             toast.error('Instagram connection cancelled or failed.');
@@ -399,6 +475,94 @@ export default function SettingsPage() {
         error: (err) => {
           setIsLinking(false);
           return err.message || 'Failed to disconnect Instagram.';
+        },
+      }
+    );
+  };
+
+  const handleConnectLinkedIn = () => {
+    setIsConnecting(true);
+    toast.loading('Redirecting to LinkedIn...');
+
+    // Get the current session token
+    const sessionToken = localStorage.getItem('session');
+    if (!sessionToken) {
+      toast.dismiss();
+      setIsConnecting(false);
+      toast.error('Authentication error. Please log in again.');
+      return;
+    }
+
+    // Use the session token as the state parameter for user linking
+    // NOTE: For stronger CSRF protection, generate a separate random value,
+    // store it server-side associated with the session, send the random value
+    // as state, and verify it on the backend against the stored value.
+    // const csrfState = Math.random().toString(36).substring(2); 
+    // storeCsrfStateForSession(sessionToken, csrfState); // Hypothetical server call
+    // const stateValue = csrfState; 
+    const stateValue = sessionToken; // Using session token directly for now
+
+    // We no longer need to store this separately in localStorage for validation
+    // localStorage.setItem('linkedin_oauth_state', csrfState);
+
+    const clientId = process.env.NEXT_PUBLIC_LINKEDIN_CLIENT_ID;
+    const redirectUri = process.env.NEXT_PUBLIC_APP_URL 
+      ? `${process.env.NEXT_PUBLIC_APP_URL}/api/social/linkedin-connect` 
+      : 'http://localhost:3000/api/social/linkedin-connect';
+      
+    if (!clientId) {
+        toast.dismiss();
+        setIsConnecting(false);
+        toast.error('LinkedIn Client ID is not configured. Please contact support.');
+        console.error('Missing NEXT_PUBLIC_LINKEDIN_CLIENT_ID environment variable');
+        return;
+    }
+
+    const scope = encodeURIComponent('openid profile email w_member_social');
+    // Pass the session token (or CSRF token) as the state value
+    const linkedInAuthUrl = `https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${stateValue}&scope=${scope}`;
+
+    window.location.href = linkedInAuthUrl;
+  };
+
+  const handleDisconnectLinkedIn = () => {
+    const sessionToken = localStorage.getItem('session');
+    if (!sessionToken) {
+      toast.error('Authentication error. Please log in again.');
+      return;
+    }
+    
+    setIsLinking(true);
+
+    toast.promise(
+      fetch('/api/social/linkedin-disconnect', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${sessionToken}`
+        }
+      }).then(res => {
+        if (!res.ok) {
+          return res.json().then(errData => {
+            throw new Error(errData.message || 'Failed to disconnect');
+          }).catch(() => { throw new Error('Failed to disconnect LinkedIn.'); });
+        }
+        return res.json();
+      }),
+      {
+        loading: 'Disconnecting LinkedIn...',
+        success: (data) => {
+          setIsLinking(false);
+          if (data.success) {
+            setIsLinkedInConnected(false);
+            setLinkedinName(null);
+            return 'LinkedIn disconnected successfully.';
+          } else {
+            throw new Error(data.message || 'Failed to disconnect LinkedIn');
+          }
+        },
+        error: (err) => {
+          setIsLinking(false);
+          return err.message || 'Failed to disconnect LinkedIn.';
         },
       }
     );
@@ -531,7 +695,6 @@ export default function SettingsPage() {
     setIsSavingAgentInfo(true);
     const toastId = toast.loading('Saving agent information...');
 
-    // Use FormData to handle file upload along with text fields
     const formData = new FormData();
     formData.append('agentName', agentName);
     formData.append('agentEmail', agentEmail);
@@ -541,14 +704,12 @@ export default function SettingsPage() {
     }
 
     try {
-      // TODO: Create and call the API endpoint '/api/agent/profile'
-      const response = await fetch('/api/agent/profile', { // Changed endpoint
+      const response = await fetch('/api/agent/profile', {
         method: 'POST',
         headers: {
-          // 'Content-Type': 'application/json', // Don't set Content-Type when using FormData
           'Authorization': `Bearer ${sessionToken}`
         },
-        body: formData, // Send FormData directly
+        body: formData,
       });
 
       const data = await response.json();
@@ -558,13 +719,74 @@ export default function SettingsPage() {
       }
 
       toast.success('Agent information saved successfully!', { id: toastId });
-      // Optionally update user context or refetch data if needed
 
     } catch (error) {
       console.error('Error saving agent info:', error);
       toast.error(error.message || 'Failed to save agent information.', { id: toastId });
     } finally {
       setIsSavingAgentInfo(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (newPassword !== confirmNewPassword) {
+      toast.error('New passwords do not match.');
+      return;
+    }
+    if (!currentPassword || !newPassword) {
+      toast.error('Please fill in all password fields.');
+      return;
+    }
+
+    setIsUpdatingAccount(true);
+    const toastId = toast.loading('Changing password...');
+
+    try {
+      // 1. Get the custom session token from local storage
+      const sessionToken = localStorage.getItem('session'); 
+
+      if (!sessionToken) {
+        // This case might indicate the user's session expired between page load and action
+        throw new Error('Session not found. Please log in again.');
+      }
+
+      // 2. Call the backend API endpoint
+      const response = await fetch('/api/auth/change-password', { // Call our backend API
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          // Send the *custom session token* in the Authorization header
+          'Authorization': `Bearer ${sessionToken}` 
+        },
+        body: JSON.stringify({ 
+          currentPassword: currentPassword, 
+          newPassword: newPassword 
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) { // Check response status code for errors
+        // Use the specific error message from the backend
+        throw new Error(data.message || `Request failed with status ${response.status}`);
+      }
+      
+      // Assuming success if response.ok is true and no error was thrown
+      toast.dismiss(toastId);
+      toast.success('Password changed successfully!');
+      
+      // Clear password fields
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmNewPassword('');
+
+    } catch (error) {
+      toast.dismiss(toastId);
+      console.error("Error changing password:", error);
+      // Display the error message (could be from backend or frontend validation)
+      toast.error(error.message || 'An unexpected error occurred.');
+    } finally {
+      setIsUpdatingAccount(false);
     }
   };
 
@@ -642,154 +864,300 @@ export default function SettingsPage() {
                 <p className="subtitle">Manage your profile and social media connections.</p>
               </div>
 
-              <Card title="Social Media Connections">
-                <div className="social-connection">
-                  <div className="connection-header">
-                    <h2>Facebook</h2>
-                    {isFacebookConnected ? <span className="status connected">Connected</span> : <span className="status disconnected">Not Connected</span>}
-                  </div>
-                  {isFacebookConnected && facebookPageName && (
-                    <p className="connected-account-info">Connected Page: <strong>{facebookPageName}</strong></p>
-                  )}
-                  <p>{isFacebookConnected ? 'Facebook Page connected.' : 'Connect your Facebook account to post property designs directly to your pages.'}</p>
-                  {isFacebookConnected ? (
-                    <button 
-                      className="button secondary" 
-                      onClick={handleDisconnectFacebook}
-                      disabled={isConnecting || isLinking}
-                    >
-                      Disconnect Facebook
-                    </button>
-                  ) : (
-                    <button 
-                      className="button primary" 
-                      onClick={handleConnectFacebook}
-                      disabled={isConnecting || isLinking}
-                    >
-                      {(isConnecting || isLinking) ? "Processing..." : "Connect Facebook"}
-                    </button>
-                  )}
-                </div>
-                
-                <div className="social-connection">
-                  <div className="connection-header">
-                    <h2>Instagram</h2>
-                    {isInstagramConnected ? (
-                      <span className="status connected">Connected</span>
-                    ) : (
-                      <span className="status disconnected">Not Connected</span>
-                    )}
-                  </div>
-                  {isInstagramConnected && instagramUsername && (
-                    <p className="connected-account-info">Connected Account: <strong>@{instagramUsername}</strong></p>
-                  )}
-                  <p>{isInstagramConnected ? 'Instagram account connected.' : 'Connect your Instagram Business account (via Facebook) to post property designs.'}</p>
-                  {isInstagramConnected ? (
-                    <button
-                      className="button secondary"
-                      onClick={handleDisconnectInstagram}
-                      disabled={isConnecting || isLinking}
-                    >
-                      Disconnect Instagram
-                    </button>
-                  ) : (
-                    <button
-                      className="button primary"
-                      onClick={handleConnectInstagram}
-                      disabled={isConnecting || isLinking}
-                    >
-                      {(isConnecting || isLinking) ? "Processing..." : "Connect Instagram"}
-                    </button>
-                  )}
-                  {!isInstagramConnected && (
-                    <p className="small-text">Note: Requires a connected Facebook Business account with an associated Instagram Business profile.</p>
-                  )}
-                </div>
-              </Card>
+              {/* Tab Navigation */}
+              <div className="tab-navigation">
+                <button 
+                  className={`tab-button ${activeTab === 'social' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('social')}
+                >
+                  Social Connections
+                </button>
+                <button 
+                  className={`tab-button ${activeTab === 'agent' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('agent')}
+                >
+                  Agent Profile
+                </button>
+                <button 
+                  className={`tab-button ${activeTab === 'account' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('account')}
+                >
+                  Account Profile
+                </button>
+              </div>
 
-              {/* --- Agent Profile Section --- */}
-              <Card title="Agent Profile" className="agent-profile-card">
-                <p className="card-subtitle">Update your details shown on generated property images.</p>
-                
-                <div className="form-group">
-                  <label htmlFor="agentName">Agent Name</label>
-                  <input 
-                    type="text" 
-                    id="agentName" 
-                    value={agentName}
-                    onChange={(e) => setAgentName(e.target.value)}
-                    placeholder="Your full name"
-                    disabled={isSavingAgentInfo}
-                  />
-                </div>
+              {/* Tab Content */}
+              <div className="tab-content">
+                {activeTab === 'social' && (
+                  <Card title="Social Media Connections">
+                    <div className="social-connection">
+                      <div className="connection-header">
+                        <h2><FaFacebookSquare style={{ marginRight: '8px', color: '#1877F2' }}/> Facebook</h2>
+                        {isFacebookConnected ? <span className="status connected">Connected</span> : <span className="status disconnected">Not Connected</span>}
+                      </div>
+                      {isFacebookConnected && facebookPageName && (
+                        <p className="connected-account-info">Connected Page: <strong>{facebookPageName}</strong></p>
+                      )}
+                      <p>{isFacebookConnected ? 'Facebook Page connected.' : 'Connect your Facebook account to post property designs directly to your pages.'}</p>
+                      {isFacebookConnected ? (
+                        <button 
+                          className="button secondary" 
+                          onClick={handleDisconnectFacebook}
+                          disabled={isConnecting || isLinking}
+                        >
+                          Disconnect Facebook
+                        </button>
+                      ) : (
+                        <button 
+                          className="button primary" 
+                          onClick={handleConnectFacebook}
+                          disabled={isConnecting || isLinking}
+                        >
+                          {(isConnecting || isLinking) ? "Processing..." : "Connect Facebook"}
+                        </button>
+                      )}
+                    </div>
+                    
+                    <div className="social-connection">
+                      <div className="connection-header">
+                        <h2><FaInstagram style={{ marginRight: '8px', color: '#E4405F' }}/> Instagram</h2>
+                        {isInstagramConnected ? (
+                          <span className="status connected">Connected</span>
+                        ) : (
+                          <span className="status disconnected">Not Connected</span>
+                        )}
+                      </div>
+                      {isInstagramConnected && instagramUsername && (
+                        <p className="connected-account-info">Connected Account: <strong>@{instagramUsername}</strong></p>
+                      )}
+                      <p>{isInstagramConnected ? 'Instagram account connected.' : 'Connect your Instagram Business account (via Facebook) to post property designs.'}</p>
+                      {isInstagramConnected ? (
+                        <button
+                          className="button secondary"
+                          onClick={handleDisconnectInstagram}
+                          disabled={isConnecting || isLinking}
+                        >
+                          Disconnect Instagram
+                        </button>
+                      ) : (
+                        <button
+                          className="button primary"
+                          onClick={handleConnectInstagram}
+                          disabled={isConnecting || isLinking}
+                        >
+                          {(isConnecting || isLinking) ? "Processing..." : "Connect Instagram"}
+                        </button>
+                      )}
+                      {!isInstagramConnected && (
+                        <p className="small-text">Note: Requires a connected Facebook Business account with an associated Instagram Business profile.</p>
+                      )}
+                    </div>
 
-                <div className="form-group">
-                  <label htmlFor="agentEmail">Contact Email</label>
-                  <input 
-                    type="email" 
-                    id="agentEmail" 
-                    value={agentEmail}
-                    onChange={(e) => setAgentEmail(e.target.value)}
-                    placeholder="your.email@example.com"
-                    disabled={isSavingAgentInfo}
-                  />
-                </div>
+                    <div className="social-connection">
+                      <div className="connection-header">
+                        <h2><FaLinkedin style={{ marginRight: '8px', color: '#0A66C2' }}/> LinkedIn</h2>
+                        {isLinkedInConnected ? (
+                          <span className="status connected">Connected</span>
+                        ) : (
+                          <span className="status disconnected">Not Connected</span>
+                        )}
+                      </div>
+                      {isLinkedInConnected && linkedinName && (
+                        <p className="connected-account-info">Connected Account: <strong>{linkedinName}</strong></p>
+                      )}
+                      <p>{isLinkedInConnected ? 'LinkedIn account connected.' : 'Connect your LinkedIn account to share property designs with your professional network.'}</p>
+                      {isLinkedInConnected ? (
+                        <button
+                          className="button secondary"
+                          onClick={handleDisconnectLinkedIn}
+                          disabled={isConnecting || isLinking}
+                        >
+                          Disconnect LinkedIn
+                        </button>
+                      ) : (
+                        <button
+                          className="button primary"
+                          onClick={handleConnectLinkedIn}
+                          disabled={isConnecting || isLinking}
+                        >
+                          {(isConnecting || isLinking) ? "Processing..." : "Connect LinkedIn"}
+                        </button>
+                      )}
+                      {!isLinkedInConnected && (
+                         <p className="small-text">Ensure you allow sharing permissions when connecting.</p>
+                      )}
+                    </div>
+                  </Card>
+                )}
 
-                <div className="form-group">
-                  <label htmlFor="agentPhone">Phone Number</label>
-                  <input 
-                    type="tel" 
-                    id="agentPhone" 
-                    value={agentPhone}
-                    onChange={(e) => setAgentPhone(e.target.value)}
-                    placeholder="+447123456789"
-                    disabled={isSavingAgentInfo}
-                  />
-                </div>
+                {activeTab === 'agent' && (
+                  <Card title="Agent Profile" className="agent-profile-card">
+                    <p className="card-subtitle">Update your details shown on generated property images.</p>
+                    
+                    <div className="form-group">
+                      <label htmlFor="agentName">Agent Name</label>
+                      <input 
+                        type="text" 
+                        id="agentName" 
+                        value={agentName}
+                        onChange={(e) => setAgentName(e.target.value)}
+                        placeholder="Your full name"
+                        disabled={isSavingAgentInfo}
+                      />
+                    </div>
 
-                <div className="form-group">
-                  <label htmlFor="agentPhoto">Profile Photo</label>
-                  <div className="photo-upload-area">
-                    {agentPhotoPreview && (
-                      <img src={agentPhotoPreview} alt="Agent photo preview" className="photo-preview" />
-                    )}
-                    <input 
-                      type="file" 
-                      id="agentPhoto" 
-                      accept="image/png, image/jpeg, image/webp" 
-                      onChange={handleAgentPhotoChange}
-                      disabled={isSavingAgentInfo}
-                      className="file-input"
-                    />
-                    <label htmlFor="agentPhoto" className="button file-upload-button">
-                      {agentPhotoPreview ? 'Change Photo' : 'Upload Photo'}
-                    </label>
-                    {agentPhotoPreview && (
+                    <div className="form-group">
+                      <label htmlFor="agentEmail">Contact Email</label>
+                      <input 
+                        type="email" 
+                        id="agentEmail" 
+                        value={agentEmail}
+                        onChange={(e) => setAgentEmail(e.target.value)}
+                        placeholder="your.email@example.com"
+                        disabled={isSavingAgentInfo}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label htmlFor="agentPhone">Phone Number</label>
+                      <input 
+                        type="tel" 
+                        id="agentPhone" 
+                        value={agentPhone}
+                        onChange={(e) => setAgentPhone(e.target.value)}
+                        placeholder="+447123456789"
+                        disabled={isSavingAgentInfo}
+                      />
+                    </div>
+
+                    <div className="form-group">
+                      <label htmlFor="agentPhoto">Profile Photo</label>
+                      <div className="photo-upload-area">
+                        {agentPhotoPreview && (
+                          <img src={agentPhotoPreview} alt="Agent photo preview" className="photo-preview" />
+                        )}
+                        <input 
+                          type="file" 
+                          id="agentPhoto" 
+                          accept="image/png, image/jpeg, image/webp" 
+                          onChange={handleAgentPhotoChange}
+                          disabled={isSavingAgentInfo}
+                          className="file-input"
+                        />
+                        <label htmlFor="agentPhoto" className="button file-upload-button">
+                          {agentPhotoPreview ? 'Change Photo' : 'Upload Photo'}
+                        </label>
+                        {agentPhotoPreview && (
+                          <button 
+                            className="button secondary remove-photo-button" 
+                            onClick={() => { setAgentPhotoFile(null); setAgentPhotoPreview(null); }}
+                            disabled={isSavingAgentInfo}
+                          >
+                            Remove Photo
+                          </button>
+                        )}
+                      </div>
+                      <p className="small-text">Recommended size: 200x200px. Max 2MB.</p>
+                    </div>
+
+                    <div className="form-actions">
                       <button 
-                        className="button secondary remove-photo-button" 
-                        onClick={() => { setAgentPhotoFile(null); setAgentPhotoPreview(null); /* TODO: Add API call to remove photo */ }}
+                        className="button primary save-button" 
+                        onClick={handleSaveAgentInfo}
                         disabled={isSavingAgentInfo}
                       >
-                        Remove Photo
+                        {isSavingAgentInfo ? 'Saving...' : 'Save Agent Info'}
                       </button>
-                    )}
-                  </div>
-                  <p className="small-text">Recommended size: 200x200px. Max 2MB.</p>
-                </div>
+                    </div>
 
-                <div className="form-actions">
-                  <button 
-                    className="button primary save-button" 
-                    onClick={handleSaveAgentInfo}
-                    disabled={isSavingAgentInfo}
-                  >
-                    {isSavingAgentInfo ? 'Saving...' : 'Save Agent Info'}
-                  </button>
-                </div>
+                  </Card>
+                )}
 
-              </Card>
-
-              {/* TODO: Add other settings sections (e.g., Billing) */}
+                {activeTab === 'account' && (
+                  <Card title="Account Profile" className="account-profile-card">
+                    <p className="card-subtitle">Manage your account security settings.</p>
+                    
+                    <div className="password-change-section">
+                      <h3 className="section-subheader">Change Password</h3>
+                      <div className="form-group">
+                        <label htmlFor="currentPassword">Current Password</label>
+                        <div className="password-input-wrapper">
+                          <input
+                            type={showCurrentPassword ? "text" : "password"}
+                            id="currentPassword"
+                            value={currentPassword}
+                            onChange={(e) => setCurrentPassword(e.target.value)}
+                            placeholder="Enter your current password"
+                            disabled={isUpdatingAccount}
+                          />
+                          <button
+                            type="button"
+                            className="password-visibility-toggle"
+                            tabIndex={-1}
+                            onClick={() => setShowCurrentPassword((v) => !v)}
+                            aria-label={showCurrentPassword ? 'Hide password' : 'Show password'}
+                          >
+                            {showCurrentPassword ? <FiEyeOff /> : <FiEye />}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="form-group">
+                        <label htmlFor="newPassword">New Password</label>
+                        <div className="password-input-wrapper">
+                          <input
+                            type={showNewPassword ? "text" : "password"}
+                            id="newPassword"
+                            value={newPassword}
+                            onChange={(e) => setNewPassword(e.target.value)}
+                            placeholder="Enter your new password"
+                            disabled={isUpdatingAccount}
+                          />
+                          <button
+                            type="button"
+                            className="password-visibility-toggle"
+                            tabIndex={-1}
+                            onClick={() => setShowNewPassword((v) => !v)}
+                            aria-label={showNewPassword ? 'Hide password' : 'Show password'}
+                          >
+                            {showNewPassword ? <FiEyeOff /> : <FiEye />}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="form-group">
+                        <label htmlFor="confirmNewPassword">Confirm New Password</label>
+                        <div className="password-input-wrapper">
+                          <input
+                            type={showConfirmNewPassword ? "text" : "password"}
+                            id="confirmNewPassword"
+                            value={confirmNewPassword}
+                            onChange={(e) => setConfirmNewPassword(e.target.value)}
+                            placeholder="Confirm your new password"
+                            disabled={isUpdatingAccount}
+                          />
+                          <button
+                            type="button"
+                            className="password-visibility-toggle"
+                            tabIndex={-1}
+                            onClick={() => setShowConfirmNewPassword((v) => !v)}
+                            aria-label={showConfirmNewPassword ? 'Hide password' : 'Show password'}
+                          >
+                            {showConfirmNewPassword ? <FiEyeOff /> : <FiEye />}
+                          </button>
+                        </div>
+                      </div>
+                      <div className="form-actions">
+                        <button 
+                          className="button primary save-button"
+                          onClick={handleChangePassword}
+                          disabled={isUpdatingAccount || !currentPassword || !newPassword || !confirmNewPassword}
+                        >
+                          {isUpdatingAccount ? 'Changing...' : 'Change Password'}
+                        </button>
+                      </div>
+                    </div>
+                  </Card>
+                )}
+              </div>
 
             </div>
           </main>
@@ -848,6 +1216,38 @@ export default function SettingsPage() {
           font-size: 1rem;
           color: #6b7280;
         }
+
+        /* Tab Styles Start */
+        .tab-navigation {
+          display: flex;
+          border-bottom: 1px solid #e5e7eb; 
+          margin-bottom: 2rem;
+        }
+        .tab-button {
+          padding: 0.8rem 1.5rem;
+          border: none;
+          background: none;
+          cursor: pointer;
+          font-size: 1rem;
+          font-weight: 500;
+          color: #6b7280;
+          margin-bottom: -1px; /* Overlap border */
+          border-bottom: 2px solid transparent; 
+          transition: color 0.2s ease, border-color 0.2s ease;
+        }
+        .tab-button:hover {
+          color: #1f2937;
+        }
+        .tab-button.active {
+          color: #62d76b; /* Theme color */
+          border-bottom-color: #62d76b; /* Theme color */
+        }
+        .tab-content {
+           /* Add any specific styles for the content area below tabs if needed */
+        }
+        /* Tab Styles End */
+
+        /* Card and Form Styles */
         .social-connection {
           border-top: 1px solid #e5e7eb;
           padding: 1.5rem 0;
@@ -863,6 +1263,8 @@ export default function SettingsPage() {
           margin-bottom: 0.5rem;
         }
         .social-connection h2 {
+          display: flex;
+          align-items: center;
           font-size: 1.2rem;
           font-weight: 600;
           margin: 0;
@@ -936,14 +1338,15 @@ export default function SettingsPage() {
         .connected-account-info strong {
             color: #2e7d32;
         }
-        .agent-profile-card {
-          margin-top: 2rem; /* Add space above the new card */
+        .agent-profile-card,
+        .account-profile-card {
+          /* Cards within tabs don't need margin-top usually */
         }
         .card-subtitle {
           font-size: 0.95rem;
           color: #6b7280;
           margin-bottom: 1.5rem;
-          margin-top: -0.5rem; /* Adjust spacing relative to Card title */
+          margin-top: -0.5rem; /* Adjust if needed based on card padding */
         }
         .form-group {
           margin-bottom: 1.5rem;
@@ -956,7 +1359,8 @@ export default function SettingsPage() {
         }
         .form-group input[type="text"],
         .form-group input[type="email"],
-        .form-group input[type="tel"] {
+        .form-group input[type="tel"],
+        .form-group input[type="password"] { /* Added password */
           width: 100%;
           padding: 0.75rem;
           border: 1px solid #d1d5db;
@@ -986,7 +1390,6 @@ export default function SettingsPage() {
           border: 2px solid #e5e7eb;
         }
         .file-input {
-          /* Hide the default file input */
           width: 0.1px;
           height: 0.1px;
           opacity: 0;
@@ -995,7 +1398,6 @@ export default function SettingsPage() {
           z-index: -1;
         }
         .file-upload-button {
-          /* Style the custom button */
           padding: 0.6rem 1.2rem;
           border: 1px solid #d1d5db;
           border-radius: 6px;
@@ -1009,7 +1411,7 @@ export default function SettingsPage() {
           background-color: #f9fafb;
         }
         .remove-photo-button {
-           padding: 0.6rem 1.0rem; /* Slightly smaller padding */
+           padding: 0.6rem 1.0rem;
            min-width: auto;
            font-size: 0.9rem;
         }
@@ -1022,10 +1424,62 @@ export default function SettingsPage() {
         .save-button {
           min-width: 160px;
         }
+        .password-change-section {
+           margin-top: 0; /* Reset margin */
+           padding-top: 1.5rem; /* Add padding above the header */
+           border-top: none; /* No border needed inside card */
+        }
+        .password-change-section .form-actions {
+           border-top: none; /* Remove border above password change button */
+           padding-top: 0.5rem; /* Adjust spacing if needed */
+           margin-top: 1rem; /* Adjust spacing */
+        }
+        .section-subheader {
+          font-size: 1.1rem;
+          font-weight: 600;
+          color: #1f2937;
+          margin-bottom: 1.5rem;
+        }
+        .password-input-wrapper {
+          position: relative;
+          display: flex;
+          align-items: center;
+        }
+        .password-input-wrapper input {
+          flex: 1;
+        }
+        .password-visibility-toggle {
+          background: none;
+          border: none;
+          position: absolute;
+          right: 0.75rem;
+          top: 50%;
+          transform: translateY(-50%);
+          cursor: pointer;
+          color: #6b7280;
+          font-size: 1.2rem;
+          padding: 0 0.25rem;
+          display: flex;
+          align-items: center;
+        }
+        .password-visibility-toggle:focus {
+          outline: 2px solid #62d76b;
+        }
+
         @media (max-width: 768px) {
           .dashboard-container {
             margin-left: 0;
-            padding-top: 64px; /* Height of mobile header */
+            padding-top: 64px;
+          }
+          .tab-navigation {
+            /* Example: Make tabs scrollable horizontally on small screens */
+            overflow-x: auto;
+            white-space: nowrap;
+            margin-bottom: 1.5rem;
+          }
+          .tab-button {
+             padding: 0.6rem 1rem;
+             font-size: 0.9rem;
           }
         }
       `}</style>

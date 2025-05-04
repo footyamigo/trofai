@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-export default function Modal({ isOpen, onClose, children, title, footer }) {
+export default function Modal({ isOpen, onClose, children, title, footer, containerClassName = '' }) {
   const modalRef = useRef();
   
   // Close modal when clicking outside
@@ -36,7 +36,7 @@ export default function Modal({ isOpen, onClose, children, title, footer }) {
   
   return (
     <div className="modal-overlay">
-      <div className="modal-container" ref={modalRef}>
+      <div className={`modal-container ${containerClassName}`} ref={modalRef}>
         <div className="modal-header">
           <h2>{title}</h2>
           <button className="close-button" onClick={onClose}>×</button>

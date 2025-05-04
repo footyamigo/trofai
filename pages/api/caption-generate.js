@@ -1,6 +1,7 @@
 import { scrapeRightmoveProperty } from '../../firecrawl-rightmove-scraper';
 import { scrapeZillowProperty } from '../../firecrawl-zillow-scraper';
 const { scrapeOnTheMarketProperty } = require('../../firecrawl-onthemarket-scraper');
+const { scrapeRealtorProperty } = require('../../firecrawl-realtor-scraper');
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -36,8 +37,11 @@ export default async function handler(req, res) {
     } else if (url.includes('onthemarket.com')) {
       // Pass listingType to the scraper function
       result = await scrapeOnTheMarketProperty(url, listingType);
+    } else if (url.includes('realtor.com')) {
+      // Pass listingType to the scraper function
+      result = await scrapeRealtorProperty(url, listingType);
     } else {
-      return res.status(400).json({ success: false, message: 'Unsupported property URL. Only Rightmove, Zillow, and OnTheMarket are supported.' });
+      return res.status(400).json({ success: false, message: 'Unsupported property URL. Only Rightmove, Zillow, OnTheMarket, and Realtor.com are supported.' });
     }
 
     if (!result || !result.caption) {

@@ -2,6 +2,7 @@ import fetch from 'node-fetch';
 import getConfig from 'next/config';
 import fs from 'fs';
 import path from 'path';
+import AWS from 'aws-sdk';
 
 // Get server config
 const { serverRuntimeConfig } = getConfig() || { serverRuntimeConfig: {} };
@@ -47,6 +48,15 @@ async function fetchSingleTemplateSet(uid) {
     }
 }
 
+// Helper to extract token
+const getSessionFromHeader = (req) => {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    return authHeader.substring(7);
+  }
+  return null;
+};
+
 export default async function handler(req, res) {
     if (req.method !== 'GET') {
         return res.status(405).json({ success: false, message: 'Method Not Allowed' });
@@ -71,30 +81,70 @@ export default async function handler(req, res) {
         return res.status(500).json({ success: false, message: 'Error reading template set configuration.' });
     }
 
-    // Exit early if no IDs are configured
-    if (allowedTemplateSetIds.length === 0) {
+    // --- Fetch user-owned template set IDs (duplicated sets) ---
+    let userOwnedSetIds = [];
+    let session = getSessionFromHeader(req);
+    if (session) {
+      try {
+        AWS.config.update({ region: process.env.AWS_REGION || 'us-east-1' });
+        const dynamoDb = new AWS.DynamoDB.DocumentClient();
+        const USERS_TABLE = 'trofai-users';
+        const SESSION_INDEX = 'SessionIndex';
+        const userResponse = await dynamoDb.query({
+          TableName: USERS_TABLE,
+          IndexName: SESSION_INDEX,
+          KeyConditionExpression: '#sess = :session',
+          ExpressionAttributeNames: { '#sess': 'session' },
+          ExpressionAttributeValues: { ':session': session }
+        }).promise();
+        if (userResponse.Items && userResponse.Items.length > 0) {
+          const userObj = userResponse.Items[0];
+          console.log('Full user object from DynamoDB:', JSON.stringify(userObj, null, 2));
+          userOwnedSetIds = [
+            ...(userObj.userDuplicatedListingTemplateSetIds?.values || [])
+          ];
+        }
+        console.log(`User-owned (duplicated) template set IDs:`, userOwnedSetIds);
+      } catch (err) {
+        console.error('Error fetching user-owned template set IDs:', err);
+      }
+    }
+
+    // Merge user-owned IDs (first), then config IDs, dedupe
+    const mergedSetIds = [...new Set([...(userOwnedSetIds || []), ...allowedTemplateSetIds])];
+
+    if (mergedSetIds.length === 0) {
         console.log("No allowed template set IDs configured. Returning empty list.");
         return res.status(200).json({ success: true, sets: [] });
     }
 
-    // Fetch ONLY the specified template sets
     try {
-        console.log(`Fetching details for ${allowedTemplateSetIds.length} specified template set(s)...`);
-        
-        // Use Promise.allSettled to fetch all specified sets concurrently
+        console.log(`Fetching details for ${mergedSetIds.length} specified template set(s)...`);
         const results = await Promise.allSettled(
-            allowedTemplateSetIds.map(uid => fetchSingleTemplateSet(uid))
+            mergedSetIds.map(uid => fetchSingleTemplateSet(uid))
         );
-
-        // Filter out failed requests and extract successful results
         const fetchedTemplateSets = results
             .filter(result => result.status === 'fulfilled' && result.value !== null)
-            .map(result => result.value);
-
+            .map((result, idx) => {
+              const set = result.value;
+              const isUserOwned = userOwnedSetIds.includes(set.uid);
+              return { set, isUserOwned, idx };
+            });
         console.log(`Successfully fetched details for ${fetchedTemplateSets.length} template set(s).`);
 
+        // --- START RENAME LOGIC --- 
+        let platformSetCounter = 1;
+        let userSetCounter = 1;
+        
+        // Sort user-owned sets to the front
+        fetchedTemplateSets.sort((a, b) => {
+            if (a.isUserOwned && !b.isUserOwned) return -1;
+            if (!a.isUserOwned && b.isUserOwned) return 1;
+            return 0;
+        });
+
         // Map the fetched sets to the format expected by TemplateSelector
-        const formattedSets = fetchedTemplateSets.map(set => {
+        const formattedSets = fetchedTemplateSets.map(({ set, isUserOwned }) => {
              const previews = set.templates
                 ?.map(t => ({
                     name: formatTemplateName(t.name), 
@@ -102,22 +152,29 @@ export default async function handler(req, res) {
                     uid: t.uid 
                 }))
                 .filter(t => t.url); 
+            
+            let displayName;
+            if (isUserOwned) {
+                displayName = `My Template Set ${userSetCounter++}`;
+            } else {
+                displayName = `Template Set ${platformSetCounter++}`;
+            }
 
             return {
                 id: set.uid, 
                 name: set.name, 
-                display_name: set.name, 
+                display_name: displayName,
                 description: `Contains ${set.templates?.length || 0} designs.`, 
                 previewUrl: previews && previews.length > 0 ? previews[0].url : null, 
                 previews: previews || [], 
                 templateUids: set.templates?.map(t => t.uid) || [], 
+                isUserOwned,
             };
         }).filter(set => set.templateUids.length > 0); 
+        // --- END RENAME LOGIC --- 
 
         console.log(`Returning ${formattedSets.length} non-empty formatted listing sets.`);
-
         return res.status(200).json({ success: true, sets: formattedSets });
-
     } catch (error) {
         console.error("Error processing specified template sets:", error);
         return res.status(500).json({ success: false, message: error.message || 'Internal server error processing template sets.' });

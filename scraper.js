@@ -8,19 +8,22 @@ const getConfig = require('next/config').default;
 // Import specialized scrapers
 const rightmoveScraper = require('./firecrawl-rightmove-scraper');
 const zillowScraper = require('./firecrawl-zillow-scraper');
-const onthemarketScraper = require('./firecrawl-onthemarket-scraper');
+const onthemarketScraper = require('./firecrawl-onthemarket-scraper.js');
+const realtorScraper = require('./firecrawl-realtor-scraper');
 
 // Add a console log to ensure scrapers are loaded
 console.log('Scraper modules loaded:', {
   rightmove: typeof rightmoveScraper === 'object' ? `Found with ${Object.keys(rightmoveScraper).length} exports` : 'Not found',
   zillow: typeof zillowScraper === 'object' ? `Found with ${Object.keys(zillowScraper).length} exports` : 'Not found',
-  onthemarket: typeof onthemarketScraper === 'object' ? `Found with ${Object.keys(onthemarketScraper).length} exports` : 'Not found'
+  onthemarket: typeof onthemarketScraper === 'object' ? `Found with ${Object.keys(onthemarketScraper).length} exports` : 'Not found',
+  realtor: typeof realtorScraper === 'object' ? `Found with ${Object.keys(realtorScraper).length} exports` : 'Not found'
 });
 
 // Log exactly what functions are exported by each scraper
 console.log('Rightmove scraper exports:', Object.keys(rightmoveScraper));
 console.log('Zillow scraper exports:', Object.keys(zillowScraper));
 console.log('OnTheMarket scraper exports:', typeof onthemarketScraper === 'object' ? Object.keys(onthemarketScraper) : typeof onthemarketScraper);
+console.log('Realtor scraper exports:', typeof realtorScraper === 'object' ? Object.keys(realtorScraper) : typeof realtorScraper);
 
 const { serverRuntimeConfig } = getConfig() || {
   serverRuntimeConfig: {
@@ -43,6 +46,9 @@ const ZILLOW_URL_PATTERN = /^https:\/\/(?:www\.)?zillow\.com\/(?:homedetails\/[^
 // OnTheMarket pattern
 const ONTHEMARKET_URL_PATTERN = /^https:\/\/(?:www\.)?onthemarket\.com\/details\/\d+\/?/;
 
+// Realtor.com pattern - UPDATED to accept rentals and sales, with or without query params
+const REALTOR_URL_PATTERN = /^https:\/\/(?:www\.)?realtor\.com\/(?:realestateandhomes-detail|rentals\/details)\/.*?/;
+
 // Test function for URL patterns
 function testUrlPatterns() {
   const testUrls = [
@@ -58,6 +64,7 @@ function testUrlPatterns() {
     console.log(`  Zillow pattern: ${ZILLOW_URL_PATTERN.test(url)}`);
     console.log(`  Rightmove pattern: ${RIGHTMOVE_URL_PATTERN.test(url)}`);
     console.log(`  OnTheMarket pattern: ${ONTHEMARKET_URL_PATTERN.test(url)}`);
+    console.log(`  Realtor.com pattern: ${REALTOR_URL_PATTERN.test(url)}`);
   }
 }
 
@@ -82,12 +89,16 @@ function getScraper(url) {
   } else if (ONTHEMARKET_URL_PATTERN.test(url)) {
     console.log('URL matched OnTheMarket pattern');
     return onthemarketScraper;
+  } else if (REALTOR_URL_PATTERN.test(url)) {
+    console.log('URL matched Realtor.com pattern');
+    return realtorScraper;
   } else {
     // Log more debug info when no match is found
     console.error('No pattern match found for URL:', url);
     console.error('Rightmove pattern test:', RIGHTMOVE_URL_PATTERN.test(url));
     console.error('Zillow pattern test:', ZILLOW_URL_PATTERN.test(url));
     console.error('OnTheMarket pattern test:', ONTHEMARKET_URL_PATTERN.test(url));
+    console.error('Realtor.com pattern test:', REALTOR_URL_PATTERN.test(url));
     throw new Error(`Unsupported URL pattern: ${url}`);
   }
 }
@@ -149,6 +160,12 @@ async function scrapeProperty(propertyUrl, listingType, agentProfile = null) {
       } else {
         throw new Error('No valid function found in OnTheMarket scraper module');
       }
+    } else if (REALTOR_URL_PATTERN.test(propertyUrl)) {
+      if (typeof scraper.scrapeRealtorProperty !== 'function') {
+        throw new Error('scrapeRealtorProperty is not a function in the realtor scraper module');
+      }
+      console.log('Calling scraper.scrapeRealtorProperty() with listingType and agentProfile');
+      return await scraper.scrapeRealtorProperty(propertyUrl, listingType, agentProfile);
     } else {
       throw new Error(`No scraper implementation found for URL: ${propertyUrl}`);
     }
@@ -175,6 +192,8 @@ async function generateBannerbearImage(propertyData, agentProfile = null) {
   } else if (source === 'onthemarket') {
     // Assuming onthemarket scraper also follows the same pattern
     return await onthemarketScraper.generateBannerbearImage(propertyData, agentProfile);
+  } else if (source === 'realtor') {
+    return await realtorScraper.generateBannerbearImage(propertyData, agentProfile);
   } else {
     console.error(`Cannot generate image: Unknown property source: ${source}`);
     throw new Error(`Unknown property source: ${source}`);
@@ -206,6 +225,8 @@ async function generateBannerbearCollection(propertyData, templateSetUid, agentP
   } else if (source === 'onthemarket') {
      // Assuming onthemarket scraper also follows the same pattern
     return await onthemarketScraper.generateBannerbearCollection(propertyData, templateSetUid, agentProfile, listing_type);
+  } else if (source === 'realtor') {
+    return await realtorScraper.generateBannerbearCollection(propertyData, templateSetUid, agentProfile, listing_type);
   } else {
     console.error(`Cannot generate collection: Unknown property source: ${source}`);
     throw new Error(`Unknown property source: ${source}`);

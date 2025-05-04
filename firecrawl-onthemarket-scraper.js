@@ -1,7 +1,8 @@
-import FireCrawlApp from '@mendable/firecrawl-js';
-import { z } from 'zod';
+const { z } = require('zod');
 const fetch = require('node-fetch');
 const getConfig = require('next/config').default;
+const { generatePropertyCaptions, CAPTION_TYPES } = require('./caption-generator');
+
 const { serverRuntimeConfig } = getConfig() || {
   serverRuntimeConfig: {
     FIRECRAWL_API_KEY: process.env.FIRECRAWL_API_KEY,
@@ -12,8 +13,6 @@ const { serverRuntimeConfig } = getConfig() || {
     BANNERBEAR_WEBHOOK_SECRET: process.env.BANNERBEAR_WEBHOOK_SECRET,
   }
 };
-
-const app = new FireCrawlApp({ apiKey: process.env.FIRECRAWL_API_KEY || "fc-2d3cdb3b94e14edabd5825271079994b" });
 
 const schema = z.object({
   property: z.object({
@@ -33,17 +32,47 @@ const schema = z.object({
   })
 });
 
-const { generatePropertyCaptions, CAPTION_TYPES } = require('./caption-generator');
+// Helper to format OnTheMarket price with £ and pcm if missing
+function formatOnTheMarketPrice(price) {
+  if (!price) return '';
+  let priceStr = price.toString().trim();
+  // If already has £, just ensure pcm is present for rentals
+  if (priceStr.startsWith('£')) {
+    if (!/pcm|pw/i.test(priceStr)) {
+      priceStr += ' pcm';
+    }
+    return priceStr;
+  }
+  // If it's just a number, format as £X,XXX pcm
+  const numeric = Number(priceStr.replace(/[^0-9]/g, ''));
+  if (!isNaN(numeric) && numeric > 0) {
+    return `£${numeric.toLocaleString()} pcm`;
+  }
+  // Fallback: just return as string
+  return priceStr;
+}
 
 function formatOnTheMarketData(data) {
-  // Normalize the structure for caption generation
+  // Extract only the sq ft value if square_ft is a string with both units
+  let squareFtValue = data.property.square_ft;
+  if (typeof squareFtValue === 'string') {
+    // Match the first occurrence of digits followed by optional commas and 'sq ft'
+    const match = squareFtValue.match(/([\d,]+)\s*sq\s*ft/i);
+    if (match) {
+      squareFtValue = match[0]; // e.g., '1,937 sq ft'
+    } else {
+      // fallback: just take the first number
+      const numMatch = squareFtValue.match(/([\d,]+)/);
+      squareFtValue = numMatch ? numMatch[0] + ' sq ft' : '';
+    }
+  }
   return {
     property: {
       address: data.property.address,
-      price: data.property.price,
+      price: formatOnTheMarketPrice(data.property.price),
       bedrooms: data.property.bedrooms,
       bathrooms: data.property.bathrooms,
-      square_ft: data.property.square_ft,
+      square_ft: squareFtValue,
       keyFeatures: data.property.key_features || data.property.keyFeatures || [],
       description: data.property.description,
       allImages: data.property.images || [],
@@ -70,51 +99,117 @@ async function processOnTheMarketResult(extractResult, listingType, agentProfile
   const formattedData = formatOnTheMarketData(extractResult.data);
   let caption = '';
   try {
-    caption = await generatePropertyCaptions(formattedData, CAPTION_TYPES.INSTAGRAM, agentProfile, listingType);
+    // Pass the correct agent profile to caption generation if available
+    const agentForCaption = agentProfile ? {
+        name: agentProfile.name,
+        email: agentProfile.email,
+        phone: agentProfile.phone,
+        photo_url: agentProfile.photo_url,
+        address: extractResult.data.estate_agent.address, // Keep scraped address
+        logo: extractResult.data.estate_agent.logo, // Keep scraped logo
+        about: ''
+      } : formattedData.agent; // Fallback to scraped agent if no profile
+
+    caption = await generatePropertyCaptions(formattedData, CAPTION_TYPES.INSTAGRAM, agentForCaption, listingType);
     if (!caption) {
       caption = `${formattedData.property.bedrooms} bedroom, ${formattedData.property.bathrooms} bathroom property in ${formattedData.property.address}`;
     }
   } catch (error) {
     caption = `${formattedData.property.bedrooms} bedroom, ${formattedData.property.bathrooms} bathroom property in ${formattedData.property.address}`;
   }
+
+  // Structure the raw data, merging agentProfile if available
+  const scrapedAgent = extractResult.data.estate_agent;
+  const finalAgent = agentProfile ? {
+      name: agentProfile.name || scrapedAgent.name, // Prioritize profile name
+      address: scrapedAgent.address,                // Use scraped address
+      logo: scrapedAgent.logo,                      // Use scraped logo
+      email: agentProfile.email,                    // Use profile email
+      phone: agentProfile.phone,                    // Use profile phone
+      photo_url: agentProfile.photo_url,            // Use profile photo_url (CRITICAL)
+      about: ''                                     // Add empty about field
+    } : {
+      // Fallback if no agentProfile
+      name: scrapedAgent.name,
+      address: scrapedAgent.address,
+      logo: scrapedAgent.logo,
+      about: ''
+    };
+
+  const rawOutput = {
+    property: extractResult.data.property,
+    agent: finalAgent // Use the merged or scraped agent data
+  };
+
   return {
-    raw: extractResult.data,
+    raw: rawOutput, // Use the modified raw data structure
     bannerbear: { metadata: { source: 'onthemarket' } },
     caption,
   };
 }
 
-async function scrapeOnTheMarketProperty(propertyUrl, listingType, agentProfile = null) {
-  const extractResult = await app.extract([
-    propertyUrl
-  ], {
-    prompt: `Extract the property address, price (if rental, only the pcm value), number of bedrooms, number of bathrooms, square footage, description, all gallery images, key features, estate agent name, estate agent address, and estate agent logo image.\n\nReturn the result in this schema: { property: { address, price, bedrooms, bathrooms, square_ft, description, images, key_features }, estate_agent: { name, address, logo } }`,
-    schema,
-  });
-  return processOnTheMarketResult(extractResult, listingType, agentProfile);
+async function pollFirecrawlResults(extractId) {
+  let attempts = 0;
+  const maxAttempts = 30;
+  const interval = 3000;
+  while (attempts < maxAttempts) {
+    attempts++;
+    const response = await fetch(`https://api.firecrawl.dev/v1/extract/${extractId}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${serverRuntimeConfig.FIRECRAWL_API_KEY}`
+      }
+    });
+    const data = await response.json();
+    if (data.status === 'completed' && data.data) {
+      return data;
+    } else if (data.status === 'failed') {
+      throw new Error('Firecrawl extraction failed: ' + JSON.stringify(data));
+    }
+    await new Promise(resolve => setTimeout(resolve, interval));
+  }
+  throw new Error('Max polling attempts reached');
 }
 
-// Add utility function to format square footage
+async function scrapeOnTheMarketProperty(propertyUrl, listingType, agentProfile = null) {
+  // Use fetch to call Firecrawl HTTP API
+  const prompt = `Extract the property address, price (if rental, only the pcm value), number of bedrooms, number of bathrooms, square footage, description, all gallery images, key features, estate agent name, estate agent address, and estate agent logo image.\n\nReturn the result in this schema: { property: { address, price, bedrooms, bathrooms, square_ft, description, images, key_features }, estate_agent: { name, address, logo } }`;
+  const response = await fetch('https://api.firecrawl.dev/v1/extract', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${serverRuntimeConfig.FIRECRAWL_API_KEY}`
+    },
+    body: JSON.stringify({
+      urls: [propertyUrl],
+      prompt,
+    })
+  });
+  const extractData = await response.json();
+  if (!extractData.success) {
+    throw new Error(`Error from Firecrawl: ${extractData.message || 'Unknown error'}`);
+  }
+  if (extractData.data && extractData.data.length > 0) {
+    return processOnTheMarketResult(extractData, listingType, agentProfile);
+  } else if (extractData.id) {
+    // Poll for results
+    const pollResult = await pollFirecrawlResults(extractData.id);
+    return processOnTheMarketResult(pollResult, listingType, agentProfile);
+  } else {
+    throw new Error('Unexpected response format from Firecrawl');
+  }
+}
+
 function formatSquareFt(sqft) {
     if (!sqft) return "";
-    
-    // If already formatted with sq ft, return as is
     if (typeof sqft === 'string' && sqft.toLowerCase().includes('sq ft')) {
         return sqft;
     }
-    
-    // Convert to number if it's a string
     const numericValue = typeof sqft === 'string' ? parseInt(sqft.replace(/[^0-9]/g, ''), 10) : sqft;
-    
-    // If not a valid number, return empty string
     if (isNaN(numericValue) || numericValue <= 0) {
         return "";
     }
-    
-    // Format the number with commas for thousands if needed
     const formattedValue = numericValue.toLocaleString();
-    
-    // Return with sq ft appended
     return `${formattedValue} sq ft`;
 }
 
@@ -179,7 +274,7 @@ async function generateBannerbearImage(propertyData, agentProfile = null) {
 async function generateBannerbearCollection(propertyData, templateSetUid, agentProfile = null, listing_type = null) {
   try {
     const property = propertyData.raw.property;
-    const agent = propertyData.raw.estate_agent;
+    const agent = propertyData.raw.agent;
     const propertyImages = property.images || property.gallery_images || [];
     const baseModifications = [
       { name: "property_price", text: property.price },
@@ -296,7 +391,7 @@ if (isMain) {
 
 module.exports = {
   scrapeOnTheMarketProperty,
+  formatSquareFt,
   generateBannerbearImage,
-  generateBannerbearCollection,
-  default: scrapeOnTheMarketProperty
+  generateBannerbearCollection
 }; 

@@ -502,15 +502,27 @@ async function processStructuredData(data, listingType, agentProfile = null) {
             keyFeatures: keyFeatures,
             description: data.property.description
         },
-        agent: {
+        agent: agentProfile ? {
+            name: agentProfile.name || data.estate_agent.name || 'Unknown agent',
+            // Use scraped address as profile doesn't have it
+            address: formatAddress(data.estate_agent.address || 'Unknown address'), 
+            // Use scraped logo as profile doesn't have it
+            logo: data.estate_agent.logo || null, 
+            // Use profile email/phone/photo if available, otherwise keep scraped (or null)
+            email: agentProfile.email,
+            phone: agentProfile.phone,
+            photo_url: agentProfile.photo_url,
+            about: "" // About not usually available
+        } : {
+            // Fallback to only scraped data if no agentProfile
             name: data.estate_agent.name,
             address: formatAddress(data.estate_agent.address),
             logo: data.estate_agent.logo,
-            about: "" // Firecrawl might not provide agent about info
+            about: ""
         }
     };
     
-    console.log('Formatted data created successfully');
+    console.log('Formatted data created successfully using agentProfile if provided');
     // Pass listingType to output function
     return await createOutputData(formattedData, listingType, agentProfile);
 }
@@ -604,7 +616,18 @@ async function processUnstructuredData(data, listingType, agentProfile = null) {
             keyFeatures: key_features,
             description: description
         },
-        agent: {
+        agent: agentProfile ? {
+            name: agentProfile.name || agentName || 'Unknown agent',
+            // Use scraped address/logo as profile doesn't have them
+            address: formatAddress(agentAddress || 'Unknown address'),
+            logo: agentLogo || null,
+            // Use profile email/phone/photo if available
+            email: agentProfile.email,
+            phone: agentProfile.phone,
+            photo_url: agentProfile.photo_url,
+            about: ""
+        } : {
+            // Fallback to only scraped data if no agentProfile
             name: agentName || 'Unknown agent',
             address: formatAddress(agentAddress || 'Unknown address'),
             logo: agentLogo,

@@ -171,6 +171,8 @@ export default async function handler(req, res) {
     return res.status(200).json({
       data: {
         status: status,
+        type: result.Item.type || 'image',
+        videoUrl: result.Item.videoUrl || null,
         images: images,
         bannerbear: {
           uid: bannerbear.uid || null,

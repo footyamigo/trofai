@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Modal from '../UI/Modal';
 import { FiDownload, FiCopy, FiShare2, FiChevronLeft, FiChevronRight, FiX, FiRefreshCw } from 'react-icons/fi'; // Removed FiSave
-import { FaInstagram, FaFacebookSquare } from 'react-icons/fa';
+import { FaInstagram, FaFacebookSquare, FaLinkedin } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 // Removed useAuth as save property is not needed
 
@@ -35,6 +35,9 @@ export default function TestimonialResultsModal({ isOpen, onClose, results }) {
   const [isRegeneratingCaption, setIsRegeneratingCaption] = useState(false);
   const [captionError, setCaptionError] = useState(null);
 
+  // Add LinkedIn state
+  const [isLinkedInConnected, setIsLinkedInConnected] = useState(false);
+
   // --- useEffects (Keep social status fetching, remove caption init based on options) ---
    useEffect(() => { // Fetch social status
      let isMounted = true; 
@@ -46,6 +49,7 @@ export default function TestimonialResultsModal({ isOpen, onClose, results }) {
         if (isMounted) {
           setIsFacebookConnected(false);
           setIsInstagramConnected(false);
+          setIsLinkedInConnected(false);
           setIsLoadingStatus(false);
         }
         return;
@@ -57,14 +61,17 @@ export default function TestimonialResultsModal({ isOpen, onClose, results }) {
         if (data.success && data.connections) {
           setIsFacebookConnected(data.connections.facebook || false);
           setIsInstagramConnected(data.connections.instagram || false);
+          setIsLinkedInConnected(data.connections.linkedin || false);
         } else {
            setIsFacebookConnected(false);
            setIsInstagramConnected(false);
+           setIsLinkedInConnected(false);
         }
       } catch (error) {
          if (!isMounted) return; 
          setIsFacebookConnected(false);
          setIsInstagramConnected(false);
+         setIsLinkedInConnected(false);
       } finally {
          if (isMounted) {
             setIsLoadingStatus(false);
@@ -72,7 +79,7 @@ export default function TestimonialResultsModal({ isOpen, onClose, results }) {
       }
     };
     if (isOpen) { fetchStatus(); }
-    else { setIsLoadingStatus(false); setIsFacebookConnected(false); setIsInstagramConnected(false); }
+    else { setIsLoadingStatus(false); setIsFacebookConnected(false); setIsInstagramConnected(false); setIsLinkedInConnected(false); }
     return () => { isMounted = false; };
   }, [isOpen]);
 
@@ -231,6 +238,55 @@ export default function TestimonialResultsModal({ isOpen, onClose, results }) {
       }
   };
   // --- End Regenerate Handler --- 
+
+  // Add LinkedIn post handler
+  const handlePostToLinkedIn = async () => {
+    if (!isLinkedInConnected) {
+      toast.error("Please connect your LinkedIn account in Settings first.");
+      return;
+    }
+    if (selectedImages.length === 0) {
+      toast.error("Please select at least one image to post.");
+      return;
+    }
+    if (selectedImages.length > 9) {
+      toast.error("LinkedIn posting supports up to 9 images.");
+      return;
+    }
+    const sessionToken = localStorage.getItem('session');
+    if (!sessionToken) {
+      toast.error('Authentication error. Please log in again.');
+      return;
+    }
+    const imageUrlsToPost = selectedImages.map(img => img.url);
+    setIsPosting(true);
+    toast.loading('Posting to LinkedIn...');
+    try {
+      const response = await fetch('/api/social/post-linkedin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionToken}`
+        },
+        body: JSON.stringify({
+          caption: currentCaption,
+          imageUrls: imageUrlsToPost
+        }),
+      });
+      const data = await response.json();
+      toast.dismiss();
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || 'Failed to post to LinkedIn.');
+      }
+      toast.success(data.message || 'Successfully posted to LinkedIn!');
+    } catch (error) {
+      toast.dismiss();
+      console.error('Error posting to LinkedIn:', error);
+      toast.error(error.message || 'Failed to post to LinkedIn.');
+    } finally {
+      setIsPosting(false);
+    }
+  };
 
   return (
     <Modal 
@@ -506,7 +562,7 @@ export default function TestimonialResultsModal({ isOpen, onClose, results }) {
                             <button 
                                 className="social-button instagram"
                                 onClick={handlePostToInstagram}
-                                disabled={isPosting || selectedImages.length === 0}
+                                disabled={isPosting || selectedImages.length === 0 || !isInstagramConnected}
                             >
                                 <FaInstagram className="icon" />
                                 <div className="button-content">
@@ -517,7 +573,7 @@ export default function TestimonialResultsModal({ isOpen, onClose, results }) {
                             <button 
                                 className="social-button facebook"
                                 onClick={handlePostToFacebook}
-                                disabled={isPosting || selectedImages.length === 0}
+                                disabled={isPosting || selectedImages.length === 0 || !isFacebookConnected}
                             >
                                 <FaFacebookSquare className="icon" />
                                 <div className="button-content">
@@ -525,9 +581,20 @@ export default function TestimonialResultsModal({ isOpen, onClose, results }) {
                                 <span className="button-desc">Post selected images & text</span>
                                 </div>
                             </button>
+                            <button 
+                                className="social-button linkedin"
+                                onClick={handlePostToLinkedIn}
+                                disabled={isPosting || selectedImages.length < 1 || selectedImages.length > 9 || !isLinkedInConnected}
+                            >
+                                <FaLinkedin className="icon" />
+                                <div className="button-content">
+                                <span className="button-title">Share on LinkedIn</span>
+                                <span className="button-desc">Post up to 9 images to your profile</span>
+                                </div>
+                            </button>
                             </div>
                         )}
-                        {!isLoadingStatus && (!isFacebookConnected || !isInstagramConnected) && (
+                        {!isLoadingStatus && (!isFacebookConnected || !isInstagramConnected || !isLinkedInConnected) && (
                             <p className="connect-tip">
                                 Connect your accounts in <a href="/dashboard/settings" target="_blank" rel="noopener noreferrer">Settings</a> to enable posting.
                             </p>
@@ -617,6 +684,7 @@ export default function TestimonialResultsModal({ isOpen, onClose, results }) {
         .social-button { flex: 1; display: flex; align-items: center; gap: 1rem; padding: 0.8rem 1rem; /* Adjusted padding */ border-radius: 10px; text-decoration: none; color: white; transition: all 0.2s ease; border: none; cursor: pointer; }
         .social-button.instagram { background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%); }
         .social-button.facebook { background: #1877f2; }
+        .social-button.linkedin { background: #0A66C2; }
         .social-button:hover:not(:disabled) { transform: translateY(-2px); filter: brightness(110%); }
         .social-button:disabled { opacity: 0.6; cursor: not-allowed; }
         .social-button .icon { font-size: 1.25rem; }

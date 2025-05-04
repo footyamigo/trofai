@@ -33,6 +33,7 @@ export default function QuoteGeneratorPage() {
     const [selectedTemplatesetId, setSelectedTemplatesetId] = useState(null);
     const [selectedTipCategory, setSelectedTipCategory] = useState(TIP_CATEGORIES[0]);
     const [templateSelectionError, setTemplateSelectionError] = useState(null);
+    const [loadedTemplateSets, setLoadedTemplateSets] = useState([]); // <<< Added state for loaded templates
 
     // Loading Modal State
     const [isTipLoadingModalOpen, setIsTipLoadingModalOpen] = useState(false);
@@ -123,6 +124,14 @@ export default function QuoteGeneratorPage() {
         fetchHistory();
     }, []); // Empty dependency array means this runs once on mount
     // --- End Fetch History Effect ---
+
+    // --- Add Effect to Pre-select First Template ---
+    useEffect(() => {
+        if (!selectedTemplatesetId && loadedTemplateSets.length > 0) {
+            setSelectedTemplatesetId(loadedTemplateSets[0].id);
+        }
+    }, [loadedTemplateSets, selectedTemplatesetId]); // Run when templates load or selection changes
+    // --- End Pre-select Effect ---
 
     // --- Handlers ---
 
@@ -557,13 +566,18 @@ export default function QuoteGeneratorPage() {
                              </div>
 
                             {/* --- Use TemplateSelector Component --- */}
-                            <div className="template-selector-section card">
+                            <div className="template-selector-container card">
                                 <TemplateSelector
                                     selectedTemplate={selectedTemplatesetId}
                                     onSelect={handleTemplateSelect}
-                                    apiEndpoint="/api/list-quote-templates"
+                                    onSetsLoaded={setLoadedTemplateSets} // <<< Pass callback to store loaded sets
+                                    apiEndpoint="/api/list-quote-templates" // <<< Restore this line
                                 />
-                                {templateSelectionError && <div className="error-inline" style={{marginTop: '1rem'}}>{templateSelectionError}</div>}
+                                {templateSelectionError && (
+                                    <p className="error-message template-error" style={{ marginTop: '1rem' }}>
+                                        <FiAlertTriangle /> {templateSelectionError}
+                                    </p>
+                                )}
 
                                 {/* --- Moved Tip Category Selection Here --- */}
                                 <div className="listing-type-section">

@@ -21,9 +21,10 @@ const REVIEW_LOADING_STEPS = [
 ];
 
 export default function ReviewGenerator() {
-  const [selectedTemplateSetId, setSelectedTemplateSetId] = useState(null); 
-  const [templateSelectionError, setTemplateSelectionError] = useState(null); 
-  
+  const [selectedTemplateSetId, setSelectedTemplateSetId] = useState(null);
+  const [templateSelectionError, setTemplateSelectionError] = useState(null);
+  const [loadedTemplateSets, setLoadedTemplateSets] = useState([]); // <<< Added state for loaded templates
+
   const [selectedFile, setSelectedFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   
@@ -112,6 +113,14 @@ export default function ReviewGenerator() {
     fetchHistory();
   }, []); // Empty dependency array means this runs once on mount
   // --- End Fetch History Effect ---
+
+  // --- Add Effect to Pre-select First Template ---
+  useEffect(() => {
+    if (!selectedTemplateSetId && loadedTemplateSets.length > 0) {
+      setSelectedTemplateSetId(loadedTemplateSets[0].id);
+    }
+  }, [loadedTemplateSets, selectedTemplateSetId]); // Run when templates load or selection changes
+  // --- End Pre-select Effect ---
 
   const handleTemplateSelect = (templateId) => {
       setSelectedTemplateSetId(templateId);
@@ -587,7 +596,8 @@ export default function ReviewGenerator() {
                  <TemplateSelector 
                     selectedTemplate={selectedTemplateSetId} 
                     onSelect={handleTemplateSelect} 
-                    apiEndpoint="/api/list-testimonial-templates" 
+                    onSetsLoaded={setLoadedTemplateSets}
+                    apiEndpoint="/api/list-testimonial-templates"
                  />
                  {templateSelectionError && <div className="error-message" style={{marginTop: '1rem'}}>{templateSelectionError}</div>}
               </div>

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { AiFillStar } from 'react-icons/ai';
 
-export default function TemplateSelector({ selectedTemplate, onSelect, onSetsLoaded, apiEndpoint = '/api/bannerbear/template-sets' }) {
+export default function TemplateSelector({ selectedTemplate, onSelect, onSetsLoaded, apiEndpoint = '/api/bannerbear/template-sets', outputType, onOutputTypeChange }) {
   const [templateSets, setTemplateSets] = useState([]);
   const [isLoadingSets, setIsLoadingSets] = useState(true);
   const [errorLoadingSets, setErrorLoadingSets] = useState(null);
@@ -32,31 +32,28 @@ export default function TemplateSelector({ selectedTemplate, onSelect, onSetsLoa
       
       try {
         console.log(`TemplateSelector fetching from: ${apiEndpoint}`);
-        const response = await fetch(apiEndpoint, { headers });
+        const timestamp = new Date().getTime(); // Add a timestamp to prevent caching
+        const response = await fetch(`${apiEndpoint}?t=${timestamp}`, { headers });
         const data = await response.json();
         if (!response.ok || !data.success) {
           throw new Error(data.message || 'Failed to fetch template sets');
         }
-        setTemplateSets(data.sets || []);
-        
-        let userTemplateCounter = 1;
-        const processedSets = (data.sets || []).map(set => {
-          const isStandardSet = /^Template Set \d+$/i.test(set.name);
-          
-          if (isStandardSet) {
-            return { ...set, display_name: set.name };
-          } else {
-            if (apiEndpoint !== '/api/bannerbear/template-sets') {
-                 return { ...set, display_name: set.name }; 
-            } else {
-                return { ...set, display_name: `My Template ${userTemplateCounter++}` };
-            }
-          }
-        });
-        setDisplayTemplateSets(processedSets);
+        let sets = data.sets || [];
+        // Separate user and platform sets
+        const userSets = sets.filter(set => set.isUserOwned);
+        const platformSets = sets.filter(set => !set.isUserOwned);
+        // Rename user sets as 'My Template Set X'
+        const renamedUserSets = userSets.map((set, idx) => ({
+          ...set,
+          display_name: `My Template Set ${idx + 1}`
+        }));
+        // Combine: user sets first, then platform sets
+        sets = [...renamedUserSets, ...platformSets];
+        setTemplateSets(sets);
+        setDisplayTemplateSets(sets);
         
         if (onSetsLoaded) {
-          onSetsLoaded(processedSets);
+          onSetsLoaded(sets);
         }
       } catch (error) {
         console.error("Error fetching template sets:", error);
@@ -101,7 +98,7 @@ export default function TemplateSelector({ selectedTemplate, onSelect, onSetsLoa
   }, [previewImage, currentImageIndex, currentTemplateId, templateSets]);
 
   const getSelectedTemplateName = () => {
-    const selected = displayTemplateSets.find(t => t.id === selectedTemplate);
+    const selected = templateSets.find(t => t.id === selectedTemplate);
     return selected ? selected.display_name : 'Select a Template Set';
   };
 
@@ -175,24 +172,50 @@ export default function TemplateSelector({ selectedTemplate, onSelect, onSetsLoa
   return (
     <div className="template-selector">
       <div className="selector-header">
-        <h3 className="selector-title">
-          Template: <span className="selected-template">{getSelectedTemplateName()}</span>
-        </h3>
-        <div className="navigation-controls">
-          <button 
-            className="nav-button prev" 
-            onClick={() => setStartIndex(Math.max(0, startIndex - 1))}
-            disabled={startIndex === 0 || isLoadingSets || templateSets.length <= 4}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
-          </button>
-          <button 
-            className="nav-button next" 
-            onClick={() => setStartIndex(Math.min(templateSets.length - 4, startIndex + 1))}
-            disabled={startIndex >= templateSets.length - 4 || isLoadingSets || templateSets.length <= 4}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
-          </button>
+        <div className="header-left">
+          <h3 className="selector-title">
+            Template: <span className="selected-template">{getSelectedTemplateName()}</span>
+          </h3>
+        </div>
+        
+        <div className="header-right">
+          {outputType && onOutputTypeChange && (
+            <div className="dropdown-wrapper">
+              <div className="inline-output-selector template-selector-output">
+                  <select 
+                    id="output-type-image"
+                    value={outputType}
+                    onChange={onOutputTypeChange}
+                    className="output-type-dropdown inline"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <option value="image">Image</option>
+                    <option value="video">Video</option>
+                  </select>
+                  <span className="dropdown-chevron">
+                    <svg width="18" height="18" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M6 8L10 12L14 8" stroke="#7B8A97" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  </span>
+              </div>
+            </div>
+          )}
+          <div className="navigation-controls">
+            <button 
+              className="nav-button prev" 
+              onClick={() => setStartIndex(Math.max(0, startIndex - 1))}
+              disabled={startIndex === 0 || isLoadingSets || templateSets.length <= 4}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            </button>
+            <button 
+              className="nav-button next" 
+              onClick={() => setStartIndex(Math.min(templateSets.length - 4, startIndex + 1))}
+              disabled={startIndex >= templateSets.length - 4 || isLoadingSets || templateSets.length <= 4}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </button>
+          </div>
         </div>
       </div>
       
@@ -359,6 +382,18 @@ export default function TemplateSelector({ selectedTemplate, onSelect, onSetsLoa
           align-items: center;
           padding: 0.8rem 1rem;
           border-bottom: 1px solid #eaeaea;
+        }
+        
+        .header-left {
+          display: flex;
+          align-items: center;
+          gap: 1rem;
+        }
+        
+        .header-right {
+          display: flex;
+          align-items: center;
+          gap: 1rem; /* Space between dropdown and nav buttons */
         }
         
         .selector-title {
@@ -609,6 +644,68 @@ export default function TemplateSelector({ selectedTemplate, onSelect, onSetsLoa
           top: 10px;
           right: 10px;
           z-index: 1;
+        }
+        
+        .dropdown-wrapper {
+          position: relative;
+          display: flex;
+          align-items: center;
+        }
+        
+        .inline-output-selector {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
+        
+        .inline-output-selector label {
+          font-weight: 500;
+          font-size: 0.9rem;
+          color: #4a5568;
+        }
+
+        .output-type-dropdown.inline {
+          appearance: none;
+          -webkit-appearance: none;
+          -moz-appearance: none;
+          padding: 0.5rem 2.2rem 0.5rem 1rem;
+          border: 1px solid #e2e8f0;
+          border-radius: 8px;
+          background: #f8fafc;
+          font-size: 1rem;
+          color: #222;
+          font-weight: 500;
+          box-shadow: 0 1px 2px rgba(60,60,60,0.03);
+          transition: border-color 0.2s, box-shadow 0.2s;
+          cursor: pointer;
+          min-width: 110px;
+        }
+
+        .output-type-dropdown.inline:focus {
+          outline: none;
+          border-color: #62d76b;
+          box-shadow: 0 0 0 2px rgba(98, 215, 107, 0.18);
+        }
+        
+        .template-selector-output {
+          /* Add specific adjustments if needed */
+        }
+        
+        .dropdown-chevron {
+          pointer-events: none;
+          position: absolute;
+          right: 1rem;
+          top: 50%;
+          transform: translateY(-50%);
+          display: flex;
+          align-items: center;
+        }
+        .output-type-dropdown.inline::-ms-expand {
+          display: none;
+        }
+        .output-type-dropdown.inline option {
+          background: #fff;
+          color: #222;
         }
         
         @media (max-width: 768px) {

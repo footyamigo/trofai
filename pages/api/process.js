@@ -1,5 +1,5 @@
 // Import AWS SDK
-const AWS = require('aws-sdk');
+import AWS from 'aws-sdk';
 const fetch = require('node-fetch');
 const getConfig = require('next/config').default;
 const fs = require('fs');
@@ -192,21 +192,21 @@ async function pollBannerbearStatus(uid, propertyId, isCollection = true) {
   return fetchStatus();
 }
 
-// Main API handler
+// Main API handler - Modified for Bannerbear Generation Only
 export default async function handler(req, res) {
-  console.log('Starting API request');
-  console.log('Request method:', req.method);
+  console.log('[API /process] Starting Bannerbear generation request');
 
-  // Only allow POST requests
   if (req.method !== 'POST') {
     return res.status(405).json({ message: 'Method not allowed' });
   }
 
+  let userData;
+  let userId;
   try {
-    // Get the user from the session token
+    // --- Authentication Logic (Direct DynamoDB lookup) --- 
     const session = req.headers.authorization?.replace('Bearer ', '');
     if (!session) {
-      return res.status(401).json({ message: 'Unauthorized - No session provided' });
+      return res.status(401).json({ error: 'Unauthorized - No session provided' });
     }
 
     // Validate session with DynamoDB
@@ -223,224 +223,114 @@ export default async function handler(req, res) {
     }).promise();
 
     if (!userResponse.Items || userResponse.Items.length === 0) {
-      return res.status(401).json({ message: 'Unauthorized - Invalid session' });
+      return res.status(401).json({ error: 'Unauthorized - Invalid session' });
+    }
+    userData = userResponse.Items[0]; // Store user data
+    userId = userData.userId;
+    console.log(`[API /process] Authenticated user: ${userId}`);
+    // --- End Authentication Logic ---
+    
+    // Extract data needed for Bannerbear generation from the request body
+    const { scrapedData, templateId, listing_type } = req.body;
+
+    // Validate required inputs
+    if (!scrapedData) {
+      return res.status(400).json({ error: 'Missing scrapedData.' });
+    }
+    if (!templateId) {
+      return res.status(400).json({ error: 'Missing templateId (Bannerbear Template Set UID).' });
+    }
+    // listing_type is optional but log if present
+    if (listing_type) {
+      console.log(`[API /process] Listing type provided: ${listing_type}`);
     }
 
-    const userData = userResponse.Items[0]; // Get the full user item
-    const userId = userData.userId;
-
-    // Extract Agent Profile Data (with fallbacks)
-    const agentProfile = {
-      name: userData.agent_name || userData.name || '' , // Fallback to user's name if agent name not set
-      email: userData.agent_email || userData.email || '', // Fallback to user's email
-      phone: userData.agent_phone || '',
-      photo_url: userData.agent_photo_url || null, // Use null if not set
-    };
-    // Only fetch and log agent profile if it's explicitly an agent flow
+    // Extract Agent Profile Data from authenticated user data (only if agent flow was indicated during scrape? TBD)
+    // For now, assume agent flow if agent details exist in userData
     let agentProfileForBannerbear = null;
-    const isAgentFlow = req.body.isAgentFlow === true || String(req.body.isAgentFlow).toLowerCase() === 'true';
-
-    if (isAgentFlow) {
+    if (userData.agent_name || userData.agent_email || userData.agent_phone || userData.agent_photo_url) {
         agentProfileForBannerbear = {
             name: userData.agent_name || userData.name || '' ,
             email: userData.agent_email || userData.email || '',
             phone: userData.agent_phone || '',
             photo_url: userData.agent_photo_url || null,
         };
-        console.log(`Agent Flow detected. Profile for Bannerbear:`, agentProfileForBannerbear);
+        console.log(`[API /process] Agent profile found. Passing to Bannerbear:`, agentProfileForBannerbear);
     } else {
-        console.log('Standard flow detected, not passing agent profile to Bannerbear.');
+        console.log('[API /process] No agent profile found in user data.');
     }
 
-    // Get parameters from either query or body for backward compatibility
-    const params = { ...req.query, ...req.body };
-    const { url, listing_type } = params;
-
-    if (!url) {
-      return res.status(400).json({ message: 'URL parameter is required' });
-    }
-
-    // Log if listing type is provided
-    if (listing_type) {
-      console.log(`Listing type provided: ${listing_type}`);
-    }
-
-    // Log environment variables (without exposing full keys)
-    console.log('Environment check:', {
-      BANNERBEAR_API_KEY: BANNERBEAR_API_KEY ? '✓ Set' : '✗ Missing',
-      BANNERBEAR_TEMPLATE_UID: BANNERBEAR_TEMPLATE_UID ? '✓ Set' : '✗ Missing',
-      AWS_ACCESS_KEY_ID: AWS_ACCESS_KEY_ID ? '✓ Set' : '✗ Missing',
-      AWS_SECRET_ACCESS_KEY: AWS_SECRET_ACCESS_KEY ? '✓ Set' : '✗ Missing',
-      FIRECRAWL_API_KEY: FIRECRAWL_API_KEY ? '✓ Set' : '✗ Missing',
-      USE_FIRECRAWL: serverRuntimeConfig.USE_FIRECRAWL || process.env.USE_FIRECRAWL
-    });
+    // --- Bannerbear Generation --- 
+    console.log('[API /process] Initiating Bannerbear collection generation with template set:', templateId);
     
-    let propertyData;
-    let propertyUrl = url;
-    
-    // First check if this is a URL we know how to scrape
-    const isRightmoveUrl = url.includes('rightmove.co.uk');
-    const isZillowUrl = url.includes('zillow.com');
-    const isOnTheMarketUrl = url.includes('onthemarket.com');
-    const isKnownScraperUrl = isRightmoveUrl || isZillowUrl || isOnTheMarketUrl;
-    
-    // Only try to get from DynamoDB if this is not a recognizable scraper URL
-    // and might be a property ID from DynamoDB
-    if (!isKnownScraperUrl) {
-      console.log('URL is not a recognized scraper URL, attempting to fetch property from DynamoDB:', url);
-      
-      if (!dynamoDb) {
-        return res.status(400).json({ error: 'DynamoDB not configured and no URL provided' });
-      }
-      
-      const { Item } = await dynamoDb.get({
-        TableName: TABLES.PROPERTIES,
-        Key: { url: url }
-      }).promise();
-      
-      if (!Item) {
-        return res.status(404).json({ error: 'Property not found in database' });
-      }
-      
-      propertyUrl = Item.url;
-      propertyData = Item.data;
-      
-      console.log('Retrieved property from database:', {
-        url: propertyUrl
-      });
-    }
-    
-    // If we don't have property data yet, scrape it
-    if (!propertyData) {
-      console.log('Starting property scrape with URL:', propertyUrl);
-      
-      // Clean the URL only if it's a Rightmove URL
-      const cleanedUrl = isRightmoveUrl ? cleanRightmoveUrl(propertyUrl) : propertyUrl;
-      console.log('Cleaned URL:', cleanedUrl);
-      
-      try {
-        // Log which scraper module we're using
-        console.log('Using unified scraper module with USE_FIRECRAWL=', serverRuntimeConfig.USE_FIRECRAWL || process.env.USE_FIRECRAWL);
-        
-        // Perform the actual scraping using our unified scraper
-        console.log('Calling scraper.scrapeProperty()...');
-        propertyData = await scrapeProperty(cleanedUrl, listing_type, agentProfile);
-        
-        if (!propertyData) {
-          console.error('scrapeProperty returned null or undefined');
-          return res.status(500).json({ error: 'Failed to scrape property data - no data returned' });
-        }
-        
-        console.log('Successfully scraped property data. Raw data keys:', Object.keys(propertyData));
-        console.log('Property type:', propertyData.raw?.property?.price);
-        console.log('Banner details:', propertyData.bannerbear?.template);
-      } catch (scrapeError) {
-        console.error('Error in scrapeProperty function:', scrapeError);
-      return res.status(500).json({
-          error: 'Failed to scrape property data',
-          message: scrapeError.message,
-          stack: scrapeError.stack 
-        });
-      }
-    }
-    
-    // Generate Bannerbear images
-    console.log('Initiating Bannerbear image generation');
-    
-    // Generate images using our imported generateBannerbearCollection function
-    let bannerbearResponse;
-    const templateSetToUse = params.templateId || BANNERBEAR_TEMPLATE_SET_UID;
-    
-    if (templateSetToUse) {
-      console.log('Using template set for collection generation:', templateSetToUse);
-      // Pass the listing_type to the Bannerbear generation function
-      bannerbearResponse = await generateBannerbearCollection(
-        propertyData, 
-        templateSetToUse, 
+    // Use the scrapedData directly
+    const bannerbearResponse = await generateBannerbearCollection(
+      scrapedData, 
+      templateId, 
         agentProfileForBannerbear, 
         listing_type
       );
-      console.log('Bannerbear response received:', JSON.stringify(bannerbearResponse, null, 2));
-    } else {
-      console.log('Using single template for image generation');
-      bannerbearResponse = await generateBannerbearImage(propertyData, agentProfileForBannerbear);
-    }
     
     if (!bannerbearResponse) {
-      return res.status(500).json({ error: 'Failed to generate Bannerbear response' });
+        console.error('[API /process] generateBannerbearCollection returned null or undefined');
+        throw new Error('Failed to initiate Bannerbear collection generation.');
     }
-
-    console.log('Bannerbear generation completed successfully');
+    console.log('[API /process] Bannerbear response received:', JSON.stringify(bannerbearResponse, null, 2));
     
-    // Generate propertyId outside the try block so it's available throughout
-    const propertyId = crypto.randomUUID();
+    // --- DynamoDB Storage --- 
+    const propertyId = crypto.randomUUID(); // Generate a unique ID for this content instance
     const timestamp = new Date().toISOString();
 
-    // Update the bannerbear response to include propertyId in metadata for webhook handling
-    if (bannerbearResponse) {
+    // Add propertyId to metadata for webhook/polling reference
       bannerbearResponse.metadata = {
         ...(bannerbearResponse.metadata || {}),
         propertyId: propertyId
       };
-    }
 
     try {
-      // Store completed property content with full Bannerbear response
+      // Store data in DynamoDB (similar logic as before, but using scrapedData)
+      const propertyDataForDB = scrapedData.raw || scrapedData; // Use raw if available
+      const addressValue = propertyDataForDB?.property?.location || propertyDataForDB?.property?.address || ''; 
+
+      // 1. PROPERTY_CONTENT table
+      const propertyContentItem = {
+        id: propertyId,
+        userId: userId,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        propertyData: scrapedData, // Store the full scraped data
+        status: 'pending', // Initial status before polling completes
+        price: propertyDataForDB?.property?.price || '',
+        bedrooms: propertyDataForDB?.property?.bedrooms ?? null,
+        bathrooms: propertyDataForDB?.property?.bathrooms ?? null,
+        templateId: templateId,
+        bannerbear: bannerbearResponse, // Store initial BB response
+        address: addressValue
+      };
       await dynamoDb.put({
         TableName: TABLES.PROPERTY_CONTENT,
-        Item: {
-          id: propertyId,
-          userId: userId,
-          createdAt: timestamp,
-          updatedAt: timestamp,
-          propertyData: propertyData,
-          status: 'completed',
-          address: propertyData.raw?.property?.address || '',
-          price: propertyData.raw?.property?.price || '',
-          bedrooms: propertyData.raw?.property?.bedrooms || '',
-          bathrooms: propertyData.raw?.property?.bathrooms || '',
-          templateId: templateSetToUse,
-          // Store the complete Bannerbear response exactly as received
-          bannerbear: bannerbearResponse
-        }
+        Item: propertyContentItem
       }).promise();
 
-      // Save to properties table with user association
-      await dynamoDb.put({
-        TableName: TABLES.PROPERTIES,
-        Item: {
-          propertyId,
-          userId: userId,
-          url: propertyUrl,
-          data: propertyData.raw,
-          address: propertyData.raw?.property?.address || '',
-          price: propertyData.raw?.property?.price || '',
-          bedrooms: propertyData.raw?.property?.bedrooms || '',
-          bathrooms: propertyData.raw?.property?.bathrooms || '',
-          createdAt: timestamp,
-          updatedAt: timestamp
-        }
-      }).promise();
-
-      // Save to designs table with user association
+      // 2. DESIGNS table (tracks the Bannerbear job)
+      const designsItem = {
+        uid: bannerbearResponse.uid,
+        designId: bannerbearResponse.uid,
+        propertyId,
+        userId: userId,
+        status: bannerbearResponse.status || 'pending',
+        type: bannerbearResponse.template_set ? 'collection' : 'image',
+        templateId: templateId,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        ...bannerbearResponse
+      };
       await dynamoDb.put({
         TableName: TABLES.DESIGNS,
-        Item: {
-          uid: bannerbearResponse.uid,
-          designId: bannerbearResponse.uid,
-          propertyId,
-          userId: userId,
-          status: bannerbearResponse.status || 'completed',
-          type: 'collection',
-          templateId: templateSetToUse,
-          createdAt: timestamp,
-          updatedAt: timestamp,
-          // Store the complete response data
-          ...bannerbearResponse
-        }
+        Item: designsItem
       }).promise();
 
-      // Store caption in DynamoDB
+      // 3. CAPTIONS table
       const captionId = crypto.randomUUID();
       await dynamoDb.put({
         TableName: TABLES.CAPTIONS,
@@ -449,14 +339,14 @@ export default async function handler(req, res) {
           userId,
           propertyId,
           designId: bannerbearResponse.uid,
-          caption: propertyData.caption,
-          captionOptions: propertyData.captionOptions || {},
+          caption: scrapedData.caption || '', // Get caption from scraped data
+          captionOptions: scrapedData.captionOptions || {},
           createdAt: timestamp,
           updatedAt: timestamp
         }
       }).promise();
 
-      // Save status to image-status table
+      // 4. IMAGE_STATUS table (initial status)
       await dynamoDb.put({
         TableName: TABLES.IMAGE_STATUS,
         Item: {
@@ -464,15 +354,33 @@ export default async function handler(req, res) {
           imageId: bannerbearResponse.uid,
           propertyId,
           userId: userId,
-          status: bannerbearResponse.status || 'completed',
+          status: bannerbearResponse.status || 'pending',
           createdAt: timestamp,
           updatedAt: timestamp,
-          // Store the complete response data
           ...bannerbearResponse
         }
       }).promise();
 
-      // Update user's properties list
+      // 5. **NEW**: Save summary to PROPERTIES table for History List
+      const propertySummaryItem = {
+        propertyId: propertyId,
+        userId: userId,
+        url: req.body.url, // Get original URL from request body
+        address: addressValue,
+        price: propertyDataForDB?.property?.price || '',
+        bedrooms: propertyDataForDB?.property?.bedrooms ?? null,
+        bathrooms: propertyDataForDB?.property?.bathrooms ?? null,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        status: 'pending' // Initial status for history
+      };
+      await dynamoDb.put({
+        TableName: TABLES.PROPERTIES,
+        Item: propertySummaryItem
+      }).promise();
+
+      // 6. Update USER properties list (add propertyId)
+      // (Keep existing robust logic for updating user properties)
       try {
         await dynamoDb.update({
           TableName: TABLES.USERS,
@@ -484,59 +392,70 @@ export default async function handler(req, res) {
           }
         }).promise();
       } catch (userUpdateError) {
-        console.error('Failed to update user properties list:', userUpdateError);
-        await dynamoDb.put({
+          console.warn('[API /process] Failed to update user properties list, attempting PUT:', userUpdateError);
+          // Fallback to PUT if update fails (e.g., properties list doesn't exist)
+          const existingUserData = await dynamoDb.get({ TableName: TABLES.USERS, Key: { userId } }).promise();
+          const existingProperties = existingUserData.Item?.properties || [];
+          if (!existingProperties.includes(propertyId)) { // Avoid duplicates
+             await dynamoDb.update({
           TableName: TABLES.USERS,
-          Item: {
-            userId: userId,
-            email: userResponse.Items[0].email,
-            properties: [propertyId],
-            createdAt: timestamp,
-            updatedAt: timestamp
-          }
+               Key: { userId: userId },
+               UpdateExpression: 'SET properties = :props',
+               ExpressionAttributeValues: { ':props': [...existingProperties, propertyId] }
         }).promise();
+           }
       }
 
-      console.log('Successfully saved initial Bannerbear response to DynamoDB');
+      console.log('[API /process] Successfully saved initial Bannerbear response to DynamoDB');
       
-      // Start polling for completed status
-      console.log('Starting background polling for Bannerbear status');
+      // --- Start Polling --- 
+      console.log('[API /process] Starting background polling for Bannerbear status');
       pollBannerbearStatus(
         bannerbearResponse.uid, 
         propertyId, 
         !!bannerbearResponse.template_set
       ).catch(error => {
-        console.error('Error in background polling:', error);
+        console.error('[API /process] Error in background polling:', error);
       });
 
-      // Return success response with complete data
+      // --- Return Initial Response --- 
+      // Send back the initial response including the UID for the frontend to poll
       return res.status(200).json({
-        message: 'Processing completed',
+        success: true,
+        message: 'Bannerbear generation initiated successfully.',
         data: {
           propertyId,
-          bannerbear: bannerbearResponse,
-          caption: propertyData.caption || '',
-          captionOptions: propertyData.captionOptions,
-          agentProfile: agentProfileForBannerbear,
+          bannerbear: {
+            uid: bannerbearResponse.uid,
+            status: bannerbearResponse.status || 'pending',
+            type: bannerbearResponse.template_set ? 'collection' : 'image'
+          },
+          // Include caption data from scrapedData
+          caption: scrapedData.caption || '',
+          captionOptions: scrapedData.captionOptions || {},
+          // Optionally include minimal property details if needed by frontend immediately
           property: {
-            address: propertyData.raw?.property?.address || '',
-            price: propertyData.raw?.property?.price || '',
-            bedrooms: propertyData.raw?.property?.bedrooms || '',
-            bathrooms: propertyData.raw?.property?.bathrooms || '',
-            squareFeet: propertyData.raw?.property?.square_ft || ''
+            address: addressValue,
+            price: propertyDataForDB?.property?.price || ''
           }
         }
       });
+
     } catch (dbError) {
-      console.error('Failed to store data in DynamoDB:', dbError);
-      return res.status(500).json({ 
-        error: 'Failed to store data',
-        message: dbError.message
-      });
+      console.error('[API /process] Failed to store data in DynamoDB:', dbError);
+      // Attempt to clean up Bannerbear job if DB write fails?
+      throw new Error(`Failed to store processing data: ${dbError.message}`); // Throw to be caught by outer try/catch
     }
     
   } catch (error) {
-    console.error('Error in API handler:', error);
-    return res.status(500).json({ error: error.message });
+    console.error('[API /process] Error in main handler:', error);
+     // Distinguish auth errors from other processing errors
+    if (error.message.includes('Unauthorized')) {
+        return res.status(401).json({ success: false, error: error.message });
+    }
+    res.status(500).json({ 
+        success: false,
+        error: `Processing failed: ${error.message || 'Internal Server Error'}` 
+    });
   }
 } 

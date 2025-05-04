@@ -97,7 +97,7 @@ export default async function handler(req, res) {
         console.log(`Successfully fetched details for ${fetchedTemplateSets.length} template set(s).`);
 
         // Map the fetched sets to the format expected by TemplateSelector
-        const formattedSets = fetchedTemplateSets.map(set => {
+        const formattedSets = fetchedTemplateSets.map((set, index) => {
              const previews = set.templates
                 ?.map(t => ({
                     name: formatTemplateName(t.name), 
@@ -109,7 +109,7 @@ export default async function handler(req, res) {
             return {
                 id: set.uid, 
                 name: set.name, 
-                display_name: set.name, 
+                display_name: `Template Set ${index + 1}`, 
                 description: `Contains ${set.templates?.length || 0} designs.`, 
                 previewUrl: previews && previews.length > 0 ? previews[0].url : null, 
                 previews: previews || [], 

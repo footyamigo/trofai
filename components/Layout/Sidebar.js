@@ -15,11 +15,12 @@ import { useAuth } from '../../src/context/AuthContext';
 export default function Sidebar({ activePage = 'home' }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const { user, signOut } = useAuth();
+  const userEmail = user?.attributes?.email || user?.email || user?.username || '';
   
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: AiOutlineHome, href: '/dashboard' },
-    { id: 'caption', label: 'Caption Generator', icon: RiText, href: '/caption', isNew: false },
-    { id: 'reviews', label: 'Review Generator', icon: FiStar, href: '/review-generator' },
+    // { id: 'caption', label: 'Caption Generator', icon: RiText, href: '/caption', isNew: false },
+    { id: 'reviews', label: 'Social Proof', icon: FiStar, href: '/review-generator' },
     { id: 'tips-generator', label: 'Tip Generator', icon: FiZap, href: '/tips-generator', isNew: true },
     { id: 'templates', label: 'Template Gallery', icon: MdOutlineViewModule, href: '/templates' },
     { id: 'my-templates', label: 'My Templates', icon: FiCopy, href: '/my-templates' },
@@ -83,8 +84,8 @@ export default function Sidebar({ activePage = 'home' }) {
 
       <div className="user-profile-container">
         <div className="user-profile" onClick={toggleMenu}>
-          <div className="avatar">{user?.email?.[0]?.toUpperCase() || 'P'}</div>
-          <span className="username">{user?.email || 'presidentialideas'}</span>
+          <div className="avatar">{userEmail?.[0]?.toUpperCase() || 'P'}</div>
+          <span className="username">{userEmail || 'presidentialideas'}</span>
           <button className="menu-button">
             <IoEllipsisHorizontal />
           </button>
@@ -95,7 +96,7 @@ export default function Sidebar({ activePage = 'home' }) {
             <div className="profile-menu-backdrop" onClick={handleClickOutside}></div>
             <div className="profile-menu">
               <div className="profile-menu-header">
-                <span className="menu-username">{user?.email || 'No user logged in'}</span>
+                <span className="menu-username">{userEmail || 'No user logged in'}</span>
               </div>
               {profileMenuItems.map((item) => {
                 const Icon = item.icon;

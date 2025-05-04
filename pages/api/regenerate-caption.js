@@ -52,7 +52,7 @@ export default async function handler(req, res) {
     }
 
     // 3. Extract data from request body (excluding agentProfile/isAgentFlow)
-    const { propertyDetails, currentCaption } = req.body;
+    const { propertyDetails, currentCaption, listingType } = req.body;
 
     if (!propertyDetails) {
       return res.status(400).json({ error: 'Property details are required for regeneration' });
@@ -65,8 +65,11 @@ export default async function handler(req, res) {
     
     console.log(`Regenerating caption for agent: ${agentName}`); // Log the fetched agent name
     
-    // 5. Construct the prompt using fetched agent details
+    // 5. Construct the prompt using fetched agent details and listingType
     const fullPrompt = `You are ${agentName}, an expert real estate copywriter. Rewrite the following social media post for YOUR listing to make it more compelling, detailed, and professional, while reducing emoji usage.
+
+IMPORTANT: The listing type is: ${listingType || 'Just Listed'}.
+Start the caption with a hook or phrase that matches this listing type (e.g., 'Just Listed!', 'Just Sold!', 'For Rent', 'Let Agreed', etc.) and keep the context throughout the caption.
 
 Your tone should be:
 - Professional, knowledgeable, and enthusiastic.

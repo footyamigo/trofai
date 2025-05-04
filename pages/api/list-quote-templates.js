@@ -164,7 +164,7 @@ export default async function handler(req, res) {
         console.log(`Successfully fetched details for ${fetchedTemplateSets.length} QUOTE template set(s).`); // <<< Log message updated
 
         // Map the fetched sets to the format expected by TemplateSelector
-        const formattedSets = fetchedTemplateSets.map(set => {
+        const formattedSets = fetchedTemplateSets.map((set, index) => {
              const previews = set.templates
                 ?.map(t => ({
                     name: formatTemplateName(t.name),
@@ -185,7 +185,7 @@ export default async function handler(req, res) {
             return {
                 id: set.uid, // ID used for selection in the frontend
                 name: set.name, // Internal name
-                display_name: formatTemplateName(set.name), // User-facing name <<< Use formatted name
+                display_name: `Template Set ${index + 1}`, // User-facing name
                 description: `Contains ${set.templates?.length || 0} design(s).`, // <<< Adjusted description text
                 previewUrl: previews[0].url, // Use the first template's preview as the main one
                 previews: previews || [], // Array of all template previews

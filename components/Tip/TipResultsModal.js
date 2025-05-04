@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Modal from '../UI/Modal';
 import { FiDownload, FiCopy, FiX, FiChevronLeft, FiChevronRight, FiRefreshCw } from 'react-icons/fi';
-import { FaInstagram, FaFacebookSquare } from 'react-icons/fa';
+import { FaInstagram, FaFacebookSquare, FaLinkedin } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 
 export default function TipResultsModal({ isOpen, onClose, results, selectedTip }) {
@@ -12,6 +12,7 @@ export default function TipResultsModal({ isOpen, onClose, results, selectedTip 
   const thumbnailsRef = useRef(null);
   const [isFacebookConnected, setIsFacebookConnected] = useState(false);
   const [isInstagramConnected, setIsInstagramConnected] = useState(false);
+  const [isLinkedInConnected, setIsLinkedInConnected] = useState(false);
   const [isLoadingStatus, setIsLoadingStatus] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
   const [caption, setCaption] = useState('');
@@ -26,6 +27,7 @@ export default function TipResultsModal({ isOpen, onClose, results, selectedTip 
       setSelectedImageIndex(0);
       setIsFacebookConnected(false);
       setIsInstagramConnected(false);
+      setIsLinkedInConnected(false);
       setIsLoadingStatus(false);
       setIsPosting(false);
       setCaption('');
@@ -51,6 +53,7 @@ export default function TipResultsModal({ isOpen, onClose, results, selectedTip 
         if (isMounted) {
           setIsFacebookConnected(false);
           setIsInstagramConnected(false);
+          setIsLinkedInConnected(false);
           setIsLoadingStatus(false);
         }
         return;
@@ -62,14 +65,17 @@ export default function TipResultsModal({ isOpen, onClose, results, selectedTip 
         if (data.success && data.connections) {
           setIsFacebookConnected(data.connections.facebook || false);
           setIsInstagramConnected(data.connections.instagram || false);
+          setIsLinkedInConnected(data.connections.linkedin || false);
         } else {
           setIsFacebookConnected(false);
           setIsInstagramConnected(false);
+          setIsLinkedInConnected(false);
         }
       } catch (error) {
         if (!isMounted) return;
         setIsFacebookConnected(false);
         setIsInstagramConnected(false);
+        setIsLinkedInConnected(false);
       } finally {
         if (isMounted) {
           setIsLoadingStatus(false);
@@ -77,7 +83,7 @@ export default function TipResultsModal({ isOpen, onClose, results, selectedTip 
       }
     };
     if (isOpen) { fetchStatus(); }
-    else { setIsLoadingStatus(false); setIsFacebookConnected(false); setIsInstagramConnected(false); }
+    else { setIsLoadingStatus(false); setIsFacebookConnected(false); setIsInstagramConnected(false); setIsLinkedInConnected(false); }
     return () => { isMounted = false; };
   }, [isOpen]);
 
@@ -272,6 +278,54 @@ export default function TipResultsModal({ isOpen, onClose, results, selectedTip 
     } catch (error) {
       toast.dismiss(); console.error('Error:', error); toast.error(error.message || 'Failed to post Story.');
     } finally { setIsPosting(false); }
+  };
+
+  const handlePostToLinkedIn = async () => {
+    if (!isLinkedInConnected) {
+      toast.error("Please connect your LinkedIn account in Settings first.");
+      return;
+    }
+    if (images.length === 0) {
+      toast.error("Please select at least one image to post.");
+      return;
+    }
+    if (images.length > 9) {
+      toast.error("LinkedIn posting supports up to 9 images.");
+      return;
+    }
+    const sessionToken = localStorage.getItem('session');
+    if (!sessionToken) {
+      toast.error('Authentication error. Please log in again.');
+      return;
+    }
+    const imageUrlsToPost = images.map(img => img.url);
+    setIsPosting(true);
+    toast.loading('Posting to LinkedIn...');
+    try {
+      const response = await fetch('/api/social/post-linkedin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${sessionToken}`
+        },
+        body: JSON.stringify({
+          caption: currentCaption,
+          imageUrls: imageUrlsToPost
+        }),
+      });
+      const data = await response.json();
+      toast.dismiss();
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || 'Failed to post to LinkedIn.');
+      }
+      toast.success(data.message || 'Successfully posted to LinkedIn!');
+    } catch (error) {
+      toast.dismiss();
+      console.error('Error posting to LinkedIn:', error);
+      toast.error(error.message || 'Failed to post to LinkedIn.');
+    } finally {
+      setIsPosting(false);
+    }
   };
 
   const handleCaptionChange = (e) => {
@@ -608,7 +662,7 @@ export default function TipResultsModal({ isOpen, onClose, results, selectedTip 
                         <button
                           className="social-button instagram"
                           onClick={handlePostToInstagram}
-                          disabled={isPosting || selectedImage.isStory || !selectedImage.url}
+                          disabled={isPosting || selectedImage.isStory || !selectedImage.url || !isInstagramConnected}
                         >
                           <FaInstagram className="icon" />
                           <div className="button-content">
@@ -619,17 +673,28 @@ export default function TipResultsModal({ isOpen, onClose, results, selectedTip 
                         <button
                           className="social-button facebook"
                           onClick={handlePostToFacebook}
-                          disabled={isPosting || selectedImage.isStory || !selectedImage.url}
+                          disabled={isPosting || selectedImage.isStory || !selectedImage.url || !isFacebookConnected}
                         >
                           <FaFacebookSquare className="icon" />
                           <div className="button-content">
                             <span className="button-title">Share on Facebook</span>
                             <span className="button-desc">Post selected image & text</span>
                           </div>
-          </button>
+                        </button>
+                        <button 
+                          className="social-button linkedin"
+                          onClick={handlePostToLinkedIn}
+                          disabled={isPosting || images.length < 1 || images.length > 9 || !isLinkedInConnected}
+                        >
+                          <FaLinkedin className="icon" />
+                          <div className="button-content">
+                            <span className="button-title">Share on LinkedIn</span>
+                            <span className="button-desc">Post up to 9 images to your profile</span>
+                          </div>
+                        </button>
                       </div>
                     )}
-                    {!isLoadingStatus && (!isFacebookConnected || !isInstagramConnected) && (
+                    {!isLoadingStatus && (!isFacebookConnected || !isInstagramConnected || !isLinkedInConnected) && (
                       <p className="connect-tip">
                         Connect your accounts in <a href="/dashboard/settings" target="_blank" rel="noopener noreferrer">Settings</a> to enable posting.
                       </p>
@@ -712,17 +777,20 @@ export default function TipResultsModal({ isOpen, onClose, results, selectedTip 
         .social-caption { background: white; border-radius: 10px; padding: 1rem; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); border: 1px solid #edf2f7; display: flex; flex-direction: column; }
         .social-caption .caption-textarea { flex-grow: 1; min-height: 150px; }
         .social-actions { background: white; border-radius: 10px; padding: 1rem; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); border: 1px solid #edf2f7; margin-top: auto; }
-        .social-buttons { display: flex; gap: 1rem; margin-top: 1rem; }
-        .social-button { flex: 1; display: flex; align-items: center; gap: 1rem; padding: 0.8rem 1rem; border-radius: 10px; text-decoration: none; color: white; transition: all 0.2s ease; border: none; cursor: pointer; }
+        .social-buttons { display: flex; flex-direction: column; gap: 1rem; margin-top: 1rem; }
+        .social-button { flex: 1; display: flex; align-items: center; gap: 1.25rem; padding: 1rem 1.5rem; border-radius: 12px; text-decoration: none; color: white; transition: all 0.2s ease; border: none; cursor: pointer; background: white; box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08); }
         .social-button.instagram { background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%); }
         .social-button.facebook { background: #1877f2; }
-        .social-button:hover:not(:disabled) { transform: translateY(-2px); filter: brightness(110%); }
-        .social-button:disabled { opacity: 0.6; cursor: not-allowed; }
-        .social-button .icon { font-size: 1.25rem; }
-        .button-content { display: flex; flex-direction: column; text-align: left; }
-        .button-title { font-weight: 600; font-size: 0.9rem; }
-        .button-desc { font-size: 0.75rem; opacity: 0.9; }
-        .connect-tip { margin-top: 1rem; padding: 1rem; background: #f8f9fa; border-radius: 8px; font-size: 0.9rem; color: #666; border-left: 3px solid #62d76b; }
+        .social-button.linkedin { background: #0A66C2; }
+        .social-button:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15); }
+        .social-button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; box-shadow: none; }
+        .social-button .icon { font-size: 1.5rem; flex-shrink: 0; }
+        .button-content { display: flex; flex-direction: column; text-align: left; flex-grow: 1; }
+        .button-title { font-weight: 600; font-size: 1rem; margin-bottom: 0.25rem; }
+        .button-desc { font-size: 0.85rem; opacity: 0.9; }
+        .connect-tip { margin-top: 1.5rem; padding: 1rem 1.25rem; background: #f8f9fa; border-radius: 10px; font-size: 0.9rem; color: #666; border-left: 4px solid #62d76b; line-height: 1.5; }
+        .connect-tip a { color: #62d76b; text-decoration: none; font-weight: 500; }
+        .connect-tip a:hover { text-decoration: underline; }
         .social-thumbnail { position: relative; aspect-ratio: 1; border-radius: 8px; overflow: hidden; cursor: pointer; border: 2px solid transparent; transition: all 0.2s ease; }
         .social-thumbnail img { width: 100%; height: 100%; object-fit: cover; }
         .social-thumbnail:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1); }

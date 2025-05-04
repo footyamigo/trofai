@@ -237,6 +237,24 @@ export default async function handler(req, res) {
     templateSetResult = await createBannerbearTemplateSet(apiKey, newSetName, successfullyUpdatedUids);
     // Log result, but don't block response based on this yet
     console.log('Template Set Creation Result:', templateSetResult);
+
+    // --- NEW: Add new set UID to userDuplicatedListingTemplateSetIds ---
+    if (templateSetResult.success && templateSetResult.templateSet?.uid) {
+      const params = {
+        TableName: USERS_TABLE,
+        Key: { userId },
+        UpdateExpression: 'ADD userDuplicatedListingTemplateSetIds :newSet',
+        ExpressionAttributeValues: {
+          ':newSet': dynamoDb.createSet([templateSetResult.templateSet.uid])
+        }
+      };
+      try {
+        await dynamoDb.update(params).promise();
+        console.log(`Added ${templateSetResult.templateSet.uid} to userDuplicatedListingTemplateSetIds for user ${userId}`);
+      } catch (err) {
+        console.error('Error updating userDuplicatedListingTemplateSetIds:', err);
+      }
+    }
   }
 
   // --- Step 4: Update DynamoDB --- 

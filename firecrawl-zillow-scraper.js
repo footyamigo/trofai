@@ -182,7 +182,6 @@ Extract comprehensive information about this Zillow property listing, with speci
    - Company name: Look for "Listed by management company" or similar text followed by the company name (e.g., "Homevest Management")
    - Phone number: Look for a phone number in format (XXX) XXX-XXXX, especially in the "Listed by management company" section
    - Phone number is often displayed like "(407) 753-7034" below the company name in the red box area
-   - Logo URL: Find any image tag near the management company name that could be the company logo
 
 2. For the property itself:
    - Full address
@@ -191,6 +190,8 @@ Extract comprehensive information about this Zillow property listing, with speci
    - Square footage
    - Description
    - Key features and amenities
+   - IMPORTANT: Only include actual property/gallery photos in the gallery images. Do NOT include any company logos, agent logos, or non-property images.
+   - It is CRITICAL to extract the entire set of gallery images (not just the main image). Return all available property/gallery images as a list/array.
    - All gallery images
 
 Check in these specific areas:
@@ -295,7 +296,6 @@ Extract comprehensive information about this Zillow property listing, with speci
    - Company name: Look for "Listed by management company" or similar text followed by the company name (e.g., "Homevest Management")
    - Phone number: Look for a phone number in format (XXX) XXX-XXXX, especially in the "Listed by management company" section
    - Phone number is often displayed like "(407) 753-7034" below the company name in the red box area
-   - Logo URL: Find any image tag near the management company name that could be the company logo
 
 2. For the property itself:
    - Full address
@@ -304,6 +304,8 @@ Extract comprehensive information about this Zillow property listing, with speci
    - Square footage
    - Description
    - Key features and amenities
+   - IMPORTANT: Only include actual property/gallery photos in the gallery images. Do NOT include any company logos, agent logos, or non-property images.
+   - It is CRITICAL to extract the entire set of gallery images (not just the main image). Return all available property/gallery images as a list/array.
    - All gallery images
 
 Check in these specific areas:
