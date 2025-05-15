@@ -2,13 +2,8 @@
   "/_app": "pages/_app.js",
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
-  "/dashboard": "pages/dashboard.js",
-  "/review-generator": "pages/review-generator.js",
-  "/api/list-testimonial-templates": "pages/api/list-testimonial-templates.js",
   "/carousel-generator": "pages/carousel-generator.js",
-  "/api/agent/profile": "pages/api/agent/profile.js",
-  "/api/reviews/fetch-history": "pages/api/reviews/fetch-history.js",
-  "/tips-generator": "pages/tips-generator.js",
-  "/api/properties/list": "pages/api/properties/list.js",
-  "/api/list-listing-templates": "pages/api/list-listing-templates.js"
+  "/api/auth/validate-session": "pages/api/auth/validate-session.js",
+  "/dashboard": "pages/dashboard.js",
+  "/api/agent/profile": "pages/api/agent/profile.js"
 }

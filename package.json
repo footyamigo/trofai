@@ -88,7 +88,8 @@
     "uuid": "^11.1.0",
     "vaul": "^1.1.2",
     "webfontloader": "^1.6.28",
-    "zod": "^3.24.4"
+    "zod": "^3.24.4",
+    "react-hook-form": "^7.50.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.6",
