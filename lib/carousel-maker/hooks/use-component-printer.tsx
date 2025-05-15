@@ -120,7 +120,7 @@ export function useComponentPrinter() {
 
     if (current && typeof current === "object") {
       // @ts-ignore should type narrow more precisely
-      const clone = current.cloneNode(true);
+      const clone = current.cloneNode(true) as HTMLElement;
       // Change from horizontal to vertical for printing and remove gap
       proxyImgSources(clone);
       removeSelectionStyleById(clone, "page-base-");
@@ -145,8 +145,8 @@ export function useComponentPrinter() {
   const handlePrint = useReactToPrint({
     content: reactToPrintContent,
     removeAfterPrint: true,
-    onBeforePrint: () => setIsPrinting(true),
-    onAfterPrint: () => setIsPrinting(false),
+    onBeforePrint: async () => { setIsPrinting(true); },
+    onAfterPrint: async () => { setIsPrinting(false); },
     pageStyle: `@page { size: ${SIZE.width}px ${SIZE.height}px;  margin: 0; } @media print { body { -webkit-print-color-adjust: exact; }}`,
     print: async (printIframe) => {
       const contentDocument = printIframe.contentDocument;

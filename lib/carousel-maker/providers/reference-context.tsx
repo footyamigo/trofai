@@ -17,7 +17,7 @@ export function useRefContext() {
 // The RefProvider component
 interface RefProviderProps {
   children: ReactNode;
-  myRef: React.RefObject<HTMLDivElement>; // Changed HTMLInputElement to HTMLDivElement
+  myRef: React.RefObject<HTMLDivElement | null>;
 }
 
 export function RefProvider({ children, myRef }: RefProviderProps) {
