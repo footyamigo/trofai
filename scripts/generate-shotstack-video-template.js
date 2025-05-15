@@ -91,10 +91,20 @@ function createMergeArray(scrapedData, listingType, templateId) {
       find: "BACKGROUND3",
       replace: "https://shotstack-ingest-api-v1-sources.s3.ap-southeast-2.amazonaws.com/tw9scym7kz/zzz01jtd-6zstb-qav3v-btv8s-3v4mye/source.png"
     },
+    // Add BACKGROUND4
+    {
+      find: "BACKGROUND4",
+      replace: "https://shotstack-ingest-api-v1-renditions.s3.ap-southeast-2.amazonaws.com/tw9scym7kz/zzz01jtf-zga7y-k48qc-2hga1-ms0rt8/shotstack-proxy.webp"
+    },
     // Add AUDIO2
     {
       find: "AUDIO2",
       replace: "https://shotstack-ingest-api-v1-sources.s3.ap-southeast-2.amazonaws.com/tw9scym7kz/zzz01jt5-gzszc-q0q92-x0yyg-8avp4w/source.mp3"
+    },
+    // Add AUDIO3
+    {
+      find: "AUDIO3",
+      replace: "https://shotstack-ingest-api-v1-sources.s3.ap-southeast-2.amazonaws.com/tw9scym7kz/zzz01jtf-zqakf-sbqs5-5krz6-yjskez/source.mp3"
     }
   ];
 

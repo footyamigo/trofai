@@ -2,6 +2,7 @@ import '../styles/globals.css';
 import { Toaster } from 'react-hot-toast';
 import { useEffect, useState } from 'react';
 import { AuthProvider } from '../src/context/AuthContext';
+import { PreviewModalProvider } from '../src/context/PreviewModalContext';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { isAmplifyConfigured, configureAmplify } from '../src/aws/config';
 
@@ -229,8 +230,10 @@ function MyApp({ Component, pageProps }) {
   return (
     <ErrorBoundary>
       <AuthProvider>
-        <Component {...pageProps} />
-        <Toaster position="bottom-center" />
+        <PreviewModalProvider>
+          <Component {...pageProps} />
+          <Toaster position="bottom-center" />
+        </PreviewModalProvider>
       </AuthProvider>
     </ErrorBoundary>
   );

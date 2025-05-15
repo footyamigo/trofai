@@ -32,21 +32,18 @@ const schema = z.object({
   })
 });
 
-// Helper to format OnTheMarket price with £ and pcm if missing
+// Helper to format OnTheMarket price with £ if missing, but do not add pcm or pw automatically
 function formatOnTheMarketPrice(price) {
   if (!price) return '';
   let priceStr = price.toString().trim();
-  // If already has £, just ensure pcm is present for rentals
+  // If already has £, return as is
   if (priceStr.startsWith('£')) {
-    if (!/pcm|pw/i.test(priceStr)) {
-      priceStr += ' pcm';
-    }
     return priceStr;
   }
-  // If it's just a number, format as £X,XXX pcm
+  // If it's just a number, format as £X,XXX (no pcm/pw)
   const numeric = Number(priceStr.replace(/[^0-9]/g, ''));
   if (!isNaN(numeric) && numeric > 0) {
-    return `£${numeric.toLocaleString()} pcm`;
+    return `£${numeric.toLocaleString()}`;
   }
   // Fallback: just return as string
   return priceStr;
@@ -173,7 +170,7 @@ async function pollFirecrawlResults(extractId) {
 
 async function scrapeOnTheMarketProperty(propertyUrl, listingType, agentProfile = null) {
   // Use fetch to call Firecrawl HTTP API
-  const prompt = `Extract the property address, price (if rental, only the pcm value), number of bedrooms, number of bathrooms, square footage, description, all gallery images, key features, estate agent name, estate agent address, and estate agent logo image.\n\nReturn the result in this schema: { property: { address, price, bedrooms, bathrooms, square_ft, description, images, key_features }, estate_agent: { name, address, logo } }`;
+  const prompt = `Extract the property address, price (include the currency symbol and any suffix such as pcm as shown on the listing), number of bedrooms, number of bathrooms, square footage, description, all gallery images, key features, estate agent name, estate agent address, and estate agent logo image.\n\nReturn the result in this schema: { property: { address, price, bedrooms, bathrooms, square_ft, description, images, key_features }, estate_agent: { name, address, logo } }`;
   const response = await fetch('https://api.firecrawl.dev/v1/extract', {
     method: 'POST',
     headers: {
@@ -216,7 +213,12 @@ function formatSquareFt(sqft) {
 async function generateBannerbearImage(propertyData, agentProfile = null) {
   try {
     // Prepare base modifications from property data
-    const baseModifications = propertyData.bannerbear.modifications || [];
+    const baseModifications = (propertyData.bannerbear.modifications || []).map(mod => {
+      if (mod.name === 'property_price') {
+        return { ...mod, text: formatOnTheMarketPrice(mod.text) };
+      }
+      return mod;
+    });
 
     // Add agent modifications if profile is provided
     const agentModifications = [];
@@ -277,7 +279,7 @@ async function generateBannerbearCollection(propertyData, templateSetUid, agentP
     const agent = propertyData.raw.agent;
     const propertyImages = property.images || property.gallery_images || [];
     const baseModifications = [
-      { name: "property_price", text: property.price },
+      { name: "property_price", text: formatOnTheMarketPrice(property.price) },
       { name: "property_location", text: property.address },
       { name: "bedrooms", text: property.bedrooms },
       { name: "bathrooms", text: property.bathrooms },

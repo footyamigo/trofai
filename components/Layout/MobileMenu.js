@@ -21,7 +21,7 @@ export default function MobileMenu({ activePage }) {
     { id: 'dashboard', label: 'Dashboard', icon: AiOutlineHome, href: '/dashboard' },
     { id: 'caption', label: 'Caption Generator', icon: RiText, href: '/caption', isNew: false },
     { id: 'reviews', label: 'Review Generator', icon: VscExtensions, href: '/review-generator' },
-    { id: 'tips-generator', label: 'Tip Generator', icon: BiPlayCircle, href: '/tips-generator', isNew: true },
+    { id: 'tips-generator', label: 'Tip Generator', icon: BiPlayCircle, href: '/tips-generator' },
     { id: 'templates', label: 'Template Gallery', icon: MdOutlineViewModule, href: '/templates' },
     { id: 'my-templates', label: 'My Templates', icon: BsBuilding, href: '/my-templates' },
     { id: 'settings', label: 'Settings', icon: IoSettingsOutline, href: '/dashboard/settings' },

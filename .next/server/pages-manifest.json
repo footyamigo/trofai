@@ -3,10 +3,7 @@
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
   "/dashboard": "pages/dashboard.js",
-  "/review-generator": "pages/review-generator.js",
-  "/tips-generator": "pages/tips-generator.js",
+  "/carousel-generator": "pages/carousel-generator.js",
   "/api/auth/validate-session": "pages/api/auth/validate-session.js",
-  "/api/list-listing-templates": "pages/api/list-listing-templates.js",
-  "/api/properties/list": "pages/api/properties/list.js",
-  "/api/shotstack/templates": "pages/api/shotstack/templates.js"
+  "/api/agent/profile": "pages/api/agent/profile.js"
 }

@@ -7,9 +7,14 @@ import { useAuth } from '../../src/context/AuthContext';
 import Link from 'next/link';
 import React from 'react';
 import Button from '../UI/Button';
+import { useRouter } from 'next/router';
+import CarouselPreviewModal from '../Carousel/CarouselPreviewModal';
+import { usePreviewModal } from '../../src/context/PreviewModalContext';
 
 export default function DashboardHeader() {
   const { user, loading, signOut } = useAuth();
+  const router = useRouter();
+  const { isPreviewModalOpen, carouselDataForPreview, closePreviewModal } = usePreviewModal();
 
   // Add console logging to debug user object structure
   React.useEffect(() => {
@@ -52,7 +57,7 @@ export default function DashboardHeader() {
   return (
     <header className="dashboard-header">
       <div className="left-section">
-        {/* The team selector div was removed from here */}
+        {/* Remove the Preview button from here */}
       </div>
 
       <div className="right-section">
@@ -76,6 +81,15 @@ export default function DashboardHeader() {
         ) : null}
       </div>
 
+      {/* Render the modal using context */}
+      {isPreviewModalOpen && carouselDataForPreview && (
+        <CarouselPreviewModal
+          isOpen={isPreviewModalOpen}
+          onClose={closePreviewModal}
+          carouselData={carouselDataForPreview}
+        />
+      )}
+
       <style jsx>{`
         .dashboard-header {
           display: flex;
@@ -95,6 +109,7 @@ export default function DashboardHeader() {
         .left-section {
           display: flex;
           align-items: center;
+          gap: 0.75rem; /* Added gap for button spacing */
         }
 
         .team-selector {
