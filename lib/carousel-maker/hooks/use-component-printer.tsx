@@ -108,7 +108,7 @@ export function useComponentPrinter() {
 
   const [isPrinting, setIsPrinting] = React.useState(false);
   // TODO: Show animation on loading
-  const componentRef = React.useRef(null);
+  const componentRef = React.useRef<HTMLDivElement>(null);
 
   // Packages and references
   // react-to-print: https://github.com/gregnb/react-to-print
