@@ -1,4 +1,5 @@
 export default async function handler(req, res) {
+  res.setHeader('Access-Control-Allow-Origin', '*');
   try {
     // Dynamically import puppeteer only when this API route is called
     const puppeteer = await import('puppeteer');
