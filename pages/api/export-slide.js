@@ -1,7 +1,8 @@
-import puppeteer from 'puppeteer';
-
 export default async function handler(req, res) {
   try {
+    // Dynamically import puppeteer only when this API route is called
+    const puppeteer = await import('puppeteer');
+
     // Accept slide data via query or body
     const params = req.method === 'POST' ? req.body : req.query;
     // Build the export-slide URL with query params
@@ -12,7 +13,7 @@ export default async function handler(req, res) {
     });
 
     // Launch Puppeteer (local/server: use default puppeteer)
-    const browser = await puppeteer.launch({
+    const browser = await puppeteer.default.launch({
       headless: true,
       args: [
         '--no-sandbox',
