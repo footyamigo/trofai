@@ -1,5 +1,4 @@
-import chromium from 'chrome-aws-lambda';
-import puppeteer from 'puppeteer-core';
+import puppeteer from 'puppeteer';
 
 export default async function handler(req, res) {
   try {
@@ -12,12 +11,14 @@ export default async function handler(req, res) {
       if (value !== undefined) url.searchParams.set(key, value);
     });
 
-    // Launch Puppeteer (works on Vercel/AWS Lambda with chrome-aws-lambda, or locally with puppeteer)
+    // Launch Puppeteer (local/server: use default puppeteer)
     const browser = await puppeteer.launch({
-      args: chromium.args,
-      defaultViewport: { width: 1080, height: 1350 },
-      executablePath: await chromium.executablePath || undefined,
       headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+      ],
+      defaultViewport: { width: 1080, height: 1350 },
     });
     const page = await browser.newPage();
     await page.goto(url.toString(), { waitUntil: 'networkidle0' });
