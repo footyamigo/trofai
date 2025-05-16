@@ -26,6 +26,9 @@ export default function CarouselPreviewModal({ isOpen, onClose, carouselData }) 
   const [isLoadingStatus, setIsLoadingStatus] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
 
+  const [previewImages, setPreviewImages] = useState([]);
+  const [isLoadingPreviews, setIsLoadingPreviews] = useState(false);
+
   // Fetch social connection status (can remain similar)
   useEffect(() => {
     let isMounted = true; 
@@ -102,6 +105,56 @@ export default function CarouselPreviewModal({ isOpen, onClose, carouselData }) 
     setSelectedImages([]); 
     setSelectedStoryImage(null); 
   }, [activeTab]);
+
+  // Fetch server-generated PNGs for preview when modal opens or carouselData changes
+  useEffect(() => {
+    const fetchPreviews = async () => {
+      if (!carouselData || !carouselData.slides || carouselData.slides.length === 0) {
+        setPreviewImages([]);
+        return;
+      }
+      setIsLoadingPreviews(true);
+      try {
+        const images = await Promise.all(carouselData.slides.map(async (slide, idx) => {
+          const params = new URLSearchParams({
+            heading: slide.heading || '',
+            paragraph: slide.paragraph || '',
+            userName: slide.userName || '',
+            userEmail: slide.userEmail || '',
+            userHeadshot: slide.userHeadshot || '',
+            background: slide.background || '',
+            textColor: slide.textColor || '',
+            primaryColor: slide.primaryColor || '',
+            backgroundDesign: slide.backgroundDesign || '',
+            fontHeading: slide.fontHeading || '',
+            fontParagraph: slide.fontParagraph || '',
+            index: idx,
+            slidesLength: carouselData.slides.length,
+          });
+          const res = await fetch(`/api/export-slide?${params.toString()}`);
+          const blob = await res.blob();
+          return {
+            url: URL.createObjectURL(blob),
+            name: slide.heading || `Slide ${idx + 1}`,
+            isStory: slide.isStoryFormat || false,
+            caption: slide.caption || '',
+          };
+        }));
+        setPreviewImages(images);
+      } catch (err) {
+        toast.error('Failed to generate preview images.');
+        setPreviewImages([]);
+      } finally {
+        setIsLoadingPreviews(false);
+      }
+    };
+    if (isOpen) {
+      fetchPreviews();
+    } else {
+      setPreviewImages([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, carouselData]);
 
   // Conditional rendering if no data
   if (!carouselData || !carouselData.slides || carouselData.slides.length === 0) { 
@@ -446,10 +499,31 @@ export default function CarouselPreviewModal({ isOpen, onClose, carouselData }) 
                   <div className="thumbnails-header">
                     <h3 className="section-title">All Slides</h3>
                     <div className="download-actions">
-                      {selectedSlideData.url && (
+                      {selectedSlideData && (
                         <button 
                           className="action-button"
-                          onClick={() => downloadImage(selectedSlideData.url, `${selectedSlideData.name || 'carousel-slide'}.png`)}
+                          onClick={() => {
+                            // Build query params from the selected slide data
+                            const params = new URLSearchParams({
+                              heading: selectedSlideData.heading || '',
+                              paragraph: selectedSlideData.paragraph || '',
+                              userName: selectedSlideData.userName || '',
+                              userEmail: selectedSlideData.userEmail || '',
+                              userHeadshot: selectedSlideData.userHeadshot || '',
+                              background: selectedSlideData.background || '',
+                              textColor: selectedSlideData.textColor || '',
+                              primaryColor: selectedSlideData.primaryColor || '',
+                              backgroundDesign: selectedSlideData.backgroundDesign || '',
+                              fontHeading: selectedSlideData.fontHeading || '',
+                              fontParagraph: selectedSlideData.fontParagraph || '',
+                              index: selectedSlideData.index || 0,
+                              slidesLength: selectedSlideData.slidesLength || 1,
+                            });
+                            downloadImage(
+                              `http://128.199.7.156:3000/api/export-slide?${params.toString()}`,
+                              `${selectedSlideData.name || 'carousel-slide'}.png`
+                            );
+                          }}
                           disabled={isDownloading}
                         >
                           <FiDownload className="icon" />
