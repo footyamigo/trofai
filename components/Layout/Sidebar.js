@@ -21,7 +21,6 @@ export default function Sidebar({ activePage = 'home' }) {
     { id: 'dashboard', label: 'Dashboard', icon: AiOutlineHome, href: '/dashboard' },
     // { id: 'caption', label: 'Caption Generator', icon: RiText, href: '/caption', isNew: false },
     { id: 'reviews', label: 'Social Proof', icon: FiStar, href: '/review-generator' },
-    { id: 'tips-generator', label: 'Tip Generator', icon: FiZap, href: '/tips-generator' },
     { id: 'carousel-generator', label: 'Carousel Generator', icon: BiImageAdd, href: '/carousel-generator', isNew: true },
     { id: 'templates', label: 'Template Gallery', icon: MdOutlineViewModule, href: '/templates' },
     { id: 'my-templates', label: 'My Templates', icon: FiCopy, href: '/my-templates' },
@@ -70,7 +69,7 @@ export default function Sidebar({ activePage = 'home' }) {
             >
               <Icon className="nav-icon" />
               <span>{item.label}</span>
-              {item.isNew && <span className="new-badge">New</span>}
+              {item.isNew && <span className="new-badge" style={{ marginLeft: '8px' }}>New</span>}
             </Link>
           );
         })}

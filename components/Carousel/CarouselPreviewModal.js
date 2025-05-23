@@ -4,6 +4,8 @@ import { FiDownload, FiCopy, FiShare2, FiChevronLeft, FiChevronRight, FiX, FiRef
 import { FaInstagram, FaFacebookSquare, FaLinkedin } from 'react-icons/fa';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../../src/context/AuthContext';
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
 
 // Changed component name and props
 export default function CarouselPreviewModal({ isOpen, onClose, carouselData }) { 
@@ -25,9 +27,6 @@ export default function CarouselPreviewModal({ isOpen, onClose, carouselData }) 
   const [isLinkedInConnected, setIsLinkedInConnected] = useState(false);
   const [isLoadingStatus, setIsLoadingStatus] = useState(false);
   const [isPosting, setIsPosting] = useState(false);
-
-  const [previewImages, setPreviewImages] = useState([]);
-  const [isLoadingPreviews, setIsLoadingPreviews] = useState(false);
 
   // Fetch social connection status (can remain similar)
   useEffect(() => {
@@ -87,12 +86,12 @@ export default function CarouselPreviewModal({ isOpen, onClose, carouselData }) 
   // Initialize/Update when carouselData changes
   useEffect(() => {
     if (carouselData && carouselData.slides && carouselData.slides.length > 0) {
-      // Assuming carouselData has a structure like: { slides: [{ imageUrl: '...', caption: '...', ... }], globalCaption: '...' }
-      // For now, let's set a global caption or the first slide's caption
-      setEditedCaption(carouselData.globalCaption || carouselData.slides[0]?.caption || '');
-      setSelectedImages([]); // Reset selections
+      // Prioritize carouselData.caption, then carouselData.globalCaption, then empty string
+      const initialCaption = carouselData.caption || carouselData.globalCaption || '';
+      setEditedCaption(initialCaption);
+      setSelectedImages([]);
       setSelectedStoryImage(null);
-      setSelectedImageIndex(0); // Start with the first image
+      setSelectedImageIndex(0);
     } else {
       setEditedCaption('');
       setSelectedImages([]);
@@ -106,73 +105,23 @@ export default function CarouselPreviewModal({ isOpen, onClose, carouselData }) 
     setSelectedStoryImage(null); 
   }, [activeTab]);
 
-  // Fetch server-generated PNGs for preview when modal opens or carouselData changes
-  useEffect(() => {
-    const fetchPreviews = async () => {
-      if (!carouselData || !carouselData.slides || carouselData.slides.length === 0) {
-        setPreviewImages([]);
-        return;
-      }
-      setIsLoadingPreviews(true);
-      try {
-        const images = await Promise.all(carouselData.slides.map(async (slide, idx) => {
-          const params = new URLSearchParams({
-            heading: slide.heading || '',
-            paragraph: slide.paragraph || '',
-            userName: slide.userName || '',
-            userEmail: slide.userEmail || '',
-            userHeadshot: slide.userHeadshot || '',
-            background: slide.background || '',
-            textColor: slide.textColor || '',
-            primaryColor: slide.primaryColor || '',
-            backgroundDesign: slide.backgroundDesign || '',
-            fontHeading: slide.fontHeading || '',
-            fontParagraph: slide.fontParagraph || '',
-            index: idx,
-            slidesLength: carouselData.slides.length,
-          });
-          const res = await fetch(`/api/export-slide?${params.toString()}`);
-          const blob = await res.blob();
-          return {
-            url: URL.createObjectURL(blob),
-            name: slide.heading || `Slide ${idx + 1}`,
-            isStory: slide.isStoryFormat || false,
-            caption: slide.caption || '',
-          };
-        }));
-        setPreviewImages(images);
-      } catch (err) {
-        toast.error('Failed to generate preview images.');
-        setPreviewImages([]);
-      } finally {
-        setIsLoadingPreviews(false);
-      }
-    };
-    if (isOpen) {
-      fetchPreviews();
-    } else {
-      setPreviewImages([]);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, carouselData]);
-
   // Conditional rendering if no data
   if (!carouselData || !carouselData.slides || carouselData.slides.length === 0) { 
-    // Optionally show a loading or no-data message if modal is open
-    // if (isOpen) return <Modal isOpen={isOpen} onClose={onClose} title="Carousel Preview"><p>No slides to preview.</p></Modal>;
     return null; 
   }
   
-  // Destructure images and potentially a global caption from carouselData
-  const { slides: carouselSlides = [], globalCaption = '' } = carouselData;
-  const imagesToDisplay = carouselSlides.map(slide => ({
-    url: slide.imageUrl, // Assuming PNGs are generated and passed as imageUrl
-    name: slide.heading || `Slide ${slide.id || 'image'}`,
-    // Determine if it's story format based on aspect ratio or a flag if available
-    // For now, let's assume all carousel slides are feed format unless specified
-    isStory: slide.isStoryFormat || false, 
-    caption: slide.caption // Each slide might have its own caption
-  }));
+  // USE carouselData.slides for display if available, otherwise fallback to client-side imageUrl from carouselData.slides
+  const imagesToDisplay = carouselData.slides
+    .filter(slide => !!slide.s3ImageUrl) // Only show slides with S3 URLs
+    .map((slide, index) => ({
+      id: slide.id ?? index,
+      url: slide.s3ImageUrl, // Always use S3 URL
+      name: slide.heading || `Slide ${index + 1}`,
+      isStory: slide.isStoryFormat || false,
+      caption: slide.paragraph || slide.caption || '',
+      s3ImageUrl: slide.s3ImageUrl,
+      ...slide
+    }));
 
   const selectedSlideData = imagesToDisplay[selectedImageIndex] || {};
   const currentSlideCaption = selectedSlideData.caption || editedCaption; // Prioritize slide-specific caption
@@ -182,16 +131,28 @@ export default function CarouselPreviewModal({ isOpen, onClose, carouselData }) 
     if (!url) return;
     setIsDownloading(true);
     try {
-      const response = await fetch(url);
-      const blob = await response.blob();
-      const objectUrl = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = objectUrl;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(objectUrl);
+      // If the URL is for /api/export-slide, it needs to be fetched.
+      // If it were a Data URL (client-side), direct assignment to link.href is fine.
+      if (url.startsWith('data:')) { // Client-side Data URL
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      } else { // Server-side URL, needs to be fetched to get the blob
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`Failed to download image: ${response.statusText}`);
+        const blob = await response.blob();
+        const objectUrl = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = objectUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(objectUrl);
+      }
     } catch (err) {
       console.error('Failed to download image:', err);
       toast.error('Failed to download image.');
@@ -200,14 +161,27 @@ export default function CarouselPreviewModal({ isOpen, onClose, carouselData }) 
     }
   };
   
-  // Handle zip download - This might need a different approach for carousels
-  // For now, let's assume we download individual images or a zip prepared elsewhere
-  const downloadAllSlidesAsZip = () => {
-    // This would require zipping on the client or a backend endpoint for carousel zips
-    toast.info('Download All (ZIP) for carousels needs to be implemented.');
-    // if (carouselData.zipUrl) { // If a zip URL is provided
-    //   downloadImage(carouselData.zipUrl, 'carousel-slides.zip');
-    // }
+  // Handle zip download - Now implemented for carousels
+  const downloadAllSlidesAsZip = async () => {
+    if (!imagesToDisplay || imagesToDisplay.length === 0) return;
+    setIsDownloading(true);
+    try {
+      const zip = new JSZip();
+      for (let i = 0; i < imagesToDisplay.length; i++) {
+        const img = imagesToDisplay[i];
+        // Convert dataURL to Blob
+        const response = await fetch(img.url);
+        const blob = await response.blob();
+        zip.file(`slide-${i + 1}.png`, blob);
+      }
+      const content = await zip.generateAsync({ type: 'blob' });
+      saveAs(content, 'carousel-slides.zip');
+    } catch (err) {
+      console.error('Failed to create ZIP:', err);
+      toast.error('Failed to create ZIP.');
+    } finally {
+      setIsDownloading(false);
+    }
   };
   
   // Handle caption copy (reusable)
@@ -307,9 +281,35 @@ export default function CarouselPreviewModal({ isOpen, onClose, carouselData }) 
   const handlePostToInstagram = async () => {
     if (!isInstagramConnected) { toast.error("Connect Instagram in Settings."); return; }
     if (selectedImages.length === 0) { toast.error("Select images to post."); return; }
+    
     const sessionToken = localStorage.getItem('session');
     if (!sessionToken) { toast.error('Auth error.'); return; }
-    const imageUrlsToPost = selectedImages.map(img => img.url);
+
+    // IMPORTANT CHANGE: Re-map to get the latest S3 URLs
+    const imageUrlsToPost = selectedImages.map(selectedImg => {
+      const originalSlide = carouselData.slides[selectedImg.originalIndex]; 
+      
+      if (originalSlide && originalSlide.s3ImageUrl) {
+        return originalSlide.s3ImageUrl;
+      }
+      console.warn(`S3 URL not found for slide index ${selectedImg.originalIndex}. Falling back to selectedImg.url: ${selectedImg.url}`);
+      return selectedImg.url; // This might still be a data URL
+    });
+
+    // Check if any URLs are still data URLs
+    if (imageUrlsToPost.some(url => url && url.startsWith('data:'))) {
+        toast.error("Some images do not have a valid S3 URL required for posting. Please ensure all slides are fully processed.");
+        console.error("Attempting to post with data URLs:", imageUrlsToPost.filter(url => url && url.startsWith('data:')));
+        return;
+    }
+    
+    // Optional: Check if the number of valid URLs matches the number of selected images
+    // This is implicitly handled if data URLs cause an early return, 
+    // but can be an explicit check if filtering out data URLs was done before this point.
+    // For now, the above check for data: URLs is the primary guard.
+
+    console.log("Final URLs for Instagram API:", imageUrlsToPost); // For debugging
+
     setIsPosting(true);
     toast.loading('Posting to Instagram...');
     try {
@@ -429,19 +429,13 @@ export default function CarouselPreviewModal({ isOpen, onClose, carouselData }) 
             className={`tab ${activeTab === 'caption' ? 'active' : ''}`}
             onClick={() => setActiveTab('caption')}
           >
-            {captionTabTitle} {/* Use updated caption tab title */}
+            {captionTabTitle}
           </button>
           <button 
             className={`tab ${activeTab === 'social' ? 'active' : ''}`}
             onClick={() => setActiveTab('social')}
           >
             Post to Feed
-          </button>
-          <button 
-            className={`tab ${activeTab === 'story' ? 'active' : ''}`}
-            onClick={() => setActiveTab('story')}
-          >
-            Post to Story
           </button>
         </div>
         
@@ -450,45 +444,17 @@ export default function CarouselPreviewModal({ isOpen, onClose, carouselData }) 
             <div className="images-layout">
             <div className="main-image-container">
               {selectedSlideData.url ? (
-                  <div className={`instagram-frame ${selectedSlideData.isStory ? 'story-frame' : ''}`}>
-                    {!selectedSlideData.isStory ? (
-                      <>
-                        <div className="instagram-header">
-                          <div className="profile-info">
-                            <div className="profile-picture"></div>
-                            {/* Display user name if available, or generic */}
-                            <div className="profile-name">{user?.name || 'Your Profile'}</div> 
-                          </div>
-                          <div className="more-options">•••</div>
-                        </div>
-                        <div className="instagram-image">
-                          <img 
-                            src={selectedSlideData.url} 
-                            alt={selectedSlideData.name || 'Carousel Slide'} 
-                            className="main-image" 
-                          />
-                        </div>
-                        <div className="instagram-actions">
-                          <div className="action-icons">
-                            <span>♡</span>
-                            <span>💬</span>
-                            <span>↪</span>
-                          </div>
-                          <div className="bookmark">🔖</div>
-                        </div>
-                      </>
-                    ) : (
-                      <div className="story-container">
-                        <div className="story-image">
-                          <img 
-                            src={selectedSlideData.url} 
-                            alt={selectedSlideData.name || 'Carousel Story Slide'} 
-                            className="story-main-image" 
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
+                <img 
+                  src={selectedSlideData.url} 
+                  alt={selectedSlideData.name || (selectedSlideData.isStory ? 'Carousel Story Slide' : 'Carousel Slide')} 
+                  className={selectedSlideData.isStory ? 'story-main-image' : 'main-image'} 
+                  style={{ // Add styles to constrain image size within its container
+                    maxWidth: '100%', 
+                    maxHeight: '65vh', // Reduced max height
+                    objectFit: 'contain',
+                    borderRadius: selectedSlideData.isStory ? '0px' : '8px' // Keep border radius for non-story
+                  }}
+                />
               ) : (
                 <div className="no-image">No image selected or available.</div>
               )}
@@ -499,28 +465,13 @@ export default function CarouselPreviewModal({ isOpen, onClose, carouselData }) 
                   <div className="thumbnails-header">
                     <h3 className="section-title">All Slides</h3>
                     <div className="download-actions">
-                      {selectedSlideData && (
+                      {selectedSlideData && selectedSlideData.url && (
                         <button 
                           className="action-button"
                           onClick={() => {
-                            // Build query params from the selected slide data
-                            const params = new URLSearchParams({
-                              heading: selectedSlideData.heading || '',
-                              paragraph: selectedSlideData.paragraph || '',
-                              userName: selectedSlideData.userName || '',
-                              userEmail: selectedSlideData.userEmail || '',
-                              userHeadshot: selectedSlideData.userHeadshot || '',
-                              background: selectedSlideData.background || '',
-                              textColor: selectedSlideData.textColor || '',
-                              primaryColor: selectedSlideData.primaryColor || '',
-                              backgroundDesign: selectedSlideData.backgroundDesign || '',
-                              fontHeading: selectedSlideData.fontHeading || '',
-                              fontParagraph: selectedSlideData.fontParagraph || '',
-                              index: selectedSlideData.index || 0,
-                              slidesLength: selectedSlideData.slidesLength || 1,
-                            });
+                            // Download the image directly from selectedSlideData.url (which should be a dataUrl)
                             downloadImage(
-                              `http://128.199.7.156:3000/api/export-slide?${params.toString()}`,
+                              selectedSlideData.url,
                               `${selectedSlideData.name || 'carousel-slide'}.png`
                             );
                           }}
@@ -595,72 +546,6 @@ export default function CarouselPreviewModal({ isOpen, onClose, carouselData }) 
           </div>
         )}
 
-        {activeTab === 'story' && (
-          <div className="story-tab">
-            <div className="story-content">
-              <div className="story-layout">
-                <div className="stories-grid-container">
-                  {(() => {
-                    // Filter for images marked as story format from imagesToDisplay
-                    const storyImages = imagesToDisplay.filter(image => image.isStory);
-                    if (storyImages.length === 0) {
-                      return <p className="no-content-message">No story-formatted slides available for this carousel.</p>;
-                    }
-                    return (
-                      <div className="stories-grid">
-                        {storyImages.map((storyImage, idx) => (
-                          <div 
-                            key={idx} 
-                            className={`story-item ${selectedStoryImage?.url === storyImage.url ? 'selected' : ''}`}
-                            onClick={() => toggleImageSelection(storyImage, idx)} // toggleImageSelection will set selectedStoryImage
-                          >
-                            <div className="story-frame">
-                              <img src={storyImage.url} alt={storyImage.name || "Carousel Story Slide"} />
-                              {selectedStoryImage?.url === storyImage.url && (
-                                <div className="selected-badge"><span>Selected</span></div>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })()}
-                </div>
-                
-                <div className="story-actions-container">
-                  <div className="story-actions">
-                    <h3 className="section-title">Share Story to Social Media</h3>
-                    {isLoadingStatus && <p>Loading connection status...</p>}
-                    {!isLoadingStatus && (
-                      <div className="social-buttons story-buttons">
-                        <button 
-                          className="social-button instagram"
-                          onClick={handlePostStoryToInstagram}
-                          disabled={!isInstagramConnected || isPosting || !selectedStoryImage}
-                        >
-                          <FaInstagram className="icon" />
-                          <div className="button-content"><span className="button-title">Post to Instagram Story</span></div>
-                        </button>
-                        <button 
-                          className="social-button facebook"
-                          onClick={handlePostStoryToFacebook}
-                          disabled={!isFacebookConnected || isPosting || !selectedStoryImage}
-                        >
-                          <FaFacebookSquare className="icon" />
-                          <div className="button-content"><span className="button-title">Post to Facebook Story</span></div>
-                        </button>
-                      </div>
-                    )}
-                    {!isLoadingStatus && (!isFacebookConnected && !isInstagramConnected) && 
-                      <p className="connection-tip">Connect social accounts in Settings to post stories.</p>
-                    }
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
         {activeTab === 'social' && (
           <div className="social-tab">
             <div className="social-content">
@@ -728,43 +613,43 @@ export default function CarouselPreviewModal({ isOpen, onClose, carouselData }) 
                     {!isLoadingStatus && (
                         <div className="social-buttons">
                           <button 
-                              className="social-button instagram"
-                              onClick={handlePostToInstagram}
-                              disabled={isPosting || selectedImages.length === 0 || !isInstagramConnected}
+                            className="social-button instagram"
+                            onClick={handlePostToInstagram}
+                            disabled={isPosting || selectedImages.length === 0 || !isInstagramConnected}
                           >
-                              <FaInstagram className="icon" />
-                              <div className="button-content">
-                                <span className="button-title">Post to Instagram</span>
-                                <span className="button-desc">Share as carousel (up to 10 slides)</span>
-                              </div>
+                            <FaInstagram className="icon" />
+                            <div className="button-content">
+                              <span className="button-title">Post to Instagram</span>
+                              <span className="button-desc">Share as carousel (up to 10 slides)</span>
+                            </div>
                           </button>
                           <button 
-                              className="social-button facebook"
-                              onClick={handlePostToFacebook}
-                              disabled={isPosting || selectedImages.length === 0 || !isFacebookConnected}
+                            className="social-button facebook"
+                            onClick={handlePostToFacebook}
+                            disabled={isPosting || selectedImages.length === 0 || !isFacebookConnected}
                           >
-                              <FaFacebookSquare className="icon" />
-                              <div className="button-content">
-                                <span className="button-title">Share on Facebook</span>
-                                <span className="button-desc">Post as multi-image post</span>
-                              </div>
+                            <FaFacebookSquare className="icon" />
+                            <div className="button-content">
+                              <span className="button-title">Share on Facebook</span>
+                              <span className="button-desc">Post as multi-image post</span>
+                            </div>
                           </button>
                           <button 
-                              className="social-button linkedin"
-                              onClick={handlePostToLinkedIn}
-                              disabled={isPosting || selectedImages.length === 0 || selectedImages.length > 9 || !isLinkedInConnected}
+                            className="social-button linkedin"
+                            onClick={handlePostToLinkedIn}
+                            disabled={isPosting || selectedImages.length < 1 || selectedImages.length > 9 || !isLinkedInConnected}
                           >
-                              <FaLinkedin className="icon" />
-                              <div className="button-content">
-                                <span className="button-title">Share on LinkedIn</span>
-                                <span className="button-desc">Post up to 9 slides</span>
-                              </div>
+                            <FaLinkedin className="icon" />
+                            <div className="button-content">
+                              <span className="button-title">Share on LinkedIn</span>
+                              <span className="button-desc">Post up to 9 images to your profile</span>
+                            </div>
                           </button>
                         </div>
                     )}
-                    {!isLoadingStatus && (!isFacebookConnected && !isInstagramConnected && !isLinkedInConnected) && (
+                    {!isLoadingStatus && (!isFacebookConnected || !isInstagramConnected || !isLinkedInConnected) && (
                         <p className="connect-tip">
-                            Connect accounts in <a href="/dashboard/settings" target="_blank" rel="noopener noreferrer">Settings</a> to post.
+                            Connect your accounts in <a href="/dashboard/settings" target="_blank" rel="noopener noreferrer">Settings</a> to enable posting.
                         </p>
                     )}
                   </div>
@@ -1076,6 +961,9 @@ export default function CarouselPreviewModal({ isOpen, onClose, carouselData }) 
           grid-template-columns: repeat(3, 1fr);
           gap: 0.75rem;
           padding-bottom: 0.5rem;
+          padding-top: 0.25rem;
+          padding-left: 0.25rem;
+          padding-right: 0.25rem;
         }
         
         .thumbnail {
@@ -1086,7 +974,7 @@ export default function CarouselPreviewModal({ isOpen, onClose, carouselData }) 
           box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
           transition: transform 0.2s, box-shadow 0.2s;
           background: white;
-          aspect-ratio: 1;
+          aspect-ratio: 4 / 5;
         }
         
         .thumbnail-image {
@@ -1333,6 +1221,8 @@ export default function CarouselPreviewModal({ isOpen, onClose, carouselData }) 
           padding: 1.25rem;
           box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
           border: 1px solid #edf2f7;
+          max-height: 320px;
+          overflow-y: auto;
         }
 
         .social-buttons {
@@ -1341,7 +1231,6 @@ export default function CarouselPreviewModal({ isOpen, onClose, carouselData }) 
           gap: 1rem;
           margin-top: 1rem;
         }
-        
         .social-button {
           flex: 1;
           display: flex;
@@ -1750,9 +1639,7 @@ export default function CarouselPreviewModal({ isOpen, onClose, carouselData }) 
 
          /* Cleaned up Story styles */
          .story-tab {
-           display: flex;
-           flex-direction: column;
-           padding: 0;
+           display: none;
          }
          
          .story-content {

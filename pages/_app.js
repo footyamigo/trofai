@@ -1,4 +1,5 @@
 import '../styles/globals.css';
+import '../generated_font_faces_updated.css';
 import { Toaster } from 'react-hot-toast';
 import { useEffect, useState } from 'react';
 import { AuthProvider } from '../src/context/AuthContext';

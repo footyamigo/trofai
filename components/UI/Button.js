@@ -8,6 +8,7 @@ const Button = ({
   className = '',
   isLoading = false,
   fullWidth = false,
+  variant = 'primary'
 }) => {
   return (
     <>
@@ -15,7 +16,7 @@ const Button = ({
         type={type}
         onClick={onClick}
         disabled={disabled || isLoading}
-        className={`base-button ${fullWidth ? 'full-width' : ''} ${className}`}
+        className={`base-button ${variant !== 'primary' ? variant : ''} ${fullWidth ? 'full-width' : ''} ${className}`.trim()}
       >
         {isLoading ? (
           <span className="loading-spinner"></span>
@@ -45,6 +46,26 @@ const Button = ({
           transform: translateY(-1px);
         }
 
+        .base-button.secondary {
+          background: #808080;
+          color: white;
+          border: 2px solid #5A5A5A;
+        }
+
+        .base-button.secondary:hover {
+          background: #666666;
+        }
+
+        .base-button.light-outline {
+          background: #e2e8f0;
+          color: black;
+          border: 2px solid black;
+        }
+
+        .base-button.light-outline:hover {
+          background: #cbd5e0;
+        }
+
         .base-button:disabled {
           background: #e2e8f0;
           color: #a0aec0;
@@ -52,6 +73,18 @@ const Button = ({
           cursor: not-allowed;
           transform: none;
           box-shadow: none;
+        }
+        
+        .base-button.secondary:disabled {
+          background: #cccccc;
+          color: #888888;
+          border-color: #aaaaaa;
+        }
+
+        .base-button.light-outline:disabled {
+          background: #f7fafc;
+          color: #a0aec0;
+          border-color: #e2e8f0;
         }
 
         .full-width {

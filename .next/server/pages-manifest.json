@@ -3,7 +3,13 @@
   "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
   "/carousel-generator": "pages/carousel-generator.js",
-  "/api/auth/validate-session": "pages/api/auth/validate-session.js",
+  "/auth/signin": "pages/auth/signin.js",
   "/dashboard": "pages/dashboard.js",
-  "/api/agent/profile": "pages/api/agent/profile.js"
+  "/api/process": "pages/api/process.js",
+  "/api/properties/list": "pages/api/properties/list.js",
+  "/api/direct-collection": "pages/api/direct-collection.js",
+  "/api/social/status": "pages/api/social/status.js",
+  "/api/generate-carousel-caption": "pages/api/generate-carousel-caption.js",
+  "/api/carousels/save": "pages/api/carousels/save.js",
+  "/api/properties/content": "pages/api/properties/content.js"
 }

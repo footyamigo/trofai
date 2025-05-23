@@ -1,7 +1,6 @@
 import React from 'react';
 import BlopSVG from '../components/BackgroundSvgs/BlopSVG';
 import CirclesSVG from '../components/BackgroundSvgs/CirclesSVG';
-import LineSVG from '../components/BackgroundSvgs/LineSVG';
 import TopDotsSVG from '../components/BackgroundSvgs/TopDotsSVG';
 
 // Helper to ensure heading ends with a period
@@ -15,7 +14,6 @@ function withPeriod(text) {
 const BACKGROUND_SVGS = {
   blop: BlopSVG,
   circles: CirclesSVG,
-  line: LineSVG,
   'top dots': TopDotsSVG,
 };
 

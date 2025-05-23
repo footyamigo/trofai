@@ -49,10 +49,13 @@ export default async function handler(req, res) {
     contentTheme,
     localFocus,
     audienceAppeal,
-    toneStyle,
     mainTitle,
     mainSubtitle,
     city,
+    neighborhood,
+    country,
+    location,
+    toneStyle,
     isRegeneration,
     previousSlides
   } = req.body;
@@ -62,21 +65,43 @@ export default async function handler(req, res) {
   const userEmail = userData.agent_email || userData.email || 'your@email.com';
 
   try {
-    const slides = await generateCarouselSlides({
+    // Log the received options for debugging what the generator service gets
+    console.log('Calling generateCarouselSlides with options:', {
       contentTheme,
       localFocus,
       audienceAppeal,
-      toneStyle,
       mainTitle,
       mainSubtitle,
       userName,
       userEmail,
       city,
+      neighborhood,
+      country,
+      location,
+      toneStyle,
+      isRegeneration,
+      previousSlidesCount: previousSlides ? previousSlides.length : 0
+    });
+
+    const slides = await generateCarouselSlides({
+      contentTheme,
+      localFocus,
+      audienceAppeal,
+      mainTitle,
+      mainSubtitle,
+      userName,
+      userEmail,
+      city,
+      neighborhood,
+      country,
+      location,
+      toneStyle,
       isRegeneration,
       previousSlides
     });
     return res.status(200).json({ success: true, slides });
   } catch (error) {
+    console.error('Error in /api/generate-carousel-slides calling generateCarouselSlides:', error);
     return res.status(500).json({ success: false, message: error.message || 'Failed to generate carousel slides' });
   }
 } 

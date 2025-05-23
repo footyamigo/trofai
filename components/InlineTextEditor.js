@@ -5,7 +5,21 @@ import TextAlign from '@tiptap/extension-text-align';
 import Underline from '@tiptap/extension-underline';
 import FloatingToolbar from './FloatingToolbar';
 
-export default function InlineTextEditor({ value = '<p>Test line height</p>', onChange, placeholder = '', align = 'left', fontSize = 24, fontWeight = 'bold', color = '#222', singleLine = false, fontFamily, lineHeight }) {
+export default function InlineTextEditor({
+  value = '<p>Test line height</p>',
+  onChange,
+  onEditorFocus,
+  onEditorRawChange,
+  onEditorBlurWithValue,
+  placeholder = '',
+  align = 'left',
+  fontSize = 24,
+  fontWeight = 'bold',
+  color = '#222',
+  singleLine = false,
+  fontFamily,
+  lineHeight
+}) {
   // SSR/client-only check
   if (typeof window === 'undefined') return null;
 
@@ -22,12 +36,13 @@ export default function InlineTextEditor({ value = '<p>Test line height</p>', on
         codeBlock: false,
         blockquote: false,
         horizontalRule: false,
-        hardBreak: false,
+        hardBreak: !singleLine,
         bulletList: false,
         orderedList: false,
         listItem: false,
+        paragraph: singleLine ? { HTMLAttributes: { class: 'single-line-paragraph' } } : {},
       }),
-      TextAlign.configure({ types: ['paragraph'] }),
+      TextAlign.configure({ types: ['paragraph', 'heading'] }),
       Underline,
     ],
     content: value,
@@ -41,15 +56,30 @@ export default function InlineTextEditor({ value = '<p>Test line height</p>', on
           color: ${color};
           text-align: ${align};
           background: transparent;
-          ${fontFamily ? `font-family: '${fontFamily}', ${fontFamily.includes(' ') ? 'sans-serif' : ''};` : ''}
+          font-family: "${fontFamily}", ${fontFamily && fontFamily.includes(' ') ? 'sans-serif' : 'sans-serif'};
           line-height: ${lineHeight} !important;
         `,
         placeholder,
         spellCheck: 'true',
       },
     },
+    onFocus() {
+      if (onEditorFocus) {
+        onEditorFocus();
+      }
+    },
     onUpdate({ editor }) {
-      onChange(editor.getHTML());
+      if (onChange) {
+        onChange(editor.getHTML());
+      }
+      if (onEditorRawChange) {
+        onEditorRawChange(editor.getText());
+      }
+    },
+    onBlur({ editor }) {
+      if (onEditorBlurWithValue) {
+        onEditorBlurWithValue(editor.getText());
+      }
     },
   });
 
@@ -59,49 +89,40 @@ export default function InlineTextEditor({ value = '<p>Test line height</p>', on
     }
   }, [editor]);
 
-  // Keep editor in sync with value prop
   useEffect(() => {
-    if (editor && value !== editor.getHTML()) {
+    if (editor && value !== editor.getHTML() && !editor.isFocused) {
       editor.commands.setContent(value, false);
     }
-  }, [value]);
+  }, [value, editor]);
 
-  // Optionally restrict to single line
   useEffect(() => {
     if (!editor || !singleLine) return;
-    const handleEnter = (event) => {
-      if (event.key === 'Enter') event.preventDefault();
+    const handleKeyDown = (event) => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        if (editor.isFocused && onEditorBlurWithValue) {
+          onEditorBlurWithValue(editor.getText());
+          editor.commands.blur();
+        }
+      }
     };
-    editor.view.dom.addEventListener('keydown', handleEnter);
-    return () => editor.view.dom.removeEventListener('keydown', handleEnter);
-  }, [editor, singleLine]);
+    editor.view.dom.addEventListener('keydown', handleKeyDown);
+    return () => editor.view.dom.removeEventListener('keydown', handleKeyDown);
+  }, [editor, singleLine, onEditorBlurWithValue]);
   
-  // Apply line height directly to the DOM element
   useEffect(() => {
     if (containerRef.current && lineHeight) {
-      // Set on the container first
       containerRef.current.style.lineHeight = lineHeight;
-      
-      // Wait for editor to be available
-      const applyLineHeight = () => {
+      const applyLH = () => {
         if (editor && editor.view && editor.view.dom) {
-          // Apply directly to the contenteditable element
           editor.view.dom.style.lineHeight = lineHeight;
-          
-          // Find all paragraphs and headings inside and set line height
           const elements = editor.view.dom.querySelectorAll('p, h1, h2, h3, h4, h5, h6');
-          elements.forEach(el => {
-            el.style.lineHeight = lineHeight;
-          });
-          
-          console.log('Applied line height directly to DOM:', lineHeight);
+          elements.forEach(el => { el.style.lineHeight = lineHeight; });
         } else {
-          // Retry until editor is available
-          setTimeout(applyLineHeight, 100);
+          setTimeout(applyLH, 50);
         }
       };
-      
-      applyLineHeight();
+      applyLH();
     }
   }, [editor, lineHeight]);
 
@@ -110,7 +131,7 @@ export default function InlineTextEditor({ value = '<p>Test line height</p>', on
       ref={containerRef}
       style={{ 
         width: '100%', 
-        position: 'relative', 
+        position: 'relative',
         minHeight: 60
       }}
       className="tiptap-editor-container"
@@ -118,16 +139,19 @@ export default function InlineTextEditor({ value = '<p>Test line height</p>', on
       {editor && <FloatingToolbar editor={editor} />}
       <EditorContent editor={editor} />
       
-      {/* Add a style tag to target ProseMirror content specifically */}
       <style jsx>{`
         .tiptap-editor-container :global(.ProseMirror) {
           line-height: ${lineHeight} !important;
         }
         .tiptap-editor-container :global(.ProseMirror p),
+        .tiptap-editor-container :global(.ProseMirror .single-line-paragraph),
         .tiptap-editor-container :global(.ProseMirror h1),
         .tiptap-editor-container :global(.ProseMirror h2),
         .tiptap-editor-container :global(.ProseMirror h3) {
           line-height: ${lineHeight} !important;
+        }
+        .tiptap-editor-container :global(.ProseMirror .single-line-paragraph) {
+          margin: 0;
         }
       `}</style>
     </div>
